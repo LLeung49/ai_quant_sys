@@ -1,0 +1,62 @@
+# 密钥与本地配置
+.env
+.env.*
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+
+# 日志、临时文件、输出 (递归匹配所有层级)
+**/log/
+**/logs/
+tmp/
+tmp_data/
+outputs/
+debug/
+*.log
+
+# MySQL / 数据库
+*.sql
+*.db
+*.sqlite
+*.sqlite3
+
+# Jupyter
+*.ipynb_checkpoints/
+
+# 测试 / 覆盖率
+.coverage
+htmlcov/
+
+# 数据目录
+data/
+datasets/
+raw_data/
+backtest_results/
+
+# Linter / 类型检查缓存
+.mypy_cache/
+.ruff_cache/
+
+# 构建产物
+dist/
+build/
+*.whl
+
+# 备份文件
+*.bak
+*.swp
+*~
+
+# 设计与测试文档 (内部工作笔记, 不上传)
+docs/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
