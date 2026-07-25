@@ -46,7 +46,7 @@ CREATE TABLE trade_price_reconcile_log (
     new_low_price DECIMAL(20, 6) NULL,
     new_close_price DECIMAL(20, 6) NULL,
     diff_reason VARCHAR(64) NOT NULL DEFAULT 'qfq_mismatch',
-    status ENUM('open', 'queued', 'resolved', 'ignored') NOT NULL DEFAULT 'open',
+    status ENUM('pending', 'queued', 'resolved', 'ignored') NOT NULL DEFAULT 'pending',
     detected_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     resolved_at DATETIME NULL,
     PRIMARY KEY (id),
@@ -69,3 +69,20 @@ CREATE TABLE trade_price_refresh_task (
     UNIQUE KEY uk_refresh_task (stock_code, price_mode, reason),
     KEY idx_refresh_pending (status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Retryable refresh requests for derived adjusted prices';
+
+CREATE TABLE trade_legacy_qfq_repair_task (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    stock_code VARCHAR(16) NOT NULL,
+    refresh_from DATE NOT NULL,
+    refresh_to DATE NOT NULL,
+    reason VARCHAR(64) NOT NULL,
+    status ENUM('pending', 'running', 'done', 'failed') NOT NULL DEFAULT 'pending',
+    retry_count INT UNSIGNED NOT NULL DEFAULT 0,
+    last_error VARCHAR(1000) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_legacy_qfq_repair_task (stock_code, refresh_from, refresh_to, reason),
+    KEY idx_legacy_qfq_repair_pending (status, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+  COMMENT='Confirmed, retryable old front-adjusted price repairs';
