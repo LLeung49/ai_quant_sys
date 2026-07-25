@@ -226,7 +226,8 @@ def main() -> int:
         % action_counts
     )
     print(
-        "[刷新] 成功=%(done)s 失败=%(failed)s 重试=%(retried)s 回收=%(reclaimed)s"
+        "[刷新] 成功=%(done)s 失败=%(failed)s 重试=%(retried)s "
+        "回收=%(reclaimed)s 已被新任务取代=%(superseded)s"
         % refresh
     )
     print(f"[结果] 股票成功={len(codes) - len(failures)} 股票失败={len(failures)}")

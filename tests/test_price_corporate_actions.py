@@ -185,11 +185,11 @@ def test_failed_refresh_remains_durable_and_is_retried_then_marked_done(monkeypa
     def fake_update(sql, params=None):
         if sql == actions.RECLAIM_STALE_TASKS_SQL:
             return 0
-        if "status = 'running'" in sql:
+        if sql == actions.MARK_TASK_RUNNING_SQL:
             status["value"] = "running"
-        elif "status = 'failed'" in sql:
+        elif sql == actions.MARK_TASK_FAILED_SQL:
             status["value"] = "failed"
-        elif "status = 'done'" in sql:
+        elif sql == actions.MARK_TASK_DONE_SQL:
             status["value"] = "done"
         return 1
 
@@ -205,8 +205,12 @@ def test_failed_refresh_remains_durable_and_is_retried_then_marked_done(monkeypa
     first = actions.run_due_refresh_tasks(refresh_price)
     second = actions.run_due_refresh_tasks(refresh_price)
 
-    assert first == {"done": 0, "failed": 1, "retried": 0, "reclaimed": 0}
-    assert second == {"done": 1, "failed": 0, "retried": 0, "reclaimed": 0}
+    assert first == {
+        "done": 0, "failed": 1, "retried": 0, "reclaimed": 0, "superseded": 0,
+    }
+    assert second == {
+        "done": 1, "failed": 0, "retried": 0, "reclaimed": 0, "superseded": 0,
+    }
     assert status["value"] == "done"
     assert attempts == [
         ("000001.SZ", "front", date(2015, 1, 1)),
@@ -238,7 +242,9 @@ def test_task_is_not_marked_done_when_refresh_reports_failure(monkeypatch):
         lambda *_: (_ for _ in ()).throw(ValueError("empty market response"))
     )
 
-    assert result == {"done": 0, "failed": 1, "retried": 1, "reclaimed": 0}
+    assert result == {
+        "done": 0, "failed": 1, "retried": 1, "reclaimed": 0, "superseded": 0,
+    }
     assert not any("status = 'done'" in sql for sql, _ in updates)
     assert any("status = 'failed'" in sql for sql, _ in updates)
 
@@ -294,7 +300,59 @@ def test_stale_running_projection_task_is_reclaimed_after_crash(monkeypatch):
         "failed": 0,
         "retried": 1,
         "reclaimed": 1,
+        "superseded": 0,
     }
     assert "status = 'running'" in updates[0][0]
     assert "retry_count = retry_count + 1" in updates[0][0]
     assert updates[0][1] == (30,)
+
+
+def test_reenqueued_running_task_cannot_be_completed_by_old_claim(monkeypatch):
+    task = {
+        "id": 12,
+        "stock_code": "000001.SZ",
+        "price_mode": "back",
+        "refresh_from": date(2026, 7, 1),
+        "reason": "corporate_action_changed",
+        "retry_count": 0,
+    }
+    state = {"status": "pending", "claim_token": None, "runs": 0}
+
+    def fake_query(sql, params=None):
+        return [task] if state["status"] == "pending" else []
+
+    def fake_update(sql, params=None):
+        if sql == actions.RECLAIM_STALE_TASKS_SQL:
+            return 0
+        if sql == actions.MARK_TASK_RUNNING_SQL:
+            token, _ = params
+            state.update(status="running", claim_token=token)
+            return 1
+        if sql == actions.MARK_TASK_DONE_SQL:
+            token, _ = params
+            if state["status"] == "running" and state["claim_token"] == token:
+                state.update(status="done", claim_token=None)
+                return 1
+            return 0
+        if sql == actions.MARK_TASK_FAILED_SQL:
+            _, token, _ = params
+            return int(state["status"] == "running" and state["claim_token"] == token)
+        raise AssertionError("unexpected SQL")
+
+    def refresh_price(*_):
+        state["runs"] += 1
+        if state["runs"] == 1:
+            # Simulate an earlier correction arriving while this worker is active.
+            state.update(status="pending", claim_token=None)
+        return 1
+
+    monkeypatch.setattr(actions, "execute_query", fake_query)
+    monkeypatch.setattr(actions, "execute_update", fake_update)
+
+    first = actions.run_due_refresh_tasks(refresh_price)
+    second = actions.run_due_refresh_tasks(refresh_price)
+
+    assert first["superseded"] == 1
+    assert first["done"] == 0
+    assert second["done"] == 1
+    assert state["status"] == "done"

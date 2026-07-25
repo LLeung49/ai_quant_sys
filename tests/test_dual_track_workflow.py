@@ -205,11 +205,11 @@ def test_failed_projection_refresh_is_durable_and_retried_on_the_next_run(monkey
     def fake_update(sql, params=None):
         if sql == actions.RECLAIM_STALE_TASKS_SQL:
             return 0
-        if "status = 'running'" in sql:
+        if sql == actions.MARK_TASK_RUNNING_SQL:
             task_status["value"] = "running"
-        elif "status = 'failed'" in sql:
+        elif sql == actions.MARK_TASK_FAILED_SQL:
             task_status["value"] = "failed"
-        elif "status = 'done'" in sql:
+        elif sql == actions.MARK_TASK_DONE_SQL:
             task_status["value"] = "done"
         return 1
 
@@ -231,8 +231,12 @@ def test_failed_projection_refresh_is_durable_and_retried_on_the_next_run(monkey
     first_run = actions.run_due_refresh_tasks(refresh_price)
     second_run = actions.run_due_refresh_tasks(refresh_price)
 
-    assert first_run == {"done": 0, "failed": 1, "retried": 0, "reclaimed": 0}
-    assert second_run == {"done": 1, "failed": 0, "retried": 0, "reclaimed": 0}
+    assert first_run == {
+        "done": 0, "failed": 1, "retried": 0, "reclaimed": 0, "superseded": 0,
+    }
+    assert second_run == {
+        "done": 1, "failed": 0, "retried": 0, "reclaimed": 0, "superseded": 0,
+    }
     assert attempts == 2
     assert task_status["value"] == "done"
 

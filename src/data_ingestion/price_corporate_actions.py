@@ -10,6 +10,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 import json
 from typing import Callable, Iterable, Literal
+from uuid import uuid4
 
 try:
     from .db_config import execute_query, execute_update, get_connection
@@ -375,11 +376,18 @@ def run_due_refresh_tasks(
 ) -> dict[str, int]:
     """Run every pending/failed task, preserving failures for later retries."""
     reclaimed = execute_update(RECLAIM_STALE_TASKS_SQL, (lease_timeout_minutes,))
-    result = {"done": 0, "failed": 0, "retried": 0, "reclaimed": reclaimed}
+    result = {
+        "done": 0,
+        "failed": 0,
+        "retried": 0,
+        "reclaimed": reclaimed,
+        "superseded": 0,
+    }
     for task in execute_query(SELECT_PENDING_TASKS_SQL):
         if task.get("retry_count", 0):
             result["retried"] += 1
-        claimed = execute_update(MARK_TASK_RUNNING_SQL, (task["id"],))
+        claim_token = str(uuid4())
+        claimed = execute_update(MARK_TASK_RUNNING_SQL, (claim_token, task["id"]))
         if not claimed:
             continue
         try:
@@ -394,9 +402,16 @@ def run_due_refresh_tasks(
                 raise RuntimeError("price refresh wrote zero rows")
         except Exception as exc:
             message = f"{type(exc).__name__}: {exc}"[:1000]
-            execute_update(MARK_TASK_FAILED_SQL, (message, task["id"]))
-            result["failed"] += 1
+            if execute_update(
+                MARK_TASK_FAILED_SQL,
+                (message, claim_token, task["id"]),
+            ):
+                result["failed"] += 1
+            else:
+                result["superseded"] += 1
         else:
-            execute_update(MARK_TASK_DONE_SQL, (task["id"],))
-            result["done"] += 1
+            if execute_update(MARK_TASK_DONE_SQL, (claim_token, task["id"])):
+                result["done"] += 1
+            else:
+                result["superseded"] += 1
     return result

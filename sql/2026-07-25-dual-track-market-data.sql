@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS trade_price_refresh_task (
     status ENUM('pending', 'running', 'done', 'failed') NOT NULL DEFAULT 'pending',
     retry_count INT UNSIGNED NOT NULL DEFAULT 0,
     last_error VARCHAR(1000) NULL,
+    claim_token CHAR(36) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
@@ -109,6 +110,7 @@ CREATE TABLE IF NOT EXISTS trade_legacy_qfq_repair_task (
     status ENUM('pending', 'running', 'done', 'failed') NOT NULL DEFAULT 'pending',
     retry_count INT UNSIGNED NOT NULL DEFAULT 0,
     last_error VARCHAR(1000) NULL,
+    claim_token CHAR(36) NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
@@ -122,3 +124,33 @@ ALTER TABLE trade_price_reconcile_log
     MODIFY COLUMN status
         ENUM('pending', 'queued', 'resolved', 'ignored')
         NOT NULL DEFAULT 'pending';
+
+SET @refresh_claim_exists = (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'trade_price_refresh_task'
+      AND column_name = 'claim_token'
+);
+SET @refresh_claim_ddl = IF(
+    @refresh_claim_exists = 0,
+    'ALTER TABLE trade_price_refresh_task ADD COLUMN claim_token CHAR(36) NULL AFTER last_error',
+    'SELECT 1'
+);
+PREPARE refresh_claim_stmt FROM @refresh_claim_ddl;
+EXECUTE refresh_claim_stmt;
+DEALLOCATE PREPARE refresh_claim_stmt;
+
+SET @legacy_claim_exists = (
+    SELECT COUNT(*) FROM information_schema.columns
+    WHERE table_schema = DATABASE()
+      AND table_name = 'trade_legacy_qfq_repair_task'
+      AND column_name = 'claim_token'
+);
+SET @legacy_claim_ddl = IF(
+    @legacy_claim_exists = 0,
+    'ALTER TABLE trade_legacy_qfq_repair_task ADD COLUMN claim_token CHAR(36) NULL AFTER last_error',
+    'SELECT 1'
+);
+PREPARE legacy_claim_stmt FROM @legacy_claim_ddl;
+EXECUTE legacy_claim_stmt;
+DEALLOCATE PREPARE legacy_claim_stmt;

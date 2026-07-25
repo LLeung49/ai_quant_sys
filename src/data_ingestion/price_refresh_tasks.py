@@ -10,7 +10,12 @@ INSERT INTO trade_price_refresh_task
 VALUES (%s, %s, %s, %s, 'pending')
 ON DUPLICATE KEY UPDATE
     refresh_from = LEAST(refresh_from, VALUES(refresh_from)),
-    status = CASE WHEN status = 'done' THEN 'pending' ELSE status END,
+    status = CASE
+        WHEN status = 'done' THEN 'pending'
+        WHEN status = 'running' THEN 'pending'
+        ELSE status
+    END,
+    claim_token = NULL,
     last_error = NULL,
     updated_at = CURRENT_TIMESTAMP
 """
@@ -27,6 +32,7 @@ UPDATE trade_price_refresh_task
 SET status = 'failed',
     retry_count = retry_count + 1,
     last_error = 'Lease expired while task was running; reclaimed automatically',
+    claim_token = NULL,
     updated_at = CURRENT_TIMESTAMP
 WHERE status = 'running'
   AND updated_at < CURRENT_TIMESTAMP - INTERVAL %s MINUTE
@@ -34,21 +40,23 @@ WHERE status = 'running'
 
 MARK_TASK_RUNNING_SQL = """
 UPDATE trade_price_refresh_task
-SET status = 'running', last_error = NULL, updated_at = CURRENT_TIMESTAMP
+SET status = 'running', claim_token = %s, last_error = NULL,
+    updated_at = CURRENT_TIMESTAMP
 WHERE id = %s AND status IN ('pending', 'failed')
 """
 
 MARK_TASK_DONE_SQL = """
 UPDATE trade_price_refresh_task
-SET status = 'done', last_error = NULL, updated_at = CURRENT_TIMESTAMP
-WHERE id = %s
+SET status = 'done', claim_token = NULL, last_error = NULL,
+    updated_at = CURRENT_TIMESTAMP
+WHERE claim_token = %s AND id = %s AND status = 'running'
 """
 
 MARK_TASK_FAILED_SQL = """
 UPDATE trade_price_refresh_task
 SET status = 'failed', retry_count = retry_count + 1, last_error = %s,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = %s
+    claim_token = NULL, updated_at = CURRENT_TIMESTAMP
+WHERE claim_token = %s AND id = %s AND status = 'running'
 """
 
 

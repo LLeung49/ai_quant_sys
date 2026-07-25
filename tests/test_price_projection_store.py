@@ -243,7 +243,13 @@ def test_executable_flow_syncs_actions_before_prices_then_runs_durable_refresh(
 
     def run_tasks(callback):
         callback("600519.SH", "front", date(2015, 1, 1))
-        return {"done": 1, "failed": 0, "retried": 1, "reclaimed": 1}
+        return {
+            "done": 1,
+            "failed": 0,
+            "retried": 1,
+            "reclaimed": 1,
+            "superseded": 0,
+        }
 
     monkeypatch.setattr(collector, "run_due_refresh_tasks", run_tasks)
 
@@ -255,4 +261,4 @@ def test_executable_flow_syncs_actions_before_prices_then_runs_durable_refresh(
     ]
     output = capsys.readouterr().out
     assert "[权益] 新增=0 修订=1 撤回=1 刷新任务=2" in output
-    assert "[刷新] 成功=1 失败=0 重试=1 回收=1" in output
+    assert "[刷新] 成功=1 失败=0 重试=1 回收=1 已被新任务取代=0" in output

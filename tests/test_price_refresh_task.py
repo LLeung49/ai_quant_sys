@@ -76,6 +76,11 @@ def test_refresh_task_sql_covers_lifecycle_and_retries():
     assert "retry_count = retry_count + 1" in MARK_TASK_FAILED_SQL
     assert "status = 'running'" in RECLAIM_STALE_TASKS_SQL
     assert "retry_count = retry_count + 1" in RECLAIM_STALE_TASKS_SQL
+    assert "WHEN status = 'running' THEN 'pending'" in INSERT_REFRESH_TASK_SQL
+    assert "claim_token = NULL" in INSERT_REFRESH_TASK_SQL
+    assert "claim_token = %s" in MARK_TASK_RUNNING_SQL
+    assert "claim_token = %s" in MARK_TASK_DONE_SQL
+    assert "claim_token = %s" in MARK_TASK_FAILED_SQL
 
 
 def test_ddl_defines_all_dual_track_tables_and_refresh_task_uniqueness():
@@ -94,3 +99,4 @@ def test_ddl_defines_all_dual_track_tables_and_refresh_task_uniqueness():
     assert "trade_stock_daily_raw" in ddl
     assert "trade_corporate_action" in ddl
     assert "SIGNAL SQLSTATE '45000'" in ddl
+    assert "claim_token CHAR(36) NULL" in ddl

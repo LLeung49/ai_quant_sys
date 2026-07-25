@@ -14,11 +14,12 @@ import argparse
 import sys
 from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
+from uuid import uuid4
 
 try:  # Package import for tests and application modules.
-    from .db_config import execute_many, execute_query, execute_update
+    from .db_config import execute_many, execute_query, execute_update, get_connection
 except ImportError:  # Direct script execution from src/data_ingestion.
-    from db_config import execute_many, execute_query, execute_update
+    from db_config import execute_many, execute_query, execute_update, get_connection
 
 
 PRICE_TOLERANCE = Decimal("0.000001")
@@ -142,13 +143,12 @@ WHERE stock_code = %s
 """
 
 SELECT_PENDING_RANGES_SQL = """
-SELECT stock_code, MIN(trade_date) AS refresh_from, MAX(trade_date) AS refresh_to
+SELECT stock_code, trade_date AS refresh_from, trade_date AS refresh_to
 FROM trade_price_reconcile_log
 WHERE price_mode = 'front'
   AND status = 'pending'
   AND diff_reason IN ('qfq_ohlc_mismatch', 'legacy_qfq_missing')
-GROUP BY stock_code
-ORDER BY stock_code
+ORDER BY stock_code, trade_date
 """
 
 UPSERT_LEGACY_REPAIR_TASK_SQL = """
@@ -156,7 +156,12 @@ INSERT INTO trade_legacy_qfq_repair_task
     (stock_code, refresh_from, refresh_to, reason, status)
 VALUES (%s, %s, %s, %s, 'pending')
 ON DUPLICATE KEY UPDATE
-    status = CASE WHEN status = 'done' THEN 'pending' ELSE status END,
+    status = CASE
+        WHEN status = 'done' THEN 'pending'
+        WHEN status = 'running' THEN 'pending'
+        ELSE status
+    END,
+    claim_token = NULL,
     last_error = NULL,
     updated_at = CURRENT_TIMESTAMP
 """
@@ -183,6 +188,7 @@ UPDATE trade_legacy_qfq_repair_task
 SET status = 'failed',
     retry_count = retry_count + 1,
     last_error = 'Lease expired while task was running; reclaimed automatically',
+    claim_token = NULL,
     updated_at = CURRENT_TIMESTAMP
 WHERE status = 'running'
   AND updated_at < CURRENT_TIMESTAMP - INTERVAL %s MINUTE
@@ -190,31 +196,52 @@ WHERE status = 'running'
 
 MARK_LEGACY_REPAIR_RUNNING_SQL = """
 UPDATE trade_legacy_qfq_repair_task
-SET status = 'running', last_error = NULL, updated_at = CURRENT_TIMESTAMP
+SET status = 'running', claim_token = %s, last_error = NULL,
+    updated_at = CURRENT_TIMESTAMP
 WHERE id = %s AND status IN ('pending', 'failed')
 """
 
 MARK_LEGACY_REPAIR_DONE_SQL = """
-UPDATE trade_legacy_qfq_repair_task
-SET status = 'done', last_error = NULL, updated_at = CURRENT_TIMESTAMP
-WHERE id = %s
+UPDATE trade_legacy_qfq_repair_task AS task
+INNER JOIN trade_price_reconcile_log AS log
+    ON log.stock_code = task.stock_code
+   AND log.trade_date BETWEEN task.refresh_from AND task.refresh_to
+   AND log.price_mode = 'front'
+   AND log.status = 'queued'
+   AND log.diff_reason IN ('qfq_ohlc_mismatch', 'legacy_qfq_missing')
+SET task.status = 'done',
+    task.claim_token = NULL,
+    task.last_error = NULL,
+    task.updated_at = CURRENT_TIMESTAMP,
+    log.status = 'resolved',
+    log.resolved_at = CURRENT_TIMESTAMP
+WHERE task.claim_token = %s AND task.id = %s AND task.status = 'running'
 """
 
 MARK_LEGACY_REPAIR_FAILED_SQL = """
 UPDATE trade_legacy_qfq_repair_task
 SET status = 'failed', retry_count = retry_count + 1, last_error = %s,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = %s
+    claim_token = NULL, updated_at = CURRENT_TIMESTAMP
+WHERE claim_token = %s AND id = %s AND status = 'running'
 """
 
 UPSERT_LEGACY_FROM_QFQ_SQL = """
 INSERT INTO trade_stock_daily
     (stock_code, trade_date, open_price, high_price, low_price, close_price,
      volume, amount, turnover_rate)
-SELECT stock_code, trade_date, open_price, high_price, low_price, close_price,
-       volume, amount, turnover_rate
-FROM trade_stock_daily_qfq
-WHERE stock_code = %s AND trade_date BETWEEN %s AND %s
+SELECT projected.stock_code, projected.trade_date,
+       projected.open_price, projected.high_price,
+       projected.low_price, projected.close_price,
+       projected.volume, projected.amount, projected.turnover_rate
+FROM trade_stock_daily_qfq AS projected
+INNER JOIN trade_price_reconcile_log AS log
+    ON log.stock_code = projected.stock_code
+   AND log.trade_date = projected.trade_date
+   AND log.price_mode = 'front'
+WHERE projected.stock_code = %s
+  AND projected.trade_date BETWEEN %s AND %s
+  AND log.status = 'queued'
+  AND log.diff_reason IN ('qfq_ohlc_mismatch', 'legacy_qfq_missing')
 ON DUPLICATE KEY UPDATE
     open_price = VALUES(open_price),
     high_price = VALUES(high_price),
@@ -226,20 +253,16 @@ ON DUPLICATE KEY UPDATE
 
 COUNT_QFQ_REPAIR_ROWS_SQL = """
 SELECT COUNT(*) AS row_count
-FROM trade_stock_daily_qfq
-WHERE stock_code = %s AND trade_date BETWEEN %s AND %s
+FROM trade_stock_daily_qfq AS projected
+INNER JOIN trade_price_reconcile_log AS log
+    ON log.stock_code = projected.stock_code
+   AND log.trade_date = projected.trade_date
+   AND log.price_mode = 'front'
+WHERE projected.stock_code = %s
+  AND projected.trade_date BETWEEN %s AND %s
+  AND log.status = 'queued'
+  AND log.diff_reason IN ('qfq_ohlc_mismatch', 'legacy_qfq_missing')
 """
-
-MARK_LOG_RANGE_RESOLVED_SQL = """
-UPDATE trade_price_reconcile_log
-SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP
-WHERE stock_code = %s
-  AND trade_date BETWEEN %s AND %s
-  AND price_mode = 'front'
-  AND status IN ('pending', 'queued')
-  AND diff_reason IN ('qfq_ohlc_mismatch', 'legacy_qfq_missing')
-"""
-
 
 def _decimal(value) -> Decimal:
     """Convert a database number without binary-floating-point comparisons."""
@@ -404,6 +427,36 @@ def refresh_legacy_qfq_range(stock_code: str, refresh_from: date, refresh_to: da
     return source_count
 
 
+def complete_legacy_qfq_repair(
+    task: dict,
+    claim_token: str,
+    connection_factory=None,
+) -> int:
+    """Atomically apply queued rows and complete the token-owned repair task."""
+    connection_factory = connection_factory or get_connection
+    connection = connection_factory()
+    cursor = connection.cursor()
+    params = (task["stock_code"], task["refresh_from"], task["refresh_to"])
+    try:
+        cursor.execute(COUNT_QFQ_REPAIR_ROWS_SQL, params)
+        count_row = cursor.fetchone()
+        source_count = int(count_row[0]) if count_row else 0
+        if not source_count:
+            raise RuntimeError("independent qfq table returned no queued rows")
+        cursor.execute(UPSERT_LEGACY_FROM_QFQ_SQL, params)
+        cursor.execute(MARK_LEGACY_REPAIR_DONE_SQL, (claim_token, task["id"]))
+        if not cursor.rowcount:
+            raise RuntimeError("legacy repair claim was superseded")
+        connection.commit()
+        return source_count
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        cursor.close()
+        connection.close()
+
+
 def run_pending_legacy_repairs(lease_timeout_minutes: int = 60) -> dict[str, int]:
     """Execute durable legacy repairs; failures remain queued for another run."""
     reclaimed = execute_update(
@@ -416,28 +469,34 @@ def run_pending_legacy_repairs(lease_timeout_minutes: int = 60) -> dict[str, int
         "updated_rows": 0,
         "retried": 0,
         "reclaimed": reclaimed,
+        "superseded": 0,
     }
     for task in execute_query(SELECT_PENDING_LEGACY_REPAIRS_SQL):
         if task.get("retry_count", 0):
             result["retried"] += 1
-        if not execute_update(MARK_LEGACY_REPAIR_RUNNING_SQL, (task["id"],)):
+        claim_token = str(uuid4())
+        if not execute_update(
+            MARK_LEGACY_REPAIR_RUNNING_SQL,
+            (claim_token, task["id"]),
+        ):
             continue
         try:
-            updated_rows = refresh_legacy_qfq_range(
-                task["stock_code"], task["refresh_from"], task["refresh_to"],
+            updated_rows = complete_legacy_qfq_repair(
+                task,
+                claim_token,
             )
         except Exception as exc:
-            execute_update(
+            failed = execute_update(
                 MARK_LEGACY_REPAIR_FAILED_SQL,
-                (f"{type(exc).__name__}: {exc}"[:1000], task["id"]),
+                (
+                    f"{type(exc).__name__}: {exc}"[:1000],
+                    claim_token,
+                    task["id"],
+                ),
             )
-            result["failed"] += 1
+            result["failed"] += int(bool(failed))
+            result["superseded"] += int(not failed)
         else:
-            execute_update(
-                MARK_LOG_RANGE_RESOLVED_SQL,
-                (task["stock_code"], task["refresh_from"], task["refresh_to"]),
-            )
-            execute_update(MARK_LEGACY_REPAIR_DONE_SQL, (task["id"],))
             result["done"] += 1
             result["updated_rows"] += updated_rows
     return result
@@ -462,7 +521,8 @@ def main(argv: list[str] | None = None) -> int:
         repaired = run_pending_legacy_repairs()
         print(
             "[重刷执行] 成功=%(done)s 失败=%(failed)s 更新=%(updated_rows)s "
-            "重试=%(retried)s 回收=%(reclaimed)s"
+            "重试=%(retried)s 回收=%(reclaimed)s "
+            "已被新任务取代=%(superseded)s"
             % repaired
         )
         return 1 if repaired["failed"] else 0

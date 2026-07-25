@@ -171,6 +171,15 @@ def test_confirmed_discrepancies_create_one_exact_legacy_date_range_task(monkeyp
     assert "status = 'queued'" in updates[0][0]
 
 
+def test_pending_repair_query_keeps_each_confirmed_date_exact():
+    reconciliation = load_reconciliation_module()
+
+    assert "trade_date AS refresh_from" in reconciliation.SELECT_PENDING_RANGES_SQL
+    assert "trade_date AS refresh_to" in reconciliation.SELECT_PENDING_RANGES_SQL
+    assert "MIN(trade_date)" not in reconciliation.SELECT_PENDING_RANGES_SQL
+    assert "MAX(trade_date)" not in reconciliation.SELECT_PENDING_RANGES_SQL
+
+
 def test_missing_legacy_row_is_detected_and_can_be_repaired_from_projection():
     reconciliation = load_reconciliation_module()
     row = price_row()
@@ -235,7 +244,9 @@ def test_legacy_repair_upserts_missing_rows_from_independent_qfq(monkeypatch):
 
     assert affected == 1
     assert "INSERT INTO trade_stock_daily" in updates[0][0]
-    assert "SELECT stock_code, trade_date" in updates[0][0]
+    assert "SELECT projected.stock_code, projected.trade_date" in updates[0][0]
+    assert "INNER JOIN trade_price_reconcile_log" in updates[0][0]
+    assert "log.status = 'queued'" in updates[0][0]
     assert "ON DUPLICATE KEY UPDATE" in updates[0][0]
     assert updates[0][1] == (
         "600519.SH",
@@ -296,6 +307,11 @@ def test_stale_running_legacy_task_is_reclaimed_before_retry(monkeypatch):
     monkeypatch.setattr(reconciliation, "execute_query", fake_query)
     monkeypatch.setattr(
         reconciliation,
+        "complete_legacy_qfq_repair",
+        lambda task, claim_token: 3,
+    )
+    monkeypatch.setattr(
+        reconciliation,
         "execute_update",
         lambda sql, params=None: updates.append((sql, params)) or 1,
     )
@@ -307,6 +323,80 @@ def test_stale_running_legacy_task_is_reclaimed_before_retry(monkeypatch):
     assert result["done"] == 1
     assert result["failed"] == 0
     assert updates[0][1] == (45,)
+
+
+def test_legacy_task_completion_is_guarded_by_claim_token():
+    reconciliation = load_reconciliation_module()
+
+    assert "WHEN status = 'running' THEN 'pending'" in (
+        reconciliation.UPSERT_LEGACY_REPAIR_TASK_SQL
+    )
+    assert "claim_token = NULL" in reconciliation.UPSERT_LEGACY_REPAIR_TASK_SQL
+    assert "claim_token = %s" in reconciliation.MARK_LEGACY_REPAIR_RUNNING_SQL
+    assert "claim_token = %s" in reconciliation.MARK_LEGACY_REPAIR_DONE_SQL
+    assert "claim_token = %s" in reconciliation.MARK_LEGACY_REPAIR_FAILED_SQL
+    assert "claim_token = NULL" in reconciliation.RECLAIM_STALE_LEGACY_REPAIRS_SQL
+
+
+def test_legacy_upsert_and_task_log_completion_share_one_transaction():
+    reconciliation = load_reconciliation_module()
+
+    class Cursor:
+        def __init__(self):
+            self.sql = []
+            self.rowcount = 0
+
+        def execute(self, sql, params=None):
+            self.sql.append((sql, params))
+            self.rowcount = 1
+
+        def fetchone(self):
+            return (2,)
+
+        def close(self):
+            pass
+
+    class Connection:
+        def __init__(self):
+            self.cursor_instance = Cursor()
+            self.committed = False
+            self.rolled_back = False
+
+        def cursor(self):
+            return self.cursor_instance
+
+        def commit(self):
+            self.committed = True
+
+        def rollback(self):
+            self.rolled_back = True
+
+        def close(self):
+            pass
+
+    connection = Connection()
+    task = {
+        "id": 5,
+        "stock_code": "600519.SH",
+        "refresh_from": date(2026, 7, 1),
+        "refresh_to": date(2026, 7, 1),
+    }
+
+    result = reconciliation.complete_legacy_qfq_repair(
+        task,
+        "claim-a",
+        connection_factory=lambda: connection,
+    )
+
+    assert result == 2
+    assert connection.committed
+    assert not connection.rolled_back
+    sql = [item[0] for item in connection.cursor_instance.sql]
+    assert sql == [
+        reconciliation.COUNT_QFQ_REPAIR_ROWS_SQL,
+        reconciliation.UPSERT_LEGACY_FROM_QFQ_SQL,
+        reconciliation.MARK_LEGACY_REPAIR_DONE_SQL,
+    ]
 
 
 def test_cli_logs_resolution_retry_and_reclaim_counts(monkeypatch, capsys):
@@ -325,10 +415,14 @@ def test_cli_logs_resolution_retry_and_reclaim_counts(monkeypatch, capsys):
             "updated_rows": 5,
             "retried": 2,
             "reclaimed": 1,
+            "superseded": 0,
         },
     )
 
     assert reconciliation.main(["--run-repairs"]) == 0
     output = capsys.readouterr().out
     assert "[对账] 比较=3 差异=1 写入=1 已解决=2" in output
-    assert "[重刷执行] 成功=1 失败=0 更新=5 重试=2 回收=1" in output
+    assert (
+        "[重刷执行] 成功=1 失败=0 更新=5 重试=2 回收=1 "
+        "已被新任务取代=0"
+    ) in output
