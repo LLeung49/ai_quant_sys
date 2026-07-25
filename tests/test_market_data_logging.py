@@ -8,7 +8,8 @@ import pytest
 import pymysql
 
 
-SCRIPT_PATH = Path(__file__).parents[1] / '1-行情数据采集.py'
+SCRIPT_PATH = Path(__file__).parents[1] / 'src' / 'data_ingestion' / '1-行情数据采集.py'
+SCRIPT_DIR = str(SCRIPT_PATH.parent)
 
 
 def load_market_module_with_fake_xtquant():
@@ -21,12 +22,14 @@ def load_market_module_with_fake_xtquant():
     fake_xtquant.xtdata = fake_xtdata
     previous_xtquant = sys.modules.get('xtquant')
     sys.modules['xtquant'] = fake_xtquant
+    sys.path.insert(0, SCRIPT_DIR)
     try:
         spec = importlib.util.spec_from_file_location('market_data_collector', SCRIPT_PATH)
         module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(module)
         return module
     finally:
+        sys.path.remove(SCRIPT_DIR)
         if previous_xtquant is None:
             sys.modules.pop('xtquant', None)
         else:
