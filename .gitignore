@@ -54,6 +54,11 @@ build/
 
 # 设计与测试文档 (内部工作笔记, 不上传)
 docs/
+# 项目维护文档需要随代码版本演进；其余 docs 内容仍保持为本地工作笔记。
+!docs/
+docs/*
+!docs/data_ingestion/
+!docs/data_ingestion/*.md
 
 # IDE / OS
 .vscode/
