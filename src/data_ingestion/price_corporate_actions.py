@@ -1,8 +1,8 @@
-"""QMT corporate-action snapshots and durable adjusted-price refreshes.
+"""QMT 权益事件快照与复权投影的持久化刷新任务。
 
-Raw prices and corporate actions are facts.  Front/back adjusted prices are
-projections: a changed action creates a durable database task and that task is
-marked done only after the projection refresh returns successfully.
+原始价格和权益事件是可审计事实；前/后复权价格则是可随供应商修订重建的投影。
+本模块只负责“识别权益变化并登记任务”，不直接下载行情。任务仅在价格刷新函数成功
+写入非零行数后才标记完成，因此进程中断或 QMT 短暂失败不会丢失重刷请求。
 """
 
 from dataclasses import dataclass
@@ -36,8 +36,8 @@ except ImportError:  # Direct script execution from src/data_ingestion.
     )
 
 
-DATA_SOURCE = "xtquant"
-TASK_REASON = "corporate_action_changed"
+DATA_SOURCE = "xtquant"  # 同一股票、除权日可保留不同供应商来源的事件快照。
+TASK_REASON = "corporate_action_changed"  # 供任务表审计、聚合和排障使用。
 
 ACTION_VALUE_FIELDS = (
     "cash_dividend_per_share",
@@ -50,6 +50,7 @@ ACTION_VALUE_FIELDS = (
 )
 
 SELECT_ACTION_SNAPSHOT_SQL = """
+-- 只比较本次完整回看窗口；窗口外历史事件不因每日快照被误判为撤回。
 SELECT stock_code, ex_date, cash_dividend_per_share,
        stock_bonus_per_share, stock_gift_per_share,
        rights_issue_per_share, rights_issue_price, share_reform_flag,
@@ -61,6 +62,7 @@ ORDER BY ex_date
 """
 
 UPSERT_ACTION_SQL = """
+-- 相同主键重复出现时更新供应商事实，并重新置为有效，保证日任务可幂等执行。
 INSERT INTO trade_corporate_action
     (stock_code, ex_date, cash_dividend_per_share, stock_bonus_per_share,
      stock_gift_per_share, rights_issue_per_share, rights_issue_price,
@@ -80,6 +82,7 @@ ON DUPLICATE KEY UPDATE
 """
 
 CANCEL_ACTION_SQL = """
+-- 仅撤销本窗口内原先有效、但本次供应商已不再返回的事件，保留历史审计记录。
 UPDATE trade_corporate_action
 SET event_status = 'cancelled', last_seen_at = CURRENT_TIMESTAMP
 WHERE stock_code = %s AND ex_date = %s AND data_source = %s
@@ -89,6 +92,7 @@ WHERE stock_code = %s AND ex_date = %s AND data_source = %s
 
 @dataclass(frozen=True)
 class ActionChange:
+    """一次快照比较发现的事件变化，供日志和刷新范围规划使用。"""
     kind: Literal["new", "corrected", "cancelled"]
     stock_code: str
     ex_date: date
@@ -96,6 +100,7 @@ class ActionChange:
 
 @dataclass
 class SnapshotPlan:
+    """一次快照的可审计写入计划：先写事实，再以同一事务写派生刷新任务。"""
     changes: list[ActionChange]
     events_to_upsert: list[dict]
     events_to_cancel: list[tuple[str, date, str]]
@@ -112,6 +117,7 @@ def _is_null(value) -> bool:
 
 
 def _decimal_text(value, places: int) -> str | None:
+    """以固定小数位规范化数值，消除 float/Decimal 表示差异造成的伪修订。"""
     if _is_null(value):
         return None
     try:
@@ -133,6 +139,7 @@ def _json_value(value):
 
 
 def _event_date(value) -> date:
+    """兼容 QMT 可能返回的日期、时间戳和字符串，统一转为权益事件除权日。"""
     if isinstance(value, datetime):
         return value.date()
     if isinstance(value, date):
@@ -153,7 +160,11 @@ def _event_date(value) -> date:
 
 
 def normalize_qmt_factors(stock_code: str, factor_frame) -> list[dict]:
-    """Map a QMT ``get_divid_factors`` frame to stable database values."""
+    """将 QMT ``get_divid_factors`` 转为稳定的数据库权益事实。
+
+    原始 QMT 字段同时保存在 ``source_payload``，便于以后核对字段语义或供应商修订；
+    用固定精度的文本保存可比较数值，避免二进制浮点误差反复触发重刷。
+    """
     events = []
     if factor_frame is None:
         return events
@@ -211,6 +222,7 @@ def _comparison_value(field: str, value):
 
 
 def _same_action(current: dict, stored: dict) -> bool:
+    """只比较影响复权的字段；来源载荷格式变化本身不应触发昂贵的历史重刷。"""
     return (
         stored.get("event_status", "effective") == "effective"
         and all(
@@ -227,6 +239,11 @@ def _refresh_requests(
     data_start: date,
     include_back: bool,
 ) -> list[dict]:
+    """按复权方向生成最小且正确的刷新范围。
+
+    前复权的历史价格会受新事件影响，始终从 ``data_start`` 重刷。正常新增事件不会
+    改变后复权历史；只有供应商修订或撤回历史事件时，才从该除权日重刷后复权。
+    """
     requests = [
         {
             "stock_code": stock_code,
@@ -252,7 +269,11 @@ def plan_factor_snapshot(
     stored_events: Iterable[dict],
     data_start: date,
 ) -> SnapshotPlan:
-    """Compare one complete source window and plan facts plus derived refreshes."""
+    """比较一个完整来源窗口，规划事实写入、撤回和派生价格重刷。
+
+    “窗口完整”是撤回判断的前提：若接口只返回部分日期，不能把缺失项当成已撤回。
+    ``merge_refresh_tasks`` 会把同股票、同模式的多项请求折叠为最早起点，减少重复历史下载。
+    """
     current = list(current_events)
     stored = list(stored_events)
     current_by_key = {_key(item): item for item in current}
@@ -323,6 +344,7 @@ def _task_values(task: dict) -> tuple:
 
 
 def _apply_snapshot_plan(cursor, plan: SnapshotPlan) -> None:
+    """在调用方事务中按“事件事实 → 撤回标记 → 刷新任务”顺序写入计划。"""
     if plan.events_to_upsert:
         cursor.executemany(UPSERT_ACTION_SQL, [_event_values(item) for item in plan.events_to_upsert])
     if plan.events_to_cancel:
@@ -335,7 +357,7 @@ def persist_snapshot_plan(
     plan: SnapshotPlan,
     connection_factory: Callable = get_connection,
 ) -> None:
-    """Atomically persist the factor snapshot changes and their refresh tasks."""
+    """原子写入权益快照与刷新任务，防止事实已变更而任务遗漏。"""
     connection = connection_factory()
     cursor = connection.cursor()
     try:
@@ -356,7 +378,7 @@ def sync_qmt_factor_snapshot(
     snapshot_end: date,
     data_start: date,
 ) -> SnapshotPlan:
-    """Persist one complete QMT factor window and return its auditable plan."""
+    """读取同窗口旧快照、生成差异计划并落库；返回值可用于调用方日志统计。"""
     existing = execute_query(
         SELECT_ACTION_SNAPSHOT_SQL,
         (stock_code, DATA_SOURCE, snapshot_start, snapshot_end),
@@ -374,7 +396,12 @@ def run_due_refresh_tasks(
     refresh_price: Callable[[str, str, date], object],
     lease_timeout_minutes: int = 60,
 ) -> dict[str, int]:
-    """Run every pending/failed task, preserving failures for later retries."""
+    """执行待处理/失败的投影刷新任务，并把失败保留给后续运行重试。
+
+    先回收超过租约的 ``running`` 任务，处理崩溃遗留状态。随后为每项任务写入唯一
+    ``claim_token``；完成/失败更新都带该令牌，避免两个进程中较晚结束的旧执行覆盖
+    新执行的状态。
+    """
     reclaimed = execute_update(RECLAIM_STALE_TASKS_SQL, (lease_timeout_minutes,))
     result = {
         "done": 0,
@@ -386,6 +413,7 @@ def run_due_refresh_tasks(
     for task in execute_query(SELECT_PENDING_TASKS_SQL):
         if task.get("retry_count", 0):
             result["retried"] += 1
+        # 条件更新确保只有一个并发执行者能从 pending/failed 认领此任务。
         claim_token = str(uuid4())
         claimed = execute_update(MARK_TASK_RUNNING_SQL, (claim_token, task["id"]))
         if not claimed:

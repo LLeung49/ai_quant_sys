@@ -1,8 +1,8 @@
-"""Fixed SQL storage for the independent raw and adjusted daily-price tables.
+"""独立原始/前复权/后复权日线表的固定写入边界。
 
-This module deliberately knows only the three derived-price tables.  It never
-writes the legacy ``trade_stock_daily`` table, which keeps the new collection
-path safe to run beside the existing collector.
+本模块把 QMT ``dividend_type`` 映射到唯一允许写入的三张新表，并集中维护其 UPSERT。
+它刻意不知道旧 ``trade_stock_daily`` 的写入 SQL：即使新采集任务发生故障，也不会污染
+正在使用的旧前复权链路。旧表只能由独立的、人工确认后的对账修复脚本写入。
 """
 
 from datetime import date
@@ -14,12 +14,14 @@ except ImportError:  # Direct ``python 8-...py`` execution.
 
 
 TABLE_BY_DIVIDEND_TYPE = {
+    # 该白名单同时是防误写保护：未知 QMT 模式不能拼接为任意表名。
     "none": "trade_stock_daily_raw",
     "front": "trade_stock_daily_qfq",
     "back": "trade_stock_daily_bfq",
 }
 
 RAW_INSERT_SQL = """
+-- 原始行情是交易事实；重复下载同一日期时以供应商最新值幂等覆盖。
 INSERT INTO trade_stock_daily_raw
     (stock_code, trade_date, open_price, high_price, low_price, close_price,
      volume, amount, pre_close, suspend_flag)
@@ -33,6 +35,7 @@ ON DUPLICATE KEY UPDATE
 """
 
 QFQ_INSERT_SQL = """
+-- 独立前复权投影；adjustment_asof 记录本行已包含到哪个权益事件版本。
 INSERT INTO trade_stock_daily_qfq
     (stock_code, trade_date, open_price, high_price, low_price, close_price,
      volume, amount, turnover_rate, adjustment_asof)
@@ -46,6 +49,7 @@ ON DUPLICATE KEY UPDATE
 """
 
 BFQ_INSERT_SQL = """
+-- 独立后复权投影；正常新增权益事件通常只需增量写入，历史修订才由任务表回补。
 INSERT INTO trade_stock_daily_bfq
     (stock_code, trade_date, open_price, high_price, low_price, close_price,
      volume, amount, turnover_rate, adjustment_asof)
@@ -65,6 +69,7 @@ INSERT_SQL_BY_DIVIDEND_TYPE = {
 }
 
 LATEST_DATE_SQL_BY_DIVIDEND_TYPE = {
+    # 每个模式单独取游标，再由采集器选择最早日期以保证三张表日期对齐。
     "none": "SELECT stock_code, MAX(trade_date) AS max_date FROM trade_stock_daily_raw GROUP BY stock_code",
     "front": "SELECT stock_code, MAX(trade_date) AS max_date FROM trade_stock_daily_qfq GROUP BY stock_code",
     "back": "SELECT stock_code, MAX(trade_date) AS max_date FROM trade_stock_daily_bfq GROUP BY stock_code",
@@ -72,7 +77,7 @@ LATEST_DATE_SQL_BY_DIVIDEND_TYPE = {
 
 
 def table_for_mode(dividend_type: str) -> str:
-    """Return the fixed destination table for a QMT dividend type."""
+    """返回模式的固定目标表；拒绝未知模式，防止动态 SQL 表名注入/误写。"""
     try:
         return TABLE_BY_DIVIDEND_TYPE[dividend_type]
     except KeyError as exc:
@@ -80,7 +85,7 @@ def table_for_mode(dividend_type: str) -> str:
 
 
 def get_existing_latest_dates(dividend_type: str) -> dict[str, str]:
-    """Return each code's latest saved date for one independent price mode."""
+    """取得一种模式中每个代码的最新落库日期，供上层决定增量起点。"""
     table_for_mode(dividend_type)
     rows = execute_query(LATEST_DATE_SQL_BY_DIVIDEND_TYPE[dividend_type])
     return {
@@ -93,7 +98,11 @@ def get_existing_latest_dates(dividend_type: str) -> dict[str, str]:
 def write_daily_rows(
     dividend_type: str, rows: list[dict], adjustment_asof: date | None,
 ) -> int:
-    """Upsert rows for exactly one price mode using its fixed SQL statement."""
+    """将同一模式的一批行幂等写入其固定表，返回驱动报告的影响行数。
+
+    原始数据和复权投影刻意使用不同列集：前者保留昨收/停牌事实，后者保留权益事件版本。
+    空列表不发 SQL，避免调用方将无行情响应误记为成功写入。
+    """
     if not rows:
         return 0
     table_for_mode(dividend_type)

@@ -1,13 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Reconcile legacy and independent QMT front-adjusted daily prices.
+"""旧前复权与独立前复权的对账、人工确认和定向修复任务。
 
-The legacy collector remains untouched.  This script is the only new-path code
-allowed to update ``trade_stock_daily`` and does so only after an operator
-confirms a logged discrepancy with ``--queue-repairs``.
+默认运行只读取两张价格表并维护差异审计日志，绝不修改旧 ``trade_stock_daily``。
+只有操作员确认后显式传入 ``--queue-repairs``，才会生成修复任务；再传入
+``--run-repairs`` 才会把独立前复权投影 UPSERT 回旧表。这是新链路唯一允许写旧表的入口。
 
-``PRICE_TOLERANCE`` is one unit at the six decimal places stored by both price
-tables.  Differences at or below that amount are rounding noise; a larger
-difference is persisted for review.
+``PRICE_TOLERANCE`` 是两张表六位小数精度中的最小单位。小于等于该值的差异是舍入噪声；
+更大差异、以及任一侧缺行都会持久化为可审计记录。
 """
 
 import argparse
@@ -22,11 +21,12 @@ except ImportError:  # Direct script execution from src/data_ingestion.
     from db_config import execute_many, execute_query, execute_update, get_connection
 
 
-PRICE_TOLERANCE = Decimal("0.000001")
+PRICE_TOLERANCE = Decimal("0.000001")  # 必须与两张价格表的 DECIMAL(..., 6) 精度一致。
 PRICE_COLUMNS = ("open_price", "high_price", "low_price", "close_price")
 RECONCILE_REASON = "qfq_ohlc_mismatch"
 
 SELECT_DATE_BOUNDS_SQL = """
+-- 用两表日期并集决定对账范围，使“仅一侧存在数据”的日期也不会遗漏。
 SELECT MIN(trade_date) AS min_date, MAX(trade_date) AS max_date
 FROM (
     SELECT trade_date FROM trade_stock_daily
@@ -36,6 +36,7 @@ FROM (
 """
 
 SELECT_CODES_BATCH_SQL = """
+-- 每个日期批次只枚举实际出现的代码，避免构造全市场笛卡尔扫描。
 SELECT stock_code
 FROM (
     SELECT stock_code FROM trade_stock_daily
@@ -48,6 +49,7 @@ ORDER BY stock_code
 """
 
 SELECT_DISCREPANCIES_BATCH_SQL = """
+-- 第一半识别旧表存在但独立表缺失，或两侧 OHLC 超出容差的情况。
 SELECT legacy.stock_code, legacy.trade_date,
        legacy.open_price AS old_open_price,
        legacy.high_price AS old_high_price,
@@ -73,6 +75,7 @@ WHERE legacy.trade_date BETWEEN %s AND %s
       OR ABS(legacy.close_price - projected.close_price) > 0.000001
   )
 UNION ALL
+-- 第二半补齐“独立表存在但旧表缺失”；LEFT JOIN + UNION ALL 等价于受控的全外连接。
 SELECT projected.stock_code, projected.trade_date,
        NULL, NULL, NULL, NULL,
        projected.open_price, projected.high_price,
@@ -89,6 +92,7 @@ ORDER BY stock_code, trade_date
 """
 
 SELECT_UNRESOLVED_LOGS_SQL = """
+-- 仅复查已有未解决审计记录；已一致的正常行不做任何写入。
 SELECT log.stock_code, log.trade_date,
        legacy.open_price AS old_open_price,
        legacy.high_price AS old_high_price,
@@ -112,6 +116,7 @@ WHERE log.price_mode = 'front'
 """
 
 UPSERT_RECONCILE_LOG_SQL = """
+-- (代码, 日期, 模式) 唯一：重复对账更新最新观测值；已 resolved 后再次差异会重新 pending。
 INSERT INTO trade_price_reconcile_log
     (stock_code, trade_date, price_mode,
      old_open_price, old_high_price, old_low_price, old_close_price,
@@ -134,6 +139,7 @@ ON DUPLICATE KEY UPDATE
 """
 
 MARK_RECONCILE_LOG_RESOLVED_SQL = """
+-- 只关闭仍待处理/已排队的记录，避免覆盖人工忽略等最终状态。
 UPDATE trade_price_reconcile_log
 SET status = 'resolved', resolved_at = CURRENT_TIMESTAMP
 WHERE stock_code = %s
@@ -143,6 +149,7 @@ WHERE stock_code = %s
 """
 
 SELECT_PENDING_RANGES_SQL = """
+-- 只有可由独立前复权补齐的差异才允许进入旧表修复队列；独立表缺行不能修复旧表。
 SELECT stock_code, trade_date AS refresh_from, trade_date AS refresh_to
 FROM trade_price_reconcile_log
 WHERE price_mode = 'front'
@@ -152,6 +159,7 @@ ORDER BY stock_code, trade_date
 """
 
 UPSERT_LEGACY_REPAIR_TASK_SQL = """
+-- 人工重复确认安全：相同修复任务复用；已完成/运行中任务重新置 pending 并清空认领令牌。
 INSERT INTO trade_legacy_qfq_repair_task
     (stock_code, refresh_from, refresh_to, reason, status)
 VALUES (%s, %s, %s, %s, 'pending')
@@ -184,6 +192,7 @@ ORDER BY created_at, id
 """
 
 RECLAIM_STALE_LEGACY_REPAIRS_SQL = """
+-- 进程异常退出留下的 running 任务超过租约后自动转 failed，供下一轮重试。
 UPDATE trade_legacy_qfq_repair_task
 SET status = 'failed',
     retry_count = retry_count + 1,
@@ -195,6 +204,7 @@ WHERE status = 'running'
 """
 
 MARK_LEGACY_REPAIR_RUNNING_SQL = """
+-- 条件认领：只有 pending/failed 状态可进入 running，claim_token 用于防并发覆盖。
 UPDATE trade_legacy_qfq_repair_task
 SET status = 'running', claim_token = %s, last_error = NULL,
     updated_at = CURRENT_TIMESTAMP
@@ -202,6 +212,7 @@ WHERE id = %s AND status IN ('pending', 'failed')
 """
 
 MARK_LEGACY_REPAIR_DONE_SQL = """
+-- 同一事务中完成任务并关闭它覆盖范围内的 queued 差异日志，二者不可只成功其一。
 UPDATE trade_legacy_qfq_repair_task AS task
 INNER JOIN trade_price_reconcile_log AS log
     ON log.stock_code = task.stock_code
@@ -226,6 +237,7 @@ WHERE claim_token = %s AND id = %s AND status = 'running'
 """
 
 UPSERT_LEGACY_FROM_QFQ_SQL = """
+-- 唯一写入旧 trade_stock_daily 的 SQL：只复制已 queued 且已人工确认的独立投影行。
 INSERT INTO trade_stock_daily
     (stock_code, trade_date, open_price, high_price, low_price, close_price,
      volume, amount, turnover_rate)
@@ -252,6 +264,7 @@ ON DUPLICATE KEY UPDATE
 """
 
 COUNT_QFQ_REPAIR_ROWS_SQL = """
+-- 写旧表前先验证存在可复制的源行；零行意味着不应把任务误标为成功。
 SELECT COUNT(*) AS row_count
 FROM trade_stock_daily_qfq AS projected
 INNER JOIN trade_price_reconcile_log AS log
@@ -265,7 +278,7 @@ WHERE projected.stock_code = %s
 """
 
 def _decimal(value) -> Decimal:
-    """Convert a database number without binary-floating-point comparisons."""
+    """把数据库数值转为 Decimal，避免 float 二进制误差制造虚假的价格差异。"""
     try:
         return Decimal(str(value))
     except (InvalidOperation, ValueError) as exc:
@@ -273,7 +286,11 @@ def _decimal(value) -> Decimal:
 
 
 def find_qfq_discrepancies(rows: list[dict]) -> list[dict]:
-    """Return OHLC rows whose old/new prices differ by more than the tolerance."""
+    """识别 OHLC 差异及双向缺失，并生成可直接写入审计表的字典。
+
+    ``legacy_qfq_missing`` 可以由独立投影修复；``projected_qfq_missing`` 只记录告警，
+    因为没有可信源行可回写旧表。两侧均存在时才应用六位小数容差比较。
+    """
     discrepancies = []
     for row in rows:
         legacy_exists = bool(row.get("legacy_exists", 1))
@@ -322,11 +339,13 @@ def _log_values(discrepancy: dict) -> tuple:
 
 
 def _chunks(items: list, size: int):
+    """将代码集合拆为受控批次，限制 SQL IN 参数数量和单次查询内存。"""
     for offset in range(0, len(items), size):
         yield items[offset:offset + size]
 
 
 def _batch_sql(template: str, code_count: int) -> str:
+    """为固定模板生成参数化 IN 占位符；代码值始终通过参数传递而非字符串拼接。"""
     return template.format(code_placeholders=", ".join(["%s"] * code_count))
 
 
@@ -334,10 +353,10 @@ def reconcile_qfq_prices(
     date_batch_days: int = 31,
     code_batch_size: int = 200,
 ) -> dict[str, int]:
-    """Find missing/different rows in bounded date/code batches.
+    """按日期和代码分批找出差异/缺行，并只更新审计日志。
 
-    Matching rows are never updated.  Only previously unresolved audit rows are
-    checked for resolution, which avoids full-market no-op writes.
+    正常一致行从不写库。每个批次在登记新差异后，只复查此前未解决的日志是否已自然一致，
+    因而可每日运行且不会产生全市场无意义 UPDATE。
     """
     bounds = execute_query(SELECT_DATE_BOUNDS_SQL)
     if not bounds or not bounds[0]["min_date"]:
@@ -395,7 +414,10 @@ def reconcile_qfq_prices(
 
 
 def queue_confirmed_legacy_repairs() -> dict[str, int]:
-    """Turn reviewed pending logs into idempotent, stock-specific date-range tasks."""
+    """把确认可修复的 pending 日志转成可重试的旧表修复任务。
+
+    该函数代表操作员的显式确认边界；它不会处理 ``projected_qfq_missing``，也不会直接写旧表。
+    """
     ranges = execute_query(SELECT_PENDING_RANGES_SQL)
     if not ranges:
         return {"tasks": 0, "queued_logs": 0}
@@ -414,7 +436,7 @@ def queue_confirmed_legacy_repairs() -> dict[str, int]:
 
 
 def refresh_legacy_qfq_range(stock_code: str, refresh_from: date, refresh_to: date) -> int:
-    """UPSERT a confirmed range from the independent qfq projection."""
+    """从独立前复权表 UPSERT 一个已确认范围到旧表；零源行直接失败而非静默完成。"""
     params = (stock_code, refresh_from, refresh_to)
     rows = execute_query(COUNT_QFQ_REPAIR_ROWS_SQL, params)
     source_count = int(rows[0]["row_count"]) if rows else 0
@@ -432,7 +454,11 @@ def complete_legacy_qfq_repair(
     claim_token: str,
     connection_factory=None,
 ) -> int:
-    """Atomically apply queued rows and complete the token-owned repair task."""
+    """原子复制已确认投影行，并完成由当前 ``claim_token`` 认领的任务。
+
+    复制、标记任务完成、关闭日志必须在同一事务内：任一步失败即回滚，避免旧表已更新但
+    任务仍显示失败，或任务完成但差异日志未关闭。
+    """
     connection_factory = connection_factory or get_connection
     connection = connection_factory()
     cursor = connection.cursor()
@@ -458,7 +484,7 @@ def complete_legacy_qfq_repair(
 
 
 def run_pending_legacy_repairs(lease_timeout_minutes: int = 60) -> dict[str, int]:
-    """Execute durable legacy repairs; failures remain queued for another run."""
+    """执行持久旧表修复任务；失败任务保留错误与重试次数供下一轮恢复。"""
     reclaimed = execute_update(
         RECLAIM_STALE_LEGACY_REPAIRS_SQL,
         (lease_timeout_minutes,),
@@ -474,6 +500,7 @@ def run_pending_legacy_repairs(lease_timeout_minutes: int = 60) -> dict[str, int
     for task in execute_query(SELECT_PENDING_LEGACY_REPAIRS_SQL):
         if task.get("retry_count", 0):
             result["retried"] += 1
+        # 令牌绑定本次执行，防止被回收并重新认领的任务接受旧进程的完成/失败结果。
         claim_token = str(uuid4())
         if not execute_update(
             MARK_LEGACY_REPAIR_RUNNING_SQL,
