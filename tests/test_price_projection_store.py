@@ -109,6 +109,36 @@ def test_adjusted_rows_write_adjustment_asof_to_its_own_table(monkeypatch, mode,
     assert rows[-1][-1] == date(2025, 1, 3)
 
 
+def test_batch_adjusted_rows_keep_each_stock_own_adjustment_asof(monkeypatch):
+    """Batching must not assign one stock's corporate-action version to another stock."""
+    written = []
+    monkeypatch.setattr(store, "execute_many", lambda sql, rows: written.append((sql, rows)))
+
+    store.write_daily_rows_batch(
+        "front",
+        [
+            {
+                "stock_code": "000001.SZ", "trade_date": "2025-01-02",
+                "open_price": 10, "high_price": 11, "low_price": 9,
+                "close_price": 10.5, "volume": 100, "amount": 1000,
+            },
+            {
+                "stock_code": "600519.SH", "trade_date": "2025-01-02",
+                "open_price": 20, "high_price": 21, "low_price": 19,
+                "close_price": 20.5, "volume": 200, "amount": 2000,
+            },
+        ],
+        {
+            "000001.SZ": date(2025, 1, 1),
+            "600519.SH": date(2025, 1, 2),
+        },
+    )
+
+    sql, values = written[0]
+    assert "INSERT INTO trade_stock_daily_qfq" in sql
+    assert [row[-1] for row in values] == [date(2025, 1, 1), date(2025, 1, 2)]
+
+
 def test_collector_fetches_none_front_and_back_without_importing_legacy_collector(monkeypatch):
     calls = []
 
@@ -182,6 +212,70 @@ def test_collector_treats_each_mode_empty_response_as_failure(monkeypatch):
         )
 
 
+def test_collector_fetches_three_modes_for_a_code_batch_and_isolates_missing_codes(monkeypatch):
+    """A batch response must preserve per-code failure visibility instead of failing silently."""
+    download_calls = []
+    market_calls = []
+
+    class OneRowDataFrame:
+        def __len__(self):
+            return 1
+
+        def iterrows(self):
+            yield "20250102", {
+                "open": 10.0,
+                "high": 11.0,
+                "low": 9.0,
+                "close": 10.5,
+                "volume": 100,
+                "amount": 1000.0,
+                "preClose": 9.8,
+                "suspendFlag": 0,
+            }
+
+    def get_market_data_ex(**kwargs):
+        market_calls.append(kwargs)
+        codes = kwargs["stock_list"]
+        # One code is absent only from qfq: raw/bfq data must still be persisted,
+        # while the caller receives a precise failed-code result.
+        if kwargs["dividend_type"] == "front":
+            codes = [code for code in codes if code != "000002.SZ"]
+        return {code: OneRowDataFrame() for code in codes}
+
+    fake_xtdata = types.SimpleNamespace(
+        download_history_data2=lambda *args, **kwargs: download_calls.append((args, kwargs)),
+        get_market_data_ex=get_market_data_ex,
+    )
+    collector = load_collector(fake_xtdata)
+    writes = []
+    monkeypatch.setattr(
+        collector,
+        "write_daily_rows_batch",
+        lambda mode, rows, adjustment_asofs: writes.append((mode, rows, adjustment_asofs)),
+        raising=False,
+    )
+
+    counts, failed_codes = collector.download_and_save_batch(
+        ["000001.SZ", "000002.SZ"],
+        "20250101",
+        {
+            "000001.SZ": date(2025, 1, 3),
+            "000002.SZ": None,
+        },
+    )
+
+    assert download_calls == [
+        ((["000001.SZ", "000002.SZ"], "1d", "20250101", ""), {})
+    ]
+    assert [call["dividend_type"] for call in market_calls] == ["none", "front", "back"]
+    assert all(call["stock_list"] == ["000001.SZ", "000002.SZ"] for call in market_calls)
+    assert counts == {"none": 2, "front": 1, "back": 2}
+    assert failed_codes == ["000002.SZ"]
+    assert [(mode, len(rows)) for mode, rows, _ in writes] == [
+        ("none", 2), ("front", 1), ("back", 2),
+    ]
+
+
 def test_adjustment_asof_comes_from_latest_effective_action_not_wall_clock(monkeypatch):
     collector = load_collector(types.SimpleNamespace())
     monkeypatch.setattr(
@@ -228,9 +322,11 @@ def test_executable_flow_syncs_actions_before_prices_then_runs_durable_refresh(
     )
     monkeypatch.setattr(
         collector,
-        "download_and_save_all_modes",
-        lambda code, start, adjustment_asof: calls.append(("daily", code, adjustment_asof))
-        or {"none": 1, "front": 1, "back": 1},
+        "download_and_save_batch",
+        lambda codes, start, adjustment_asofs: calls.append(
+            ("daily_batch", codes, start, adjustment_asofs)
+        )
+        or ({"none": 1, "front": 1, "back": 1}, []),
     )
     monkeypatch.setattr(
         collector,
@@ -256,7 +352,12 @@ def test_executable_flow_syncs_actions_before_prices_then_runs_durable_refresh(
     assert collector.main() == 0
     assert calls == [
         ("actions", "600519.SH"),
-        ("daily", "600519.SH", date(2026, 6, 20)),
+        (
+            "daily_batch",
+            ["600519.SH"],
+            collector.DATA_START,
+            {"600519.SH": date(2026, 6, 20)},
+        ),
         ("refresh", "600519.SH", "front", "20150101", date(2026, 6, 20)),
     ]
     output = capsys.readouterr().out

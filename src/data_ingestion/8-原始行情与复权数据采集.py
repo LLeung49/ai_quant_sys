@@ -18,7 +18,11 @@ from xtquant import xtdata
 
 from db_config import execute_query
 from price_corporate_actions import run_due_refresh_tasks, sync_qmt_factor_snapshot
-from price_projection_store import get_existing_latest_dates, write_daily_rows
+from price_projection_store import (
+    get_existing_latest_dates,
+    write_daily_rows,
+    write_daily_rows_batch,
+)
 
 
 DATA_START = "20150101"
@@ -29,6 +33,8 @@ SECTORS = (A_SHARE_SECTOR, ETF_SECTOR)
 DIVIDEND_TYPES = ("none", "front", "back")  # QMT 原始、前复权、后复权三种投影。
 # 每日重复读取最近窗口：即使权益公告在之后被修订/撤回，也能被快照比较发现。
 ACTION_LOOKBACK_DAYS = 10
+# QMT 一次返回过多 DataFrame 会占用大量内存；按固定批次限制峰值并便于失败重试。
+MARKET_BATCH_SIZE = 200
 MARKET_FIELDS = (
     "open", "high", "low", "close", "volume", "amount", "preClose", "suspendFlag",
 )
@@ -150,6 +156,61 @@ def download_and_save_all_modes(
     return counts
 
 
+def _download_history_batch(stock_codes: list[str], start_date: str) -> None:
+    """下载一个同起点代码批次的日线缓存，优先使用新版 QMT 批量接口。
+
+    ``download_history_data2`` 在本机 xtquant 已可用；保留逐股票回退，以兼容较旧的
+    QMT 安装。下载只与原始日线缓存有关，不能为 none/front/back 重复下载三次。
+    """
+    batch_download = getattr(xtdata, "download_history_data2", None)
+    if callable(batch_download):
+        batch_download(stock_codes, "1d", start_date, "")
+        return
+    for stock_code in stock_codes:
+        xtdata.download_history_data(stock_code, "1d", start_date, "")
+
+
+def download_and_save_batch(
+    stock_codes: list[str],
+    start_date: str,
+    adjustment_asofs: dict[str, date | None],
+) -> tuple[dict[str, int], list[str]]:
+    """批量下载并写入多只同起点股票的 raw/qfq/bfq 日线。
+
+    QMT 对每种 ``dividend_type`` 接受一组代码并返回 ``{代码: DataFrame}``。每种模式
+    只查询一次、每批日线只下载一次，再把所有有效行一次写入目标表。某一股票缺少任一
+    模式时，只将该股票加入失败列表，其他股票与其他模式仍可正常落库。
+    """
+    if not stock_codes:
+        return {mode: 0 for mode in DIVIDEND_TYPES}, []
+    _download_history_batch(stock_codes, start_date)
+    counts = {mode: 0 for mode in DIVIDEND_TYPES}
+    failed_codes = set()
+    for dividend_type in DIVIDEND_TYPES:
+        data = xtdata.get_market_data_ex(
+            field_list=list(MARKET_FIELDS),
+            stock_list=stock_codes,
+            period="1d",
+            start_time=start_date,
+            dividend_type=dividend_type,
+        )
+        rows = []
+        for stock_code in stock_codes:
+            dataframe = data.get(stock_code) if data else None
+            if dataframe is None or len(dataframe) == 0:
+                failed_codes.add(stock_code)
+                continue
+            code_rows = _rows_from_dataframe(stock_code, dataframe, dividend_type)
+            if not code_rows:
+                failed_codes.add(stock_code)
+                continue
+            rows.extend(code_rows)
+        if rows:
+            write_daily_rows_batch(dividend_type, rows, adjustment_asofs)
+            counts[dividend_type] = len(rows)
+    return counts, sorted(failed_codes)
+
+
 def get_adjustment_asof(stock_code: str) -> date | None:
     """返回该股票已生效权益事件的最新除权日，作为复权行的可追溯版本标记。"""
     rows = execute_query(SELECT_ADJUSTMENT_ASOF_SQL, (stock_code,))
@@ -210,6 +271,12 @@ def _earliest_start(latest_dates: dict[str, dict[str, str]], stock_code: str) ->
     return min(starts)
 
 
+def _chunks(items: list[str], size: int):
+    """以固定大小切分同起点代码，控制 QMT 返回 DataFrame 的内存峰值。"""
+    for offset in range(0, len(items), size):
+        yield items[offset:offset + size]
+
+
 def main() -> int:
     """执行完整日任务：权益事实 → 三类价格投影 → 待执行的派生刷新。
 
@@ -223,25 +290,56 @@ def main() -> int:
     action_counts = {"new": 0, "corrected": 0, "cancelled": 0, "tasks": 0}
     codes, a_share_codes = get_code_universe()
     today = date.today()
+    # 权益快照仍逐 A 股同步；普通日线随后按相同增量起点分组批量请求 QMT。
+    codes_by_start: dict[str, list[str]] = {}
+    adjustment_asofs: dict[str, date | None] = {}
     for number, stock_code in enumerate(codes, start=1):
-        start_date = _earliest_start(latest_dates, stock_code)
         try:
             if stock_code in a_share_codes:
                 plan = sync_stock_actions(stock_code, today)
                 for change in plan.changes:
                     action_counts[change.kind] += 1
                 action_counts["tasks"] += len(plan.refresh_tasks)
-            counts = download_and_save_all_modes(
-                stock_code,
-                start_date,
-                adjustment_asof=get_adjustment_asof(stock_code),
-            )
-            for mode, count in counts.items():
-                total_rows[mode] += count
-            print(f"[{number}/{len(codes)}] {stock_code}: {counts}")
+            adjustment_asofs[stock_code] = get_adjustment_asof(stock_code)
+            start_date = _earliest_start(latest_dates, stock_code)
+            codes_by_start.setdefault(start_date, []).append(stock_code)
         except Exception as exc:
             failures.append(stock_code)
-            print(f"[{number}/{len(codes)}] {stock_code}: failed - {type(exc).__name__}: {exc}")
+            print(f"[权益 {number}/{len(codes)}] {stock_code}: failed - {type(exc).__name__}: {exc}")
+
+    batch_number = 0
+    batch_count = sum(
+        (len(stock_codes) + MARKET_BATCH_SIZE - 1) // MARKET_BATCH_SIZE
+        for stock_codes in codes_by_start.values()
+    )
+    for start_date in sorted(codes_by_start):
+        for stock_batch in _chunks(codes_by_start[start_date], MARKET_BATCH_SIZE):
+            batch_number += 1
+            batch_adjustment_asofs = {
+                stock_code: adjustment_asofs[stock_code]
+                for stock_code in stock_batch
+            }
+            try:
+                counts, batch_failures = download_and_save_batch(
+                    stock_batch,
+                    start_date,
+                    batch_adjustment_asofs,
+                )
+            except Exception as exc:
+                failures.extend(stock_batch)
+                print(
+                    f"[行情批次 {batch_number}/{batch_count}] start={start_date} "
+                    f"codes={len(stock_batch)}: failed - {type(exc).__name__}: {exc}"
+                )
+                continue
+            for mode, count in counts.items():
+                total_rows[mode] += count
+            failures.extend(batch_failures)
+            print(
+                f"[行情批次 {batch_number}/{batch_count}] start={start_date} "
+                f"codes={len(stock_batch)} raw={counts['none']} qfq={counts['front']} "
+                f"bfq={counts['back']} failed={len(batch_failures)}"
+            )
     # 任务执行器只认识“股票、模式、起点”；闭包负责把它适配为本文件的 QMT 下载函数。
     def refresh_projection(stock_code: str, price_mode: str, refresh_from: date) -> int:
         return download_and_save_mode(

@@ -127,3 +127,40 @@ def write_daily_rows(
             for row in rows
         ]
     return execute_many(INSERT_SQL_BY_DIVIDEND_TYPE[dividend_type], values)
+
+
+def write_daily_rows_batch(
+    dividend_type: str,
+    rows: list[dict],
+    adjustment_asofs: dict[str, date | None],
+) -> int:
+    """批量 UPSERT 多只股票的一种价格模式。
+
+    该函数仅供日常增量采集使用。每只股票的 ``adjustment_asof`` 可能不同，不能把
+    整个批次误写成同一个权益版本；原始模式不使用该字段。单股票历史刷新仍使用
+    :func:`write_daily_rows`，保持调用边界简单。
+    """
+    if not rows:
+        return 0
+    table_for_mode(dividend_type)
+    if dividend_type == "none":
+        values = [
+            (
+                row["stock_code"], row["trade_date"], row["open_price"],
+                row["high_price"], row["low_price"], row["close_price"],
+                row["volume"], row["amount"], row.get("pre_close"),
+                row.get("suspend_flag"),
+            )
+            for row in rows
+        ]
+    else:
+        values = [
+            (
+                row["stock_code"], row["trade_date"], row["open_price"],
+                row["high_price"], row["low_price"], row["close_price"],
+                row["volume"], row["amount"], row.get("turnover_rate"),
+                adjustment_asofs.get(row["stock_code"]),
+            )
+            for row in rows
+        ]
+    return execute_many(INSERT_SQL_BY_DIVIDEND_TYPE[dividend_type], values)
