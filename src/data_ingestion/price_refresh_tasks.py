@@ -22,6 +22,16 @@ WHERE status IN ('pending', 'failed')
 ORDER BY created_at, id
 """
 
+RECLAIM_STALE_TASKS_SQL = """
+UPDATE trade_price_refresh_task
+SET status = 'failed',
+    retry_count = retry_count + 1,
+    last_error = 'Lease expired while task was running; reclaimed automatically',
+    updated_at = CURRENT_TIMESTAMP
+WHERE status = 'running'
+  AND updated_at < CURRENT_TIMESTAMP - INTERVAL %s MINUTE
+"""
+
 MARK_TASK_RUNNING_SQL = """
 UPDATE trade_price_refresh_task
 SET status = 'running', last_error = NULL, updated_at = CURRENT_TIMESTAMP

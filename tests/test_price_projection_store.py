@@ -159,3 +159,100 @@ def test_collector_backfills_all_modes_when_one_projection_table_is_empty():
         },
         "600519.SH",
     ) == collector.DATA_START
+
+
+def test_collector_treats_each_mode_empty_response_as_failure(monkeypatch):
+    fake_xtdata = types.SimpleNamespace(
+        download_history_data=lambda *args, **kwargs: None,
+        get_market_data_ex=lambda **kwargs: {},
+    )
+    collector = load_collector(fake_xtdata)
+    monkeypatch.setattr(
+        collector,
+        "write_daily_rows",
+        lambda *args, **kwargs: pytest.fail("empty market data must not be written"),
+    )
+
+    with pytest.raises(RuntimeError, match="empty QMT front-adjusted market response"):
+        collector.download_and_save_mode(
+            "600519.SH",
+            "front",
+            "20250101",
+            adjustment_asof=None,
+        )
+
+
+def test_adjustment_asof_comes_from_latest_effective_action_not_wall_clock(monkeypatch):
+    collector = load_collector(types.SimpleNamespace())
+    monkeypatch.setattr(
+        collector,
+        "execute_query",
+        lambda sql, params=None: [{"adjustment_asof": date(2025, 6, 20)}],
+    )
+
+    assert collector.get_adjustment_asof("600519.SH") == date(2025, 6, 20)
+
+
+def test_executable_flow_syncs_actions_before_prices_then_runs_durable_refresh(
+    monkeypatch,
+    capsys,
+):
+    collector = load_collector(types.SimpleNamespace(connect=lambda: None))
+    calls = []
+    plan = types.SimpleNamespace(
+        changes=[
+            types.SimpleNamespace(kind="corrected"),
+            types.SimpleNamespace(kind="cancelled"),
+        ],
+        refresh_tasks=[{}, {}],
+    )
+    monkeypatch.setattr(
+        collector,
+        "get_existing_latest_dates",
+        lambda mode: {},
+    )
+    monkeypatch.setattr(
+        collector,
+        "get_code_universe",
+        lambda: (["600519.SH"], {"600519.SH"}),
+    )
+    monkeypatch.setattr(
+        collector,
+        "sync_stock_actions",
+        lambda code, today: calls.append(("actions", code)) or plan,
+    )
+    monkeypatch.setattr(
+        collector,
+        "get_adjustment_asof",
+        lambda code: date(2026, 6, 20),
+    )
+    monkeypatch.setattr(
+        collector,
+        "download_and_save_all_modes",
+        lambda code, start, adjustment_asof: calls.append(("daily", code, adjustment_asof))
+        or {"none": 1, "front": 1, "back": 1},
+    )
+    monkeypatch.setattr(
+        collector,
+        "download_and_save_mode",
+        lambda code, mode, start, adjustment_asof: calls.append(
+            ("refresh", code, mode, start, adjustment_asof)
+        )
+        or 8,
+    )
+
+    def run_tasks(callback):
+        callback("600519.SH", "front", date(2015, 1, 1))
+        return {"done": 1, "failed": 0, "retried": 1, "reclaimed": 1}
+
+    monkeypatch.setattr(collector, "run_due_refresh_tasks", run_tasks)
+
+    assert collector.main() == 0
+    assert calls == [
+        ("actions", "600519.SH"),
+        ("daily", "600519.SH", date(2026, 6, 20)),
+        ("refresh", "600519.SH", "front", "20150101", date(2026, 6, 20)),
+    ]
+    output = capsys.readouterr().out
+    assert "[权益] 新增=0 修订=1 撤回=1 刷新任务=2" in output
+    assert "[刷新] 成功=1 失败=0 重试=1 回收=1" in output

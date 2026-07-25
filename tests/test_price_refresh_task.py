@@ -11,6 +11,7 @@ from data_ingestion.price_refresh_tasks import (  # noqa: E402
     MARK_TASK_DONE_SQL,
     MARK_TASK_FAILED_SQL,
     MARK_TASK_RUNNING_SQL,
+    RECLAIM_STALE_TASKS_SQL,
     SELECT_PENDING_TASKS_SQL,
     merge_refresh_tasks,
 )
@@ -73,6 +74,8 @@ def test_refresh_task_sql_covers_lifecycle_and_retries():
     assert "status = 'done'" in MARK_TASK_DONE_SQL
     assert "status = 'failed'" in MARK_TASK_FAILED_SQL
     assert "retry_count = retry_count + 1" in MARK_TASK_FAILED_SQL
+    assert "status = 'running'" in RECLAIM_STALE_TASKS_SQL
+    assert "retry_count = retry_count + 1" in RECLAIM_STALE_TASKS_SQL
 
 
 def test_ddl_defines_all_dual_track_tables_and_refresh_task_uniqueness():
@@ -86,5 +89,8 @@ def test_ddl_defines_all_dual_track_tables_and_refresh_task_uniqueness():
         "trade_price_reconcile_log",
         "trade_price_refresh_task",
     ):
-        assert f"CREATE TABLE {table_name}" in ddl
+        assert f"CREATE TABLE IF NOT EXISTS {table_name}" in ddl
     assert "UNIQUE KEY uk_refresh_task (stock_code, price_mode, reason)" in ddl
+    assert "trade_stock_daily_raw" in ddl
+    assert "trade_corporate_action" in ddl
+    assert "SIGNAL SQLSTATE '45000'" in ddl

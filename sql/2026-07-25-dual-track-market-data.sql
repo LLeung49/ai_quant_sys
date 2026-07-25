@@ -1,6 +1,36 @@
 -- Dual-track market-data derived tables. Execute manually in the target MySQL database.
 
-CREATE TABLE trade_stock_daily_qfq (
+DELIMITER //
+DROP PROCEDURE IF EXISTS assert_dual_track_prerequisites//
+CREATE PROCEDURE assert_dual_track_prerequisites()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = DATABASE() AND table_name = 'trade_stock_daily'
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Missing prerequisite table: trade_stock_daily';
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = DATABASE() AND table_name = 'trade_stock_daily_raw'
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Missing prerequisite table: trade_stock_daily_raw';
+    END IF;
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = DATABASE() AND table_name = 'trade_corporate_action'
+    ) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = 'Missing prerequisite table: trade_corporate_action';
+    END IF;
+END//
+CALL assert_dual_track_prerequisites()//
+DROP PROCEDURE assert_dual_track_prerequisites//
+DELIMITER ;
+
+CREATE TABLE IF NOT EXISTS trade_stock_daily_qfq (
     stock_code VARCHAR(16) NOT NULL,
     trade_date DATE NOT NULL,
     open_price DECIMAL(20, 6) NOT NULL,
@@ -16,7 +46,7 @@ CREATE TABLE trade_stock_daily_qfq (
     KEY idx_qfq_trade_date (trade_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Independent QMT front-adjusted daily prices';
 
-CREATE TABLE trade_stock_daily_bfq (
+CREATE TABLE IF NOT EXISTS trade_stock_daily_bfq (
     stock_code VARCHAR(16) NOT NULL,
     trade_date DATE NOT NULL,
     open_price DECIMAL(20, 6) NOT NULL,
@@ -32,7 +62,7 @@ CREATE TABLE trade_stock_daily_bfq (
     KEY idx_bfq_trade_date (trade_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Independent QMT back-adjusted daily prices';
 
-CREATE TABLE trade_price_reconcile_log (
+CREATE TABLE IF NOT EXISTS trade_price_reconcile_log (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     stock_code VARCHAR(16) NOT NULL,
     trade_date DATE NOT NULL,
@@ -54,7 +84,7 @@ CREATE TABLE trade_price_reconcile_log (
     KEY idx_reconcile_status (status, detected_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Old and independent front-adjusted price differences';
 
-CREATE TABLE trade_price_refresh_task (
+CREATE TABLE IF NOT EXISTS trade_price_refresh_task (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     stock_code VARCHAR(16) NOT NULL,
     price_mode ENUM('front', 'back') NOT NULL,
@@ -70,7 +100,7 @@ CREATE TABLE trade_price_refresh_task (
     KEY idx_refresh_pending (status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Retryable refresh requests for derived adjusted prices';
 
-CREATE TABLE trade_legacy_qfq_repair_task (
+CREATE TABLE IF NOT EXISTS trade_legacy_qfq_repair_task (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     stock_code VARCHAR(16) NOT NULL,
     refresh_from DATE NOT NULL,
@@ -86,3 +116,9 @@ CREATE TABLE trade_legacy_qfq_repair_task (
     KEY idx_legacy_qfq_repair_pending (status, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
   COMMENT='Confirmed, retryable old front-adjusted price repairs';
+
+-- Safe on repeat runs and upgrades a table created by an earlier draft.
+ALTER TABLE trade_price_reconcile_log
+    MODIFY COLUMN status
+        ENUM('pending', 'queued', 'resolved', 'ignored')
+        NOT NULL DEFAULT 'pending';

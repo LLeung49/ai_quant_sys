@@ -183,6 +183,8 @@ def test_failed_refresh_remains_durable_and_is_retried_then_marked_done(monkeypa
         return [task] if status["value"] in {"pending", "failed"} else []
 
     def fake_update(sql, params=None):
+        if sql == actions.RECLAIM_STALE_TASKS_SQL:
+            return 0
         if "status = 'running'" in sql:
             status["value"] = "running"
         elif "status = 'failed'" in sql:
@@ -195,6 +197,7 @@ def test_failed_refresh_remains_durable_and_is_retried_then_marked_done(monkeypa
         attempts.append((stock_code, price_mode, refresh_from))
         if len(attempts) == 1:
             raise RuntimeError("QMT unavailable")
+        return 1
 
     monkeypatch.setattr(actions, "execute_query", fake_query)
     monkeypatch.setattr(actions, "execute_update", fake_update)
@@ -202,8 +205,8 @@ def test_failed_refresh_remains_durable_and_is_retried_then_marked_done(monkeypa
     first = actions.run_due_refresh_tasks(refresh_price)
     second = actions.run_due_refresh_tasks(refresh_price)
 
-    assert first == {"done": 0, "failed": 1}
-    assert second == {"done": 1, "failed": 0}
+    assert first == {"done": 0, "failed": 1, "retried": 0, "reclaimed": 0}
+    assert second == {"done": 1, "failed": 0, "retried": 0, "reclaimed": 0}
     assert status["value"] == "done"
     assert attempts == [
         ("000001.SZ", "front", date(2015, 1, 1)),
@@ -225,13 +228,73 @@ def test_task_is_not_marked_done_when_refresh_reports_failure(monkeypatch):
     monkeypatch.setattr(
         actions,
         "execute_update",
-        lambda sql, params=None: updates.append((sql, params)) or 1,
+        lambda sql, params=None: (
+            updates.append((sql, params))
+            or (0 if sql == actions.RECLAIM_STALE_TASKS_SQL else 1)
+        ),
     )
 
     result = actions.run_due_refresh_tasks(
         lambda *_: (_ for _ in ()).throw(ValueError("empty market response"))
     )
 
-    assert result == {"done": 0, "failed": 1}
+    assert result == {"done": 0, "failed": 1, "retried": 1, "reclaimed": 0}
     assert not any("status = 'done'" in sql for sql, _ in updates)
     assert any("status = 'failed'" in sql for sql, _ in updates)
+
+
+def test_zero_row_projection_refresh_is_failed_not_done(monkeypatch):
+    task = {
+        "id": 10,
+        "stock_code": "000001.SZ",
+        "price_mode": "front",
+        "refresh_from": DATA_START,
+        "reason": "corporate_action_changed",
+        "retry_count": 0,
+    }
+    updates = []
+    monkeypatch.setattr(actions, "execute_query", lambda sql, params=None: [task])
+    monkeypatch.setattr(
+        actions,
+        "execute_update",
+        lambda sql, params=None: (
+            updates.append((sql, params))
+            or (0 if sql == actions.RECLAIM_STALE_TASKS_SQL else 1)
+        ),
+    )
+
+    result = actions.run_due_refresh_tasks(lambda *_: 0)
+
+    assert result["failed"] == 1
+    assert result["done"] == 0
+    assert any("status = 'failed'" in sql for sql, _ in updates)
+
+
+def test_stale_running_projection_task_is_reclaimed_after_crash(monkeypatch):
+    task = {
+        "id": 11,
+        "stock_code": "000001.SZ",
+        "price_mode": "front",
+        "refresh_from": DATA_START,
+        "reason": "corporate_action_changed",
+        "retry_count": 1,
+    }
+    updates = []
+    monkeypatch.setattr(actions, "execute_query", lambda sql, params=None: [task])
+    monkeypatch.setattr(
+        actions,
+        "execute_update",
+        lambda sql, params=None: updates.append((sql, params)) or 1,
+    )
+
+    result = actions.run_due_refresh_tasks(lambda *_: 3, lease_timeout_minutes=30)
+
+    assert result == {
+        "done": 1,
+        "failed": 0,
+        "retried": 1,
+        "reclaimed": 1,
+    }
+    assert "status = 'running'" in updates[0][0]
+    assert "retry_count = retry_count + 1" in updates[0][0]
+    assert updates[0][1] == (30,)

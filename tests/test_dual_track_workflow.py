@@ -203,6 +203,8 @@ def test_failed_projection_refresh_is_durable_and_retried_on_the_next_run(monkey
         return []
 
     def fake_update(sql, params=None):
+        if sql == actions.RECLAIM_STALE_TASKS_SQL:
+            return 0
         if "status = 'running'" in sql:
             task_status["value"] = "running"
         elif "status = 'failed'" in sql:
@@ -221,6 +223,7 @@ def test_failed_projection_refresh_is_durable_and_retried_on_the_next_run(monkey
         )
         if attempts == 1:
             raise RuntimeError("QMT temporarily unavailable")
+        return 1
 
     monkeypatch.setattr(actions, "execute_query", fake_query)
     monkeypatch.setattr(actions, "execute_update", fake_update)
@@ -228,8 +231,8 @@ def test_failed_projection_refresh_is_durable_and_retried_on_the_next_run(monkey
     first_run = actions.run_due_refresh_tasks(refresh_price)
     second_run = actions.run_due_refresh_tasks(refresh_price)
 
-    assert first_run == {"done": 0, "failed": 1}
-    assert second_run == {"done": 1, "failed": 0}
+    assert first_run == {"done": 0, "failed": 1, "retried": 0, "reclaimed": 0}
+    assert second_run == {"done": 1, "failed": 0, "retried": 0, "reclaimed": 0}
     assert attempts == 2
     assert task_status["value"] == "done"
 
@@ -257,13 +260,24 @@ def test_qfq_discrepancy_is_logged_then_queued_for_confirmed_legacy_repair(monke
         "refresh_from": date(2026, 7, 24),
         "refresh_to": date(2026, 7, 24),
     }
-    query_results = iter([[overlap], [pending_range]])
     batches = []
     updates = []
+
+    def fake_query(sql, params=None):
+        if sql == reconciliation.SELECT_DATE_BOUNDS_SQL:
+            return [{"min_date": date(2026, 7, 24), "max_date": date(2026, 7, 24)}]
+        if sql == reconciliation.SELECT_CODES_BATCH_SQL:
+            return [{"stock_code": "000001.SZ"}]
+        if "UNION ALL" in sql:
+            return [overlap]
+        if sql == reconciliation.SELECT_PENDING_RANGES_SQL:
+            return [pending_range]
+        return []
+
     monkeypatch.setattr(
         reconciliation,
         "execute_query",
-        lambda sql, params=None: next(query_results),
+        fake_query,
     )
     monkeypatch.setattr(
         reconciliation,
@@ -279,7 +293,12 @@ def test_qfq_discrepancy_is_logged_then_queued_for_confirmed_legacy_repair(monke
     reconcile_result = reconciliation.reconcile_qfq_prices()
     queue_result = reconciliation.queue_confirmed_legacy_repairs()
 
-    assert reconcile_result == {"compared": 1, "discrepancies": 1, "upserted": 1}
+    assert reconcile_result == {
+        "compared": 1,
+        "discrepancies": 1,
+        "upserted": 1,
+        "resolved": 0,
+    }
     assert queue_result == {"tasks": 1, "queued_logs": 1}
     reconcile_sql, reconcile_values = batches[0]
     repair_sql, repair_values = batches[1]

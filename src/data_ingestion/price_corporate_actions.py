@@ -18,6 +18,7 @@ try:
         MARK_TASK_DONE_SQL,
         MARK_TASK_FAILED_SQL,
         MARK_TASK_RUNNING_SQL,
+        RECLAIM_STALE_TASKS_SQL,
         SELECT_PENDING_TASKS_SQL,
         merge_refresh_tasks,
     )
@@ -28,6 +29,7 @@ except ImportError:  # Direct script execution from src/data_ingestion.
         MARK_TASK_DONE_SQL,
         MARK_TASK_FAILED_SQL,
         MARK_TASK_RUNNING_SQL,
+        RECLAIM_STALE_TASKS_SQL,
         SELECT_PENDING_TASKS_SQL,
         merge_refresh_tasks,
     )
@@ -369,10 +371,14 @@ def sync_qmt_factor_snapshot(
 
 def run_due_refresh_tasks(
     refresh_price: Callable[[str, str, date], object],
+    lease_timeout_minutes: int = 60,
 ) -> dict[str, int]:
     """Run every pending/failed task, preserving failures for later retries."""
-    result = {"done": 0, "failed": 0}
+    reclaimed = execute_update(RECLAIM_STALE_TASKS_SQL, (lease_timeout_minutes,))
+    result = {"done": 0, "failed": 0, "retried": 0, "reclaimed": reclaimed}
     for task in execute_query(SELECT_PENDING_TASKS_SQL):
+        if task.get("retry_count", 0):
+            result["retried"] += 1
         claimed = execute_update(MARK_TASK_RUNNING_SQL, (task["id"],))
         if not claimed:
             continue
@@ -382,8 +388,10 @@ def run_due_refresh_tasks(
                 task["price_mode"],
                 task["refresh_from"],
             )
-            if refresh_result is False:
-                raise RuntimeError("price refresh returned False")
+            if refresh_result is None or refresh_result is False:
+                raise RuntimeError("price refresh returned no result")
+            if isinstance(refresh_result, (int, float)) and refresh_result <= 0:
+                raise RuntimeError("price refresh wrote zero rows")
         except Exception as exc:
             message = f"{type(exc).__name__}: {exc}"[:1000]
             execute_update(MARK_TASK_FAILED_SQL, (message, task["id"]))
