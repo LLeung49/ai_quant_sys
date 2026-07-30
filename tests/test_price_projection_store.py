@@ -139,6 +139,29 @@ def test_batch_adjusted_rows_keep_each_stock_own_adjustment_asof(monkeypatch):
     assert [row[-1] for row in values] == [date(2025, 1, 1), date(2025, 1, 2)]
 
 
+def test_batch_write_splits_large_row_sets_into_database_chunks(monkeypatch):
+    calls = []
+    monkeypatch.setattr(
+        store,
+        "execute_many",
+        lambda sql, rows: calls.append(list(rows)) or len(rows),
+    )
+    rows = [
+        {
+            "stock_code": "600519.SH", "trade_date": f"2025-01-{index:02d}",
+            "open_price": 10, "high_price": 11, "low_price": 9,
+            "close_price": 10.5, "volume": 100, "amount": 1000,
+        }
+        for index in range(1, 6)
+    ]
+
+    assert store.write_daily_rows_batch(
+        "front", rows, {"600519.SH": date(2025, 1, 1)}, chunk_size=2
+    ) == 5
+    assert [len(chunk) for chunk in calls] == [2, 2, 1]
+
+
+
 def test_collector_fetches_none_front_and_back_without_importing_legacy_collector(monkeypatch):
     calls = []
 
@@ -178,6 +201,19 @@ def test_collector_fetches_none_front_and_back_without_importing_legacy_collecto
     assert "download_and_save(" not in source
 
 
+def test_single_code_history_download_uses_single_code_qmt_api():
+    calls = []
+    fake_xtdata = types.SimpleNamespace(
+        download_history_data=lambda *args, **kwargs: calls.append(("single", args, kwargs)),
+        download_history_data2=lambda *args, **kwargs: calls.append(("batch", args, kwargs)),
+    )
+    collector = load_collector(fake_xtdata)
+
+    collector._download_history_batch(["600519.SH"], "20260715")
+
+    assert calls == [("single", ("600519.SH", "1d", "20260715", ""), {})]
+
+
 def test_collector_backfills_all_modes_when_one_projection_table_is_empty():
     collector = load_collector(types.SimpleNamespace())
 
@@ -210,6 +246,120 @@ def test_collector_treats_each_mode_empty_response_as_failure(monkeypatch):
             "20250101",
             adjustment_asof=None,
         )
+
+
+def test_collector_skips_nan_core_field_and_logs_full_context(capsys):
+    """A NaN amount must not reach MySQL, but other daily rows remain usable."""
+    class TwoRowDataFrame:
+        def iterrows(self):
+            yield "20260728", {
+                "open": 10.0,
+                "high": 11.0,
+                "low": 9.0,
+                "close": 10.5,
+                "volume": 100,
+                "amount": float("nan"),
+            }
+            yield "20260729", {
+                "open": 11.0,
+                "high": 12.0,
+                "low": 10.0,
+                "close": 11.5,
+                "volume": 200,
+                "amount": 2000.0,
+            }
+
+    collector = load_collector(types.SimpleNamespace())
+
+    rows = collector._rows_from_dataframe("600519.SH", TwoRowDataFrame(), "none")
+
+    assert [row["trade_date"] for row in rows] == ["2026-07-29"]
+    output = capsys.readouterr().out
+    assert "stock=600519.SH" in output
+    assert "trade_date=2026-07-28" in output
+    assert "mode=none" in output
+    assert "field=amount" in output
+    assert "value=nan" in output
+
+
+def test_batch_writes_valid_rows_when_another_row_has_nan(monkeypatch):
+    """One invalid daily row must not turn its stock or the entire batch into a failure."""
+    class TwoRowDataFrame:
+        def __len__(self):
+            return 2
+
+        def iterrows(self):
+            yield "20260728", {
+                "open": 10.0,
+                "high": 11.0,
+                "low": 9.0,
+                "close": 10.5,
+                "volume": 100,
+                "amount": float("nan"),
+            }
+            yield "20260729", {
+                "open": 11.0,
+                "high": 12.0,
+                "low": 10.0,
+                "close": 11.5,
+                "volume": 200,
+                "amount": 2000.0,
+            }
+
+    fake_xtdata = types.SimpleNamespace(
+        download_history_data=lambda *args, **kwargs: None,
+        get_market_data_ex=lambda **kwargs: {"600519.SH": TwoRowDataFrame()},
+    )
+    collector = load_collector(fake_xtdata)
+    writes = []
+    monkeypatch.setattr(
+        collector,
+        "write_daily_rows_batch",
+        lambda mode, rows, adjustment_asofs: writes.append((mode, rows)),
+    )
+
+    counts, failures = collector.download_and_save_batch(
+        ["600519.SH"], "20260728", {"600519.SH": None}
+    )
+
+    assert failures == []
+    assert counts == {"none": 1, "front": 1, "back": 1}
+    assert all(rows[0]["trade_date"] == "2026-07-29" for _, rows in writes)
+
+
+def test_batch_marks_stock_failed_when_all_rows_have_nan(monkeypatch):
+    """A stock remains failed when NaN filtering leaves no usable row in a mode."""
+    class NanOnlyDataFrame:
+        def __len__(self):
+            return 1
+
+        def iterrows(self):
+            yield "20260728", {
+                "open": 10.0,
+                "high": 11.0,
+                "low": 9.0,
+                "close": 10.5,
+                "volume": 100,
+                "amount": float("nan"),
+            }
+
+    fake_xtdata = types.SimpleNamespace(
+        download_history_data=lambda *args, **kwargs: None,
+        get_market_data_ex=lambda **kwargs: {"600519.SH": NanOnlyDataFrame()},
+    )
+    collector = load_collector(fake_xtdata)
+    monkeypatch.setattr(
+        collector,
+        "write_daily_rows_batch",
+        lambda *args, **kwargs: pytest.fail("all-invalid rows must not be written"),
+    )
+
+    counts, failures = collector.download_and_save_batch(
+        ["600519.SH"], "20260728", {"600519.SH": None}
+    )
+
+    assert counts == {"none": 0, "front": 0, "back": 0}
+    assert failures == ["600519.SH"]
 
 
 def test_collector_fetches_three_modes_for_a_code_batch_and_isolates_missing_codes(monkeypatch):
@@ -276,6 +426,36 @@ def test_collector_fetches_three_modes_for_a_code_batch_and_isolates_missing_cod
     ]
 
 
+def test_collector_logs_each_qmt_batch_stage_immediately(monkeypatch, capsys):
+    class OneRowDataFrame:
+        def __len__(self):
+            return 1
+
+        def iterrows(self):
+            yield "20250102", {
+                "open": 10.0, "high": 11.0, "low": 9.0, "close": 10.5,
+                "volume": 100, "amount": 1000.0,
+            }
+
+    fake_xtdata = types.SimpleNamespace(
+        download_history_data=lambda *args, **kwargs: None,
+        download_history_data2=lambda *args, **kwargs: None,
+        get_market_data_ex=lambda **kwargs: {"600519.SH": OneRowDataFrame()},
+    )
+    collector = load_collector(fake_xtdata)
+    monkeypatch.setattr(collector, "write_daily_rows_batch", lambda *args, **kwargs: None)
+
+    collector.download_and_save_batch(["600519.SH"], "20150101", {"600519.SH": None})
+
+    output = capsys.readouterr().out
+    assert "阶段=开始下载历史缓存" in output
+    assert "阶段=历史缓存下载完成" in output
+    assert "阶段=开始读取raw (none)" in output
+    assert "阶段=开始读取front-adjusted (front)" in output
+    assert "阶段=开始读取back-adjusted (back)" in output
+    assert "阶段=back-adjusted读取完成 rows=1" in output
+
+
 def test_adjustment_asof_comes_from_latest_effective_action_not_wall_clock(monkeypatch):
     collector = load_collector(types.SimpleNamespace())
     monkeypatch.setattr(
@@ -285,6 +465,56 @@ def test_adjustment_asof_comes_from_latest_effective_action_not_wall_clock(monke
     )
 
     assert collector.get_adjustment_asof("600519.SH") == date(2025, 6, 20)
+
+
+def test_adjustment_asofs_are_loaded_with_one_grouped_query(monkeypatch):
+    collector = load_collector(types.SimpleNamespace())
+    calls = []
+    monkeypatch.setattr(
+        collector,
+        "execute_query",
+        lambda sql, params=None: calls.append((sql, params)) or [
+            {"stock_code": "600519.SH", "adjustment_asof": date(2025, 6, 20)},
+        ],
+    )
+
+    assert collector.get_adjustment_asofs(["600519.SH", "000001.SZ"]) == {
+        "600519.SH": date(2025, 6, 20),
+        "000001.SZ": None,
+    }
+    assert len(calls) == 1
+    assert "GROUP BY stock_code" in calls[0][0]
+    assert calls[0][1] == ("600519.SH", "000001.SZ")
+
+
+def test_batch_missing_count_does_not_use_dataframe_truth_value(monkeypatch):
+    class AmbiguousDataFrame:
+        def __len__(self):
+            return 1
+
+        def __bool__(self):
+            raise ValueError("ambiguous dataframe truth value")
+
+        def iterrows(self):
+            yield "20250102", {
+                "open": 10.0, "high": 11.0, "low": 9.0, "close": 10.5,
+                "volume": 100, "amount": 1000.0,
+            }
+
+    fake_xtdata = types.SimpleNamespace(
+        download_history_data=lambda *args, **kwargs: None,
+        download_history_data2=lambda *args, **kwargs: None,
+        get_market_data_ex=lambda **kwargs: {"600519.SH": AmbiguousDataFrame()},
+    )
+    collector = load_collector(fake_xtdata)
+    monkeypatch.setattr(collector, "write_daily_rows_batch", lambda *args, **kwargs: None)
+
+    counts, failed_codes = collector.download_and_save_batch(
+        ["600519.SH"], "20150101", {"600519.SH": None}
+    )
+
+    assert counts == {"none": 1, "front": 1, "back": 1}
+    assert failed_codes == []
 
 
 def test_executable_flow_syncs_actions_before_prices_then_runs_durable_refresh(
@@ -319,6 +549,11 @@ def test_executable_flow_syncs_actions_before_prices_then_runs_durable_refresh(
         collector,
         "get_adjustment_asof",
         lambda code: date(2026, 6, 20),
+    )
+    monkeypatch.setattr(
+        collector,
+        "get_adjustment_asofs",
+        lambda codes: {code: date(2026, 6, 20) for code in codes},
     )
     monkeypatch.setattr(
         collector,
@@ -363,3 +598,40 @@ def test_executable_flow_syncs_actions_before_prices_then_runs_durable_refresh(
     output = capsys.readouterr().out
     assert "[权益] 新增=0 修订=1 撤回=1 刷新任务=2" in output
     assert "[刷新] 成功=1 失败=0 重试=1 回收=1 已被新任务取代=0" in output
+
+
+def test_main_can_skip_equity_snapshot(monkeypatch):
+    collector = load_collector(types.SimpleNamespace(connect=lambda: None))
+    calls = []
+    monkeypatch.setattr(collector, "get_existing_latest_dates", lambda mode: {})
+    monkeypatch.setattr(
+        collector, "get_code_universe", lambda: (["600519.SH"], {"600519.SH"})
+    )
+    monkeypatch.setattr(
+        collector,
+        "sync_stock_actions",
+        lambda *args: pytest.fail("equity snapshot should be skipped"),
+    )
+    monkeypatch.setattr(
+        collector,
+        "get_adjustment_asofs",
+        lambda codes: {code: None for code in codes},
+    )
+    monkeypatch.setattr(
+        collector,
+        "download_and_save_batch",
+        lambda codes, start, adjustment_asofs: calls.append(
+            (codes, start, adjustment_asofs)
+        ) or ({"none": 1, "front": 1, "back": 1}, []),
+    )
+    monkeypatch.setattr(
+        collector,
+        "run_due_refresh_tasks",
+        lambda callback: {
+            "done": 0, "failed": 0, "retried": 0,
+            "reclaimed": 0, "superseded": 0,
+        },
+    )
+
+    assert collector.main(skip_equity_snapshot=True) == 0
+    assert calls == [(["600519.SH"], collector.DATA_START, {"600519.SH": None})]
