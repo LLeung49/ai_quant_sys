@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Any
+from datetime import datetime
 
 import pandas as pd
 
@@ -14,6 +15,54 @@ SNAPSHOT_COLUMNS = (
     "composite_score", "composite_rank", "phase_raw", "phase_confirmed",
     "phase_confidence", "market_regime",
 )
+
+
+def _execute_update(sql: str, params: tuple[Any, ...]) -> int:
+    connection = get_connection()
+    cursor = connection.cursor()
+    try:
+        cursor.execute(sql, params)
+        connection.commit()
+        return cursor.rowcount
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        cursor.close()
+        connection.close()
+
+
+def create_run(
+    run_id: str,
+    as_of_date: str,
+    sector_level: int,
+    model_version: str,
+    config_hash: str,
+    source_max_trade_date: str,
+) -> int:
+    """Create a durable running audit record before any daily persistence."""
+    return _execute_update(
+        """
+        INSERT INTO sector_rotation_run_log
+            (run_id, as_of_date, sector_level, model_version, config_hash,
+             source_max_trade_date, status, started_at)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        """,
+        (run_id, as_of_date, sector_level, model_version, config_hash,
+         source_max_trade_date, "running", datetime.now()),
+    )
+
+
+def mark_run_failed(run_id: str, error_summary: str) -> int:
+    """Mark an existing audit record failed after the data transaction rolls back."""
+    return _execute_update(
+        """
+        UPDATE sector_rotation_run_log
+        SET status = %s, error_summary = %s, finished_at = NOW()
+        WHERE run_id = %s
+        """,
+        ("failed", error_summary, run_id),
+    )
 
 
 def persist_daily_snapshot(

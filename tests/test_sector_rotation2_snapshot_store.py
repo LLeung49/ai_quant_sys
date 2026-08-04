@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pandas as pd
+import pytest
 
 from morning_conference.sector_rotation2 import snapshot_store
 
@@ -83,3 +84,27 @@ def test_persist_daily_snapshot_rolls_back_when_upsert_fails(monkeypatch):
         pass
 
     assert connection.rolled_back is True
+
+
+def test_create_run_writes_running_audit_record(monkeypatch):
+    connection = FakeConnection()
+    monkeypatch.setattr(snapshot_store, "get_connection", lambda: connection)
+
+    snapshot_store.create_run("run-1", "2026-01-05", 2, "v1", "hash", "2026-01-05")
+
+    sql, params = connection.cursor_instance.calls[0]
+    assert "sector_rotation_run_log" in sql
+    assert params[0] == "run-1"
+    assert params[6] == "running"
+    assert connection.committed is True
+
+
+def test_mark_run_failed_records_error_summary(monkeypatch):
+    connection = FakeConnection()
+    monkeypatch.setattr(snapshot_store, "get_connection", lambda: connection)
+
+    snapshot_store.mark_run_failed("run-1", "source unavailable")
+
+    sql, params = connection.cursor_instance.calls[0]
+    assert "status = %s" in sql
+    assert params == ("failed", "source unavailable", "run-1")
