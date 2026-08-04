@@ -1,7 +1,6 @@
-# Copied/adapted from sector_rotation/derivatives.py.
-# Differences: this module has no dependency on the old package and adds
-# relative-strength acceleration plus multi-horizon acceleration.
-"""Pure time-series indicators used by sector_rotation2."""
+# 参考并改造自 sector_rotation/derivatives.py。
+# 差异：本模块不依赖旧包，新增相对强度加速度和多周期加速度。
+"""sector_rotation2 使用的纯时间序列指标。"""
 from __future__ import annotations
 
 import pandas as pd
@@ -12,7 +11,7 @@ def ma_slope(
     ma_window: int = 20,
     slope_window: int = 10,
 ) -> pd.Series:
-    """Return the rolling least-squares slope of a moving average."""
+    """计算移动均线的滚动最小二乘斜率。"""
     ma = close.rolling(ma_window, min_periods=ma_window).mean()
     x = pd.Series(range(slope_window), dtype="float64")
 
@@ -31,7 +30,7 @@ def macd_hist(
     slow: int = 26,
     signal: int = 9,
 ) -> pd.Series:
-    """Return the MACD histogram using the existing system's 2x convention."""
+    """按既有系统的 HIST×2 约定计算 MACD 柱。"""
     fast_ema = close.ewm(span=fast, adjust=False).mean()
     slow_ema = close.ewm(span=slow, adjust=False).mean()
     dif = fast_ema - slow_ema
@@ -40,17 +39,17 @@ def macd_hist(
 
 
 def relative_strength(sector: pd.Series, benchmark: pd.Series, periods: int) -> pd.Series:
-    """Return sector return less benchmark return on their common trade dates."""
+    """在共同交易日上计算板块收益减基准收益。"""
     aligned_sector, aligned_benchmark = sector.align(benchmark, join="inner")
     return aligned_sector.pct_change(periods) - aligned_benchmark.pct_change(periods)
 
 
 def rs_acceleration(relative_strength_series: pd.Series, lag: int = 5) -> pd.Series:
-    """Return the change in relative strength over a fixed trading-day lag."""
+    """计算固定交易日滞后下的相对强度变化。"""
     return relative_strength_series - relative_strength_series.shift(lag)
 
 
 def multi_horizon_acceleration(rs_5: pd.Series, rs_20: pd.Series) -> pd.Series:
-    """Compare recent relative strength with its medium-horizon average speed."""
+    """比较近期相对强度与中期平均速度，用于诊断多周期加速度。"""
     aligned_rs5, aligned_rs20 = rs_5.align(rs_20, join="inner")
     return aligned_rs5 - 0.25 * aligned_rs20

@@ -1,7 +1,10 @@
-# Copied/adapted from sector_rotation/sector_loader.py.
-# Differences: validates sector frames before benchmark construction and never
-# imports the old package.
-"""Read-only source loading and data-quality checks for sector_rotation2."""
+# 参考并改造自 sector_rotation/sector_loader.py。
+# 差异：构建基准前先校验板块数据，且绝不导入旧包。
+"""sector_rotation2 的只读数据加载与数据质量检查。
+
+这里的 SQL 均为只读；调用方可以记录异常板块原因，但异常历史不会进入
+横截面基准和可排名样本。
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -19,6 +22,7 @@ class FrameValidation:
 
 
 def validate_sector_frame(frame: pd.DataFrame) -> FrameValidation:
+    """校验板块进入排名前必须满足的最小数据不变量。"""
     reasons: list[str] = []
     required = {"close", "amount"}
     missing = required.difference(frame.columns)
@@ -39,7 +43,11 @@ def validate_sector_frame(frame: pd.DataFrame) -> FrameValidation:
 
 
 def build_market_benchmark(sector_panel: Mapping[str, pd.DataFrame]) -> pd.DataFrame:
-    """Build an equal-weight price / summed-amount benchmark from valid sectors."""
+    """仅以有效板块构建等权价格、成交额求和的市场基准。
+
+每个板块收盘先归一到自身首个有效观察值，消除合成指数点位差异；
+成交额按市场实际规模求和而非平均。
+"""
     eligible = {name: frame for name, frame in sector_panel.items() if validate_sector_frame(frame).valid}
     if not eligible:
         return pd.DataFrame(columns=["close", "amount", "eligible_sector_count"])
@@ -58,7 +66,11 @@ def load_sector_panel(
     end_date: str | None = None,
     min_history_days: int = 60,
 ) -> dict[str, pd.DataFrame]:
-    """Load a read-only sector history panel from ``trade_sector_daily``."""
+    """从 ``trade_sector_daily`` 只读加载板块历史面板。
+
+日期筛选先在 SQL 完成以减少载入量；随后按板块独立校验，因此单个异常历史
+不会污染市场基准或可排名样本集合。
+"""
     conditions = ["sector_level = %s"]
     params: list[object] = [level]
     if start_date:
@@ -93,7 +105,11 @@ def load_sector_stock_amounts(
     level: int,
     trade_dates: list[str],
 ) -> pd.DataFrame:
-    """Load current members' read-only daily amount/close panel for breadth work."""
+    """加载当前行业成员的只读日成交额/收盘面板，用于广度计算。
+
+v1 明确使用当前行业映射，这是回测口径限制；返回结果因此逐行标记
+``membership_asof_mode=current_mapping``，供快照与报告披露。
+"""
     if not trade_dates:
         return pd.DataFrame(columns=["stock_code", "trade_date", "amount", "close", "membership_asof_mode"])
     field = "sector_1" if level == 1 else "sector_2"
@@ -114,7 +130,11 @@ def load_sector_stock_amounts(
 
 
 def load_market_aggregates(sector_panel: Mapping[str, pd.DataFrame]) -> pd.DataFrame:
-    """Aggregate limits, amount and median upward breadth from valid sector histories."""
+    """从有效板块历史聚合涨跌停、成交额和上涨广度中位数。
+
+上涨广度取板块中位数，避免超大板块主导市场状态信号；涨跌停家数与成交额
+仍按市场总量求和。
+"""
     eligible = [frame for frame in sector_panel.values() if validate_sector_frame(frame).valid]
     if not eligible:
         return pd.DataFrame(columns=["amount", "limit_up", "limit_down", "breadth_up_median"])

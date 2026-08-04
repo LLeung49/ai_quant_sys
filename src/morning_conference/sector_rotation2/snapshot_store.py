@@ -1,4 +1,8 @@
-"""Transactional persistence for versioned sector-rotation daily snapshots."""
+"""版本化板块轮动日快照的事务持久化。
+
+上游源表始终只读。本模块只操作已批准的派生表；任一行写入失败时，
+会明确回滚整批快照，避免留下半成品数据。
+"""
 from __future__ import annotations
 
 from typing import Any
@@ -18,6 +22,7 @@ SNAPSHOT_COLUMNS = (
 
 
 def _execute_update(sql: str, params: tuple[Any, ...]) -> int:
+    """执行一条运行审计写操作，并由本函数明确负责提交或回滚。"""
     connection = get_connection()
     cursor = connection.cursor()
     try:
@@ -40,7 +45,7 @@ def create_run(
     config_hash: str,
     source_max_trade_date: str,
 ) -> int:
-    """Create a durable running audit record before any daily persistence."""
+    """在每日快照持久化前创建可追溯的 running 审计记录。"""
     return _execute_update(
         """
         INSERT INTO sector_rotation_run_log
@@ -54,7 +59,7 @@ def create_run(
 
 
 def mark_run_failed(run_id: str, error_summary: str) -> int:
-    """Mark an existing audit record failed after the data transaction rolls back."""
+    """在数据事务回滚后，将已有审计记录标记为 failed 并写入错误摘要。"""
     return _execute_update(
         """
         UPDATE sector_rotation_run_log
@@ -72,7 +77,11 @@ def persist_daily_snapshot(
     model_version: str,
     run_id: str,
 ) -> int:
-    """Upsert one day's sector rows in one database transaction."""
+    """在一个数据库事务中 upsert 某日的全部板块快照。
+
+唯一键为日期、层级、板块名和模型版本；同一模型同日重跑时更新数值和
+run_id，而不是新增重复快照。
+"""
     rows: list[tuple[Any, ...]] = []
     for sector_name, row in frame.iterrows():
         name = row.get("sector_name", sector_name)
@@ -86,6 +95,7 @@ def persist_daily_snapshot(
     if not rows:
         return 0
 
+    # 列名来自内部固定常量；所有运行时数据值都使用参数化占位符，避免拼接 SQL 值。
     placeholders = ", ".join(["%s"] * len(SNAPSHOT_COLUMNS))
     sql = f"""
         INSERT INTO sector_rotation_sector_daily_snapshot ({", ".join(SNAPSHOT_COLUMNS)})

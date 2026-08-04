@@ -1,4 +1,8 @@
-"""Versioned configuration for the independent sector-rotation pipeline."""
+"""独立板块轮动管线的版本化配置。
+
+本模块是影响每日评分参数的唯一来源。每次运行保存确定性配置哈希，
+因此即使后续模型版本调整参数，历史快照仍可复现。
+"""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
@@ -9,6 +13,7 @@ from typing import Mapping
 
 @dataclass(frozen=True)
 class ModelConfig:
+    """不可变的 v1 模型契约；变更任何参数时必须新建模型版本。"""
     model_version: str = "v1"
     min_cross_section: int = 20
     min_coverage_ratio: float = 0.80
@@ -29,6 +34,9 @@ DEFAULT_CONFIG = ModelConfig()
 
 
 def config_hash(config: ModelConfig) -> str:
-    """Return a deterministic hash that identifies the complete model setup."""
+    """返回唯一标识完整模型配置的确定性哈希。
+
+    使用键排序的紧凑 JSON，避免字典插入顺序或空白字符在参数未变时改变指纹。
+    """
     payload = json.dumps(asdict(config), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return sha256(payload.encode("utf-8")).hexdigest()

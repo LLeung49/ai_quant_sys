@@ -1,4 +1,8 @@
-"""Pure cross-sectional normalization helpers for sector_rotation2."""
+"""sector_rotation2 的纯横截面标准化工具。
+
+本文件不读取日期或数据库；调用方只能传入同一交易日的横截面，
+从接口层面避免意外使用未来数据。
+"""
 from __future__ import annotations
 
 from collections.abc import Mapping
@@ -7,7 +11,10 @@ import pandas as pd
 
 
 def signed_percentile(series: pd.Series, minimum_count: int = 20) -> pd.Series:
-    """Map a valid cross section to [-1, 1] using average percentile ranks."""
+    """以对并列值安全的平均排名，将有效横截面映射到 [-1, 1]。
+
+    常数列或样本过少时不存在可区分的排名信息，返回 NaN 而不是伪造为 0 分。
+    """
     result = pd.Series(float("nan"), index=series.index, dtype="float64")
     valid = series.dropna()
     if len(valid) < minimum_count or valid.nunique() < 2:
@@ -23,7 +30,11 @@ def weighted_available_mean(
     weights: Mapping[str, float],
     minimum_weight: float,
 ) -> pd.Series:
-    """Return an available-column weighted mean, subject to a weight threshold."""
+    """按可用列计算加权均值，并受最低有效权重约束。
+
+    每个板块只对实际可用指标重新归一化；证据不足的行保持 NaN，
+    后续不得获得综合排名。
+    """
     columns = list(weights)
     missing = set(columns).difference(frame.columns)
     if missing:
