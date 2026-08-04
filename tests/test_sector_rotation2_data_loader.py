@@ -4,6 +4,7 @@ import pandas as pd
 
 from morning_conference.sector_rotation2.data_loader import (
     build_market_benchmark,
+    load_sector_panel,
     validate_sector_frame,
 )
 
@@ -34,3 +35,17 @@ def test_build_market_benchmark_uses_only_eligible_sector_frames():
 
     assert benchmark["eligible_sector_count"].iloc[-1] == 1
     assert benchmark["amount"].tolist() == [10.0, 20.0]
+
+
+def test_load_sector_panel_queries_read_only_source_and_groups_by_sector(monkeypatch):
+    rows = [
+        {"sector_name": "电子", "trade_date": "2026-01-02", "close": 100.0, "amount": 10.0,
+         "stock_count": 10, "kline_stock_count": 10, "rise_count": 6, "fall_count": 3, "flat_count": 1,
+         "limit_up": 1, "limit_down": 0},
+    ]
+    monkeypatch.setattr("morning_conference.sector_rotation2.data_loader.execute_query", lambda sql, params: rows)
+
+    panel = load_sector_panel(level=2, start_date="2026-01-02", end_date="2026-01-02", min_history_days=1)
+
+    assert list(panel) == ["电子"]
+    assert panel["电子"].loc[pd.Timestamp("2026-01-02"), "close"] == 100.0

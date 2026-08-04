@@ -9,6 +9,8 @@ from typing import Mapping
 
 import pandas as pd
 
+from data_ingestion.db_config import execute_query
+
 
 @dataclass(frozen=True)
 class FrameValidation:
@@ -48,3 +50,39 @@ def build_market_benchmark(sector_panel: Mapping[str, pd.DataFrame]) -> pd.DataF
         "amount": pd.concat(amounts, axis=1).sum(axis=1),
         "eligible_sector_count": len(eligible),
     })
+
+
+def load_sector_panel(
+    level: int,
+    start_date: str | None = None,
+    end_date: str | None = None,
+    min_history_days: int = 60,
+) -> dict[str, pd.DataFrame]:
+    """Load a read-only sector history panel from ``trade_sector_daily``."""
+    conditions = ["sector_level = %s"]
+    params: list[object] = [level]
+    if start_date:
+        conditions.append("trade_date >= %s")
+        params.append(start_date)
+    if end_date:
+        conditions.append("trade_date <= %s")
+        params.append(end_date)
+    sql = f"""
+        SELECT sector_name, trade_date, close_idx AS close, total_amount AS amount,
+               stock_count, kline_stock_count, rise_count, fall_count, flat_count,
+               limit_up, limit_down
+        FROM trade_sector_daily
+        WHERE {' AND '.join(conditions)}
+        ORDER BY sector_name ASC, trade_date ASC
+    """
+    rows = execute_query(sql, params)
+    if not rows:
+        return {}
+    frame = pd.DataFrame(rows)
+    frame["trade_date"] = pd.to_datetime(frame["trade_date"])
+    panel: dict[str, pd.DataFrame] = {}
+    for sector_name, group in frame.groupby("sector_name", sort=True):
+        sector_frame = group.drop(columns="sector_name").set_index("trade_date").sort_index()
+        if len(sector_frame) >= min_history_days and validate_sector_frame(sector_frame).valid:
+            panel[str(sector_name)] = sector_frame
+    return panel
