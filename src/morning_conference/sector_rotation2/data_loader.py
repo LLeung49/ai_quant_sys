@@ -86,3 +86,28 @@ def load_sector_panel(
         if len(sector_frame) >= min_history_days and validate_sector_frame(sector_frame).valid:
             panel[str(sector_name)] = sector_frame
     return panel
+
+
+def load_sector_stock_amounts(
+    sector_name: str,
+    level: int,
+    trade_dates: list[str],
+) -> pd.DataFrame:
+    """Load current members' read-only daily amount/close panel for breadth work."""
+    if not trade_dates:
+        return pd.DataFrame(columns=["stock_code", "trade_date", "amount", "close", "membership_asof_mode"])
+    field = "sector_1" if level == 1 else "sector_2"
+    placeholders = ", ".join(["%s"] * len(trade_dates))
+    sql = f"""
+        SELECT daily.stock_code, daily.trade_date, daily.amount, daily.close_price AS close
+        FROM trade_stock_daily_qfq AS daily
+        INNER JOIN trade_stock_status AS status ON status.stock_code = daily.stock_code
+        WHERE status.{field} = %s AND daily.trade_date IN ({placeholders})
+        ORDER BY daily.trade_date ASC, daily.stock_code ASC
+    """
+    rows = execute_query(sql, [sector_name, *trade_dates])
+    result = pd.DataFrame(rows, columns=["stock_code", "trade_date", "amount", "close"])
+    if not result.empty:
+        result["trade_date"] = pd.to_datetime(result["trade_date"])
+    result["membership_asof_mode"] = "current_mapping"
+    return result

@@ -4,6 +4,7 @@ import pandas as pd
 
 from morning_conference.sector_rotation2.data_loader import (
     build_market_benchmark,
+    load_sector_stock_amounts,
     load_sector_panel,
     validate_sector_frame,
 )
@@ -49,3 +50,13 @@ def test_load_sector_panel_queries_read_only_source_and_groups_by_sector(monkeyp
 
     assert list(panel) == ["电子"]
     assert panel["电子"].loc[pd.Timestamp("2026-01-02"), "close"] == 100.0
+
+
+def test_load_sector_stock_amounts_uses_current_sector_mapping(monkeypatch):
+    rows = [{"stock_code": "000001.SZ", "trade_date": "2026-01-02", "amount": 100.0, "close": 10.0}]
+    monkeypatch.setattr("morning_conference.sector_rotation2.data_loader.execute_query", lambda sql, params: rows)
+
+    result = load_sector_stock_amounts("电子", 2, ["2026-01-02"])
+
+    assert result.loc[0, "membership_asof_mode"] == "current_mapping"
+    assert result.loc[0, "stock_code"] == "000001.SZ"
