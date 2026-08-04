@@ -111,3 +111,18 @@ def load_sector_stock_amounts(
         result["trade_date"] = pd.to_datetime(result["trade_date"])
     result["membership_asof_mode"] = "current_mapping"
     return result
+
+
+def load_market_aggregates(sector_panel: Mapping[str, pd.DataFrame]) -> pd.DataFrame:
+    """Aggregate limits, amount and median upward breadth from valid sector histories."""
+    eligible = [frame for frame in sector_panel.values() if validate_sector_frame(frame).valid]
+    if not eligible:
+        return pd.DataFrame(columns=["amount", "limit_up", "limit_down", "breadth_up_median"])
+    combined = pd.concat(eligible, keys=range(len(eligible)), names=["sector", "trade_date"])
+    combined["breadth_up"] = combined["rise_count"] / (
+        combined["rise_count"] + combined["fall_count"] + combined["flat_count"]
+    )
+    return combined.groupby(level="trade_date").agg(
+        amount=("amount", "sum"), limit_up=("limit_up", "sum"),
+        limit_down=("limit_down", "sum"), breadth_up_median=("breadth_up", "median"),
+    )

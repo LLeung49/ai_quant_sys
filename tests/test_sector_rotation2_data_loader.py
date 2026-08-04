@@ -6,6 +6,7 @@ from morning_conference.sector_rotation2.data_loader import (
     build_market_benchmark,
     load_sector_stock_amounts,
     load_sector_panel,
+    load_market_aggregates,
     validate_sector_frame,
 )
 
@@ -60,3 +61,13 @@ def test_load_sector_stock_amounts_uses_current_sector_mapping(monkeypatch):
 
     assert result.loc[0, "membership_asof_mode"] == "current_mapping"
     assert result.loc[0, "stock_code"] == "000001.SZ"
+
+
+def test_load_market_aggregates_sums_limits_and_uses_median_breadth():
+    panel = {
+        "A": valid_frame().assign(rise_count=[6, 8], fall_count=[2, 1], flat_count=[2, 1], limit_up=[1, 2], limit_down=[0, 0]),
+        "B": valid_frame().assign(rise_count=[4, 2], fall_count=[4, 6], flat_count=[2, 2], limit_up=[0, 0], limit_down=[1, 2]),
+    }
+    aggregates = load_market_aggregates(panel)
+    assert aggregates.loc[pd.Timestamp("2026-01-02"), "limit_up"] == 2
+    assert aggregates.loc[pd.Timestamp("2026-01-02"), "limit_down"] == 2
