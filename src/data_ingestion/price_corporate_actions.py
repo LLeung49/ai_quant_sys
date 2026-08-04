@@ -50,7 +50,7 @@ ACTION_VALUE_FIELDS = (
 )
 
 SELECT_ACTION_SNAPSHOT_SQL = """
--- 只比较本次完整回看窗口；窗口外历史事件不因每日快照被误判为撤回。
+-- 只比较本次完整回看窗口；窗口外历史事件不因每日快照被误判为撤回。（先查询数据库中同一股票、同一数据源、同一最近 10 天窗口内已经保存的权益事件））
 SELECT stock_code, ex_date, cash_dividend_per_share,
        stock_bonus_per_share, stock_gift_per_share,
        rights_issue_per_share, rights_issue_price, share_reform_flag,
@@ -379,10 +379,12 @@ def sync_qmt_factor_snapshot(
     data_start: date,
 ) -> SnapshotPlan:
     """读取同窗口旧快照、生成差异计划并落库；返回值可用于调用方日志统计。"""
+    # 先查询数据库中同一股票、同一数据源、同一最近 10 天窗口内已经保存的权益事件
     existing = execute_query(
         SELECT_ACTION_SNAPSHOT_SQL,
         (stock_code, DATA_SOURCE, snapshot_start, snapshot_end),
     )
+    # 对比新旧，得出“哪些事实要更新、哪些投影要重刷”，factor_frame是最新查到的权益事件
     plan = plan_factor_snapshot(
         normalize_qmt_factors(stock_code, factor_frame),
         existing,

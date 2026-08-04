@@ -68,6 +68,8 @@ INSERT_SQL_BY_DIVIDEND_TYPE = {
     "back": BFQ_INSERT_SQL,
 }
 
+DEFAULT_WRITE_CHUNK_SIZE = 10000
+
 LATEST_DATE_SQL_BY_DIVIDEND_TYPE = {
     # 每个模式单独取游标，再由采集器选择最早日期以保证三张表日期对齐。
     "none": "SELECT stock_code, MAX(trade_date) AS max_date FROM trade_stock_daily_raw GROUP BY stock_code",
@@ -133,6 +135,7 @@ def write_daily_rows_batch(
     dividend_type: str,
     rows: list[dict],
     adjustment_asofs: dict[str, date | None],
+    chunk_size: int = DEFAULT_WRITE_CHUNK_SIZE,
 ) -> int:
     """批量 UPSERT 多只股票的一种价格模式。
 
@@ -142,6 +145,8 @@ def write_daily_rows_batch(
     """
     if not rows:
         return 0
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be greater than zero")
     table_for_mode(dividend_type)
     if dividend_type == "none":
         values = [
@@ -163,4 +168,11 @@ def write_daily_rows_batch(
             )
             for row in rows
         ]
-    return execute_many(INSERT_SQL_BY_DIVIDEND_TYPE[dividend_type], values)
+    affected = 0
+    for offset in range(0, len(values), chunk_size):
+        chunk_affected = execute_many(
+            INSERT_SQL_BY_DIVIDEND_TYPE[dividend_type],
+            values[offset:offset + chunk_size],
+        )
+        affected += chunk_affected or 0
+    return affected

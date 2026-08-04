@@ -24,6 +24,7 @@
 查表SQL
 1. 查询股票最新日期
 SELECT * FROM trade_stock_daily WHERE stock_code = '600519.SH' ORDER BY trade_date DESC LIMIT 20;
+
 # ------------------------------------------------------------
 """
 import sys
