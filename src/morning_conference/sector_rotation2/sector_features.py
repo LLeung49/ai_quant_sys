@@ -6,6 +6,8 @@ from __future__ import annotations
 
 import pandas as pd
 
+from .derivatives import relative_strength
+
 
 def calculate_simple_return(close: pd.Series, periods: int) -> float:
     """计算序列末日相对指定交易日滞后的简单收益率。
@@ -37,6 +39,38 @@ def calculate_rvol(amount: pd.Series, recent_window: int, baseline_window: int) 
     recent_mean = amount.iloc[-recent_window:].mean()
     baseline_mean = amount.iloc[-baseline_window:].mean()
     return float(recent_mean / baseline_mean) if pd.notna(baseline_mean) and baseline_mean > 0 else float("nan")
+
+
+def calculate_sector_price_features(close: pd.Series, benchmark_close: pd.Series) -> dict[str, float]:
+    """计算单板块的收益、相对强度和均线位置原始特征。
+
+    参数:
+        close: 按交易日升序排列的板块收盘指数序列。
+        benchmark_close: 同期市场基准收盘序列。
+    返回:
+        含 ret_5/20、rs_5/20/60、distance_ma20、distance_ma60 的字典；
+        任何窗口历史不足时对应字段为 NaN。
+    """
+    rs_5 = relative_strength(close, benchmark_close, 5)
+    rs_20 = relative_strength(close, benchmark_close, 20)
+    rs_60 = relative_strength(close, benchmark_close, 60)
+    ma20 = close.rolling(20, min_periods=20).mean()
+    ma60 = close.rolling(60, min_periods=60).mean()
+    latest = close.iloc[-1] if not close.empty else float("nan")
+
+    def latest_value(series: pd.Series) -> float:
+        return float(series.iloc[-1]) if not series.empty and pd.notna(series.iloc[-1]) else float("nan")
+
+    ma20_last, ma60_last = latest_value(ma20), latest_value(ma60)
+    return {
+        "ret_5": calculate_simple_return(close, 5),
+        "ret_20": calculate_simple_return(close, 20),
+        "rs_5": latest_value(rs_5),
+        "rs_20": latest_value(rs_20),
+        "rs_60": latest_value(rs_60),
+        "distance_ma20": float(latest / ma20_last - 1.0) if ma20_last > 0 else float("nan"),
+        "distance_ma60": float(latest / ma60_last - 1.0) if ma60_last > 0 else float("nan"),
+    }
 
 
 def calculate_amount_share(sector_amount: float, market_amount: float) -> float:

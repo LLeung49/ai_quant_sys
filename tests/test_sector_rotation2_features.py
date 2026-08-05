@@ -4,6 +4,7 @@ import pandas as pd
 import pytest
 
 from morning_conference.sector_rotation2.sector_features import (
+    calculate_sector_price_features,
     calculate_rvol,
     calculate_simple_return,
     calculate_amount_share,
@@ -43,3 +44,14 @@ def test_rvol_divides_recent_average_by_long_average():
 
 def test_rvol_returns_nan_when_history_is_too_short():
     assert pd.isna(calculate_rvol(pd.Series([10.0] * 5), recent_window=5, baseline_window=20))
+
+
+def test_sector_price_features_outputs_relative_strength_and_ma_distance():
+    close = pd.Series([100.0] * 60 + [110.0])
+    benchmark = pd.Series([100.0] * 60 + [105.0])
+
+    result = calculate_sector_price_features(close, benchmark)
+
+    assert result["ret_5"] == pytest.approx(0.10)
+    assert result["rs_5"] == pytest.approx(0.05)
+    assert result["distance_ma20"] > 0
