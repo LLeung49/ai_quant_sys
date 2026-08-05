@@ -20,7 +20,10 @@ def signed_percentile(series: pd.Series, minimum_count: int = 20) -> pd.Series:
     if len(valid) < minimum_count or valid.nunique() < 2:
         return result
 
+    # 先得到从 1 到 N 的平均排名；并列值取平均名次，避免人为打破并列关系。
     ranks = valid.rank(method="average")
+    # 将排名线性映射到 [-1, 1]：最低名次 -> -1，最高名次 -> +1，居中名次 -> 0。
+    # 这样 MOM、RS、量能等不同量纲指标可在同一尺度上做加权组合。
     result.loc[valid.index] = 2.0 * (ranks - 1.0) / (len(valid) - 1.0) - 1.0
     return result
 
