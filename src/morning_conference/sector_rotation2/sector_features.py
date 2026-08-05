@@ -7,6 +7,7 @@ from __future__ import annotations
 import pandas as pd
 
 from .derivatives import macd_hist, ma_slope, relative_strength, rs_acceleration
+from .data_loader import build_market_benchmark, load_sector_panel, load_sector_stock_amounts
 
 
 def calculate_simple_return(close: pd.Series, periods: int) -> float:
@@ -134,6 +135,83 @@ def calculate_sector_features(
         "share_impulse": calculate_share_impulse(amount_share, amount_share_history),
     })
     return features
+
+
+def calculate_stock_participation_features(stock_history: pd.DataFrame) -> dict[str, float]:
+    """计算成分股层面的量能和价格参与度。
+
+    参数:
+        stock_history: 含 stock_code、trade_date、amount、close 的历史表；每只股票按日期计算 20 日指标。
+    返回:
+        含 median_stock_rvol、breadth_rvol、breadth_above_ma20、breadth_new_high_20 的字典；
+        无足够有效成分股时对应字段为 NaN。
+    异常:
+        KeyError: 缺少必要列时抛出。
+    """
+    empty_result = {key: float("nan") for key in ("median_stock_rvol", "breadth_rvol", "breadth_above_ma20", "breadth_new_high_20")}
+    # 个股数据源无返回行时，参与度不可计算但不能阻断板块价格特征输出。
+    if stock_history.empty:
+        return empty_result
+    required = {"stock_code", "trade_date", "amount", "close"}
+    missing = required.difference(stock_history.columns)
+    if missing:
+        raise KeyError(f"stock_history missing columns: {sorted(missing)}")
+    latest_rows: list[dict[str, float]] = []
+    for _, group in stock_history.sort_values(["stock_code", "trade_date"]).groupby("stock_code", sort=False):
+        if len(group) < 20:
+            continue
+        amount_ma20 = group["amount"].rolling(20, min_periods=20).mean().iloc[-1]
+        close_ma20 = group["close"].rolling(20, min_periods=20).mean().iloc[-1]
+        high20 = group["close"].rolling(20, min_periods=20).max().iloc[-1]
+        current_amount, current_close = group["amount"].iloc[-1], group["close"].iloc[-1]
+        latest_rows.append({
+            "stock_rvol": current_amount / amount_ma20 if amount_ma20 > 0 else float("nan"),
+            "above_ma20": float(current_close > close_ma20) if pd.notna(close_ma20) else float("nan"),
+            "new_high_20": float(current_close >= high20) if pd.notna(high20) else float("nan"),
+        })
+    latest = pd.DataFrame(latest_rows)
+    if latest.empty:
+        return empty_result
+    return {
+        "median_stock_rvol": float(latest["stock_rvol"].median()),
+        "breadth_rvol": calculate_breadth_rvol(latest["stock_rvol"]),
+        "breadth_above_ma20": float(latest["above_ma20"].mean()),
+        "breadth_new_high_20": float(latest["new_high_20"].mean()),
+    }
+
+
+def build_daily_feature_panel(level: int, as_of_date: str, min_history_days: int = 90) -> pd.DataFrame:
+    """构建指定交易日全部有效板块的原始特征横截面。
+
+    参数:
+        level: 申万行业层级。
+        as_of_date: 特征计算截止交易日，格式 YYYY-MM-DD。
+        min_history_days: 板块进入特征面板所需的最少历史行数。
+    返回:
+        以 sector_name 为索引的原始特征 DataFrame；无有效板块时返回空表。
+    """
+    panel = load_sector_panel(level=level, end_date=as_of_date, min_history_days=min_history_days)
+    benchmark = build_market_benchmark(panel)
+    if not panel or benchmark.empty:
+        return pd.DataFrame()
+    rows: dict[str, dict[str, float]] = {}
+    date_strings = [date.strftime("%Y-%m-%d") for date in benchmark.index]
+    for sector_name, frame in panel.items():
+        share_history = frame["amount"].div(benchmark["amount"].reindex(frame.index))
+        features = calculate_sector_features(frame, benchmark, float(benchmark["amount"].iloc[-1]), share_history.iloc[:-1])
+        stock_history = load_sector_stock_amounts(sector_name, level, date_strings)
+        features.update(calculate_stock_participation_features(stock_history))
+        latest = frame.iloc[-1]
+        stock_count = latest.get("stock_count", float("nan"))
+        kline_count = latest.get("kline_stock_count", float("nan"))
+        denominator = latest.get("rise_count", 0) + latest.get("fall_count", 0) + latest.get("flat_count", 0)
+        features.update({
+            "coverage_ratio": float(kline_count / stock_count) if pd.notna(stock_count) and stock_count > 0 else float("nan"),
+            "breadth_up": float(latest.get("rise_count", 0) / denominator) if denominator > 0 else float("nan"),
+            "membership_asof_mode": "current_mapping",
+        })
+        rows[sector_name] = features
+    return pd.DataFrame.from_dict(rows, orient="index")
 
 
 def calculate_amount_share(sector_amount: float, market_amount: float) -> float:

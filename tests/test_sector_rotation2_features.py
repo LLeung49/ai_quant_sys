@@ -6,6 +6,7 @@ import pytest
 from morning_conference.sector_rotation2.sector_features import (
     calculate_sector_price_features,
     calculate_sector_features,
+    calculate_stock_participation_features,
     calculate_sector_trend_features,
     calculate_rvol,
     calculate_simple_return,
@@ -82,3 +83,37 @@ def test_sector_features_combines_price_trend_and_volume_fields():
     assert result["amount_share"] == pytest.approx(0.02)
     assert result["share_impulse"] == pytest.approx(2.0)
     assert "macd_hist_delta" in result
+
+
+def test_stock_participation_features_measure_rvol_and_price_breadth():
+    history = pd.DataFrame(
+        {
+            "stock_code": ["A"] * 20 + ["B"] * 20,
+            "trade_date": list(pd.date_range("2026-01-01", periods=20)) * 2,
+            "amount": [100.0] * 19 + [200.0] + [100.0] * 20,
+            "close": list(range(1, 21)) + list(range(20, 0, -1)),
+        }
+    )
+
+    result = calculate_stock_participation_features(history)
+
+    # MA20 包含当前日：A 的 RVOL=200/105，B 的 RVOL=1，二者中位数为 1.45238。
+    assert result["median_stock_rvol"] == pytest.approx(1.4523809524)
+    assert result["breadth_rvol"] == pytest.approx(0.5)
+    assert result["breadth_above_ma20"] == pytest.approx(0.5)
+    assert result["breadth_new_high_20"] == pytest.approx(0.5)
+
+
+def test_build_daily_feature_panel_combines_each_valid_sector(monkeypatch):
+    from morning_conference.sector_rotation2 import sector_features
+
+    dates = pd.date_range("2026-01-01", periods=80)
+    sector = pd.DataFrame({"close": range(100, 180), "amount": [100.0] * 75 + [200.0] * 5,
+                           "stock_count": 10, "kline_stock_count": 9, "rise_count": 6, "fall_count": 3, "flat_count": 1}, index=dates)
+    monkeypatch.setattr(sector_features, "load_sector_panel", lambda **_: {"电子": sector})
+    monkeypatch.setattr(sector_features, "load_sector_stock_amounts", lambda *args: pd.DataFrame())
+
+    result = sector_features.build_daily_feature_panel(2, "2026-04-22", min_history_days=60)
+
+    assert result.loc["电子", "coverage_ratio"] == pytest.approx(0.9)
+    assert result.loc["电子", "breadth_up"] == pytest.approx(0.6)
