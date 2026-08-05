@@ -101,6 +101,41 @@ def calculate_sector_trend_features(close: pd.Series, benchmark_close: pd.Series
     }
 
 
+def calculate_sector_features(
+    sector_frame: pd.DataFrame,
+    benchmark_frame: pd.DataFrame,
+    market_amount: float,
+    amount_share_history: pd.Series,
+) -> dict[str, float]:
+    """组合单板块价格、趋势和量能原始特征。
+
+    参数:
+        sector_frame: 含 close、amount 列且按交易日升序排列的板块历史表。
+        benchmark_frame: 含 close 列的同期市场基准历史表。
+        market_amount: 当前交易日全部有效板块成交额之和。
+        amount_share_history: 当前日前的板块成交额份额历史序列。
+    返回:
+        可直接进入每日横截面评分的原始特征字典；窗口不足的指标保持 NaN。
+    异常:
+        KeyError: 任一输入表缺少必要的 close 或 amount 列时抛出。
+    """
+    if "close" not in sector_frame or "amount" not in sector_frame or "close" not in benchmark_frame:
+        raise KeyError("sector_frame requires close/amount and benchmark_frame requires close")
+    close = sector_frame["close"]
+    amount = sector_frame["amount"]
+    current_amount = amount.iloc[-1] if not amount.empty else float("nan")
+    amount_share = calculate_amount_share(float(current_amount), market_amount)
+    features = calculate_sector_price_features(close, benchmark_frame["close"])
+    features.update(calculate_sector_trend_features(close, benchmark_frame["close"]))
+    features.update({
+        "rvol_5_20": calculate_rvol(amount, 5, 20),
+        "rvol_5_60": calculate_rvol(amount, 5, 60),
+        "amount_share": amount_share,
+        "share_impulse": calculate_share_impulse(amount_share, amount_share_history),
+    })
+    return features
+
+
 def calculate_amount_share(sector_amount: float, market_amount: float) -> float:
     """计算板块成交额占同日有效市场成交额的比例。
 

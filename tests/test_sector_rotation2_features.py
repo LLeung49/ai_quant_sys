@@ -5,6 +5,7 @@ import pytest
 
 from morning_conference.sector_rotation2.sector_features import (
     calculate_sector_price_features,
+    calculate_sector_features,
     calculate_sector_trend_features,
     calculate_rvol,
     calculate_simple_return,
@@ -67,3 +68,17 @@ def test_sector_trend_features_output_acceleration_fields():
     assert set(result) == {"ma20_slope", "rs20_accel", "ma20_accel", "macd_hist", "macd_hist_delta"}
     assert pd.notna(result["ma20_slope"])
     assert pd.notna(result["macd_hist_delta"])
+
+
+def test_sector_features_combines_price_trend_and_volume_fields():
+    close = pd.Series([100.0 + index for index in range(80)])
+    amount = pd.Series([100.0] * 75 + [200.0] * 5)
+    frame = pd.DataFrame({"close": close, "amount": amount})
+    benchmark = pd.DataFrame({"close": pd.Series([100.0 + index * 0.5 for index in range(80)])})
+
+    result = calculate_sector_features(frame, benchmark, market_amount=10_000.0, amount_share_history=pd.Series([0.01] * 20))
+
+    assert result["rvol_5_20"] > 1.0
+    assert result["amount_share"] == pytest.approx(0.02)
+    assert result["share_impulse"] == pytest.approx(2.0)
+    assert "macd_hist_delta" in result
