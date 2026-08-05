@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import pandas as pd
+from scipy.stats import linregress
 
 
 def ma_slope(
@@ -21,13 +22,17 @@ def ma_slope(
         与 close 索引一致的斜率序列；历史不足处为 NaN。
     """
     ma = close.rolling(ma_window, min_periods=ma_window).mean()
-    x = pd.Series(range(slope_window), dtype="float64")
-
     def slope(values: pd.Series) -> float:
+        """拟合单个均线窗口并返回 scipy 标准最小二乘斜率。
+
+        参数:
+            values: rolling 窗口内的均线观测值。
+        返回:
+            线性回归斜率；窗口含缺失值时返回 NaN。
+        """
         if values.isna().any():
             return float("nan")
-        centered_x = x - x.mean()
-        return float((centered_x * (values.reset_index(drop=True) - values.mean())).sum() / (centered_x**2).sum())
+        return float(linregress(range(len(values)), values.to_numpy()).slope)
 
     return ma.rolling(slope_window, min_periods=slope_window).apply(slope, raw=False)
 

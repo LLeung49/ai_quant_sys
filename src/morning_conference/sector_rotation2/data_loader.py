@@ -62,6 +62,7 @@ def build_market_benchmark(sector_panel: Mapping[str, pd.DataFrame]) -> pd.DataF
     eligible = {name: frame for name, frame in sector_panel.items() if validate_sector_frame(frame).valid}
     if not eligible:
         return pd.DataFrame(columns=["close", "amount", "eligible_sector_count"])
+    # 归一到自身首个有效观察值，消除合成指数点位差异(frame["close"].iloc[0] 是当前这个板块历史 DataFrame 中，close 列的第一条有效收盘指数值)
     normalized = [frame["close"] / frame["close"].iloc[0] for frame in eligible.values()]
     amounts = [frame["amount"] for frame in eligible.values()]
     return pd.DataFrame({
