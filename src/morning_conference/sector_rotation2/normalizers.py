@@ -39,13 +39,20 @@ def weighted_available_mean(
     后续不得获得综合排名。
     """
     columns = list(weights)
+    # 评分权重中声明的字段必须全部存在；缺字段意味着调用方的特征面板契约被破坏。
     missing = set(columns).difference(frame.columns)
     if missing:
         raise KeyError(f"Missing weighted columns: {sorted(missing)}")
 
+    # 将配置字典转为与 DataFrame 列对齐的权重序列，后续按列广播计算。
     weight_series = pd.Series(weights, dtype="float64")
+    # 每行分别判断哪些分数可用；不同板块允许缺失的评分维度不同。
     available = frame[columns].notna()
+    # 只累计可用分数的权重。例如仅趋势位置可用时，权重和为 0.45。
     available_weight = available.mul(weight_series, axis=1).sum(axis=1)
+    # 加权分子只包含非空分数；min_count=1 防止整行缺失时被 pandas 默认为 0。
     numerator = frame[columns].mul(weight_series, axis=1).sum(axis=1, min_count=1)
+    # 权重和达到门槛才除以可用权重和，从而在缺少部分指标时保持同一 [-1, 1] 尺度；
+    # 低于门槛则保留 NaN，后续不应为该板块生成综合排名。
     result = numerator.div(available_weight.where(available_weight >= minimum_weight))
     return result.astype("float64")
