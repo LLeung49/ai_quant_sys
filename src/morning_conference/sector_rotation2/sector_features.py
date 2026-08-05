@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from .derivatives import relative_strength
+from .derivatives import macd_hist, ma_slope, relative_strength, rs_acceleration
 
 
 def calculate_simple_return(close: pd.Series, periods: int) -> float:
@@ -70,6 +70,34 @@ def calculate_sector_price_features(close: pd.Series, benchmark_close: pd.Series
         "rs_60": latest_value(rs_60),
         "distance_ma20": float(latest / ma20_last - 1.0) if ma20_last > 0 else float("nan"),
         "distance_ma60": float(latest / ma60_last - 1.0) if ma60_last > 0 else float("nan"),
+    }
+
+
+def calculate_sector_trend_features(close: pd.Series, benchmark_close: pd.Series) -> dict[str, float]:
+    """计算趋势速度和加速度层所需的单板块原始指标。
+
+    参数:
+        close: 按交易日升序排列的板块收盘指数序列。
+        benchmark_close: 同期市场基准收盘序列。
+    返回:
+        含 MA20 斜率、RS20 加速度、MA20 斜率加速度、MACD 柱及其单日变化的字典；
+        所需窗口历史不足时对应字段为 NaN。
+    """
+    slope = ma_slope(close)
+    relative_strength_20 = relative_strength(close, benchmark_close, 20)
+    rs20_accel = rs_acceleration(relative_strength_20, lag=5)
+    slope_accel = slope - slope.shift(5)
+    hist = macd_hist(close)
+
+    def latest_value(series: pd.Series) -> float:
+        return float(series.iloc[-1]) if not series.empty and pd.notna(series.iloc[-1]) else float("nan")
+
+    return {
+        "ma20_slope": latest_value(slope),
+        "rs20_accel": latest_value(rs20_accel),
+        "ma20_accel": latest_value(slope_accel),
+        "macd_hist": latest_value(hist),
+        "macd_hist_delta": latest_value(hist.diff()),
     }
 
 

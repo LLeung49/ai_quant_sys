@@ -5,6 +5,7 @@ import pytest
 
 from morning_conference.sector_rotation2.sector_features import (
     calculate_sector_price_features,
+    calculate_sector_trend_features,
     calculate_rvol,
     calculate_simple_return,
     calculate_amount_share,
@@ -55,3 +56,14 @@ def test_sector_price_features_outputs_relative_strength_and_ma_distance():
     assert result["ret_5"] == pytest.approx(0.10)
     assert result["rs_5"] == pytest.approx(0.05)
     assert result["distance_ma20"] > 0
+
+
+def test_sector_trend_features_output_acceleration_fields():
+    close = pd.Series([100.0 + index for index in range(80)])
+    benchmark = pd.Series([100.0 + index * 0.5 for index in range(80)])
+
+    result = calculate_sector_trend_features(close, benchmark)
+
+    assert set(result) == {"ma20_slope", "rs20_accel", "ma20_accel", "macd_hist", "macd_hist_delta"}
+    assert pd.notna(result["ma20_slope"])
+    assert pd.notna(result["macd_hist_delta"])
