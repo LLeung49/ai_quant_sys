@@ -17,7 +17,8 @@ SNAPSHOT_COLUMNS = (
     "as_of_date", "sector_level", "sector_name", "model_version", "run_id",
     "membership_asof_mode", "coverage_ratio", "score_eligible", "base_score",
     "composite_score", "composite_rank", "phase_raw", "phase_confirmed",
-    "phase_confidence", "market_regime",
+    "phase_age", "phase_changed", "phase_confidence", "market_regime",
+    "regime_multiplier", "rank_change_1d", "rank_change_5d", "top10_days_20",
 )
 
 
@@ -128,7 +129,9 @@ run_id，而不是新增重复快照。
             row.get("membership_asof_mode", "current_mapping"), row.get("coverage_ratio"),
             bool(row.get("score_eligible", False)), row.get("base_score"),
             row.get("composite_score"), row.get("composite_rank"), row.get("phase_raw"),
-            row.get("phase_confirmed"), row.get("phase_confidence"), row.get("market_regime"),
+            row.get("phase_confirmed"), row.get("phase_age"), row.get("phase_changed"),
+            row.get("phase_confidence"), row.get("market_regime"), row.get("regime_multiplier"),
+            row.get("rank_change_1d"), row.get("rank_change_5d"), row.get("top10_days_20"),
         ))
     if not rows:
         return 0
@@ -143,8 +146,11 @@ run_id，而不是新增重复快照。
             coverage_ratio = VALUES(coverage_ratio), score_eligible = VALUES(score_eligible),
             base_score = VALUES(base_score), composite_score = VALUES(composite_score),
             composite_rank = VALUES(composite_rank), phase_raw = VALUES(phase_raw),
-            phase_confirmed = VALUES(phase_confirmed), phase_confidence = VALUES(phase_confidence),
-            market_regime = VALUES(market_regime)
+            phase_confirmed = VALUES(phase_confirmed), phase_age = VALUES(phase_age),
+            phase_changed = VALUES(phase_changed), phase_confidence = VALUES(phase_confidence),
+            market_regime = VALUES(market_regime), regime_multiplier = VALUES(regime_multiplier),
+            rank_change_1d = VALUES(rank_change_1d), rank_change_5d = VALUES(rank_change_5d),
+            top10_days_20 = VALUES(top10_days_20)
     """
     connection = get_connection()
     cursor = connection.cursor()

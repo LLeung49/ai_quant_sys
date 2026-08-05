@@ -14,6 +14,8 @@ def test_migration_defines_approved_sector_rotation_tables():
     assert "CREATE TABLE IF NOT EXISTS sector_rotation_sector_forward_return" in sql
     assert "CREATE TABLE IF NOT EXISTS sector_rotation_backtest_metric" in sql
     assert "UNIQUE KEY uq_snapshot (as_of_date, sector_level, sector_name, model_version)" in sql
+    for column in ("phase_age", "phase_changed", "regime_multiplier", "rank_change_1d", "rank_change_5d", "top10_days_20"):
+        assert column in sql
 
 
 class FakeCursor:
@@ -69,6 +71,8 @@ def test_persist_daily_snapshot_uses_one_parameterized_upsert_and_commits(monkey
     assert "ON DUPLICATE KEY UPDATE" in sql
     assert "%s" in sql
     assert rows[0][0] == "2026-01-05"
+    assert "phase_age" in sql
+    assert "rank_change_5d" in sql
 
 
 def test_persist_daily_snapshot_rolls_back_when_upsert_fails(monkeypatch):
