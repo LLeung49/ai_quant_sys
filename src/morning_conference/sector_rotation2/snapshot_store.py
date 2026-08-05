@@ -22,7 +22,16 @@ SNAPSHOT_COLUMNS = (
 
 
 def _execute_update(sql: str, params: tuple[Any, ...]) -> int:
-    """执行一条运行审计写操作，并由本函数明确负责提交或回滚。"""
+    """执行一条运行审计写操作，并由本函数明确负责提交或回滚。
+
+    参数:
+        sql: 使用 %s 参数占位符的单条审计 SQL。
+        params: 与 SQL 占位符一一对应的参数元组。
+    返回:
+        数据库受影响行数。
+    异常:
+        Exception: 数据库执行失败时先回滚，再原样抛出。
+    """
     connection = get_connection()
     cursor = connection.cursor()
     try:
@@ -45,7 +54,18 @@ def create_run(
     config_hash: str,
     source_max_trade_date: str,
 ) -> int:
-    """在每日快照持久化前创建可追溯的 running 审计记录。"""
+    """在每日快照持久化前创建可追溯的 running 审计记录。
+
+    参数:
+        run_id: 本次运行的唯一 UUID。
+        as_of_date: 计算所对应的交易日。
+        sector_level: 申万行业层级，当前支持 1 或 2。
+        model_version: 评分模型版本。
+        config_hash: 本次模型配置的确定性哈希。
+        source_max_trade_date: 上游源表可用的最大交易日。
+    返回:
+        数据库受影响行数，正常为 1。
+    """
     return _execute_update(
         """
         INSERT INTO sector_rotation_run_log
@@ -59,7 +79,14 @@ def create_run(
 
 
 def mark_run_failed(run_id: str, error_summary: str) -> int:
-    """在数据事务回滚后，将已有审计记录标记为 failed 并写入错误摘要。"""
+    """在数据事务回滚后，将已有审计记录标记为 failed 并写入错误摘要。
+
+    参数:
+        run_id: 需要更新状态的运行唯一标识。
+        error_summary: 可供排障和报告展示的错误摘要。
+    返回:
+        数据库受影响行数。
+    """
     return _execute_update(
         """
         UPDATE sector_rotation_run_log
@@ -81,7 +108,18 @@ def persist_daily_snapshot(
 
 唯一键为日期、层级、板块名和模型版本；同一模型同日重跑时更新数值和
 run_id，而不是新增重复快照。
-"""
+
+    参数:
+        frame: 每行一个板块的评分/状态 DataFrame；sector_name 可为列或索引。
+        as_of_date: 快照归属交易日。
+        sector_level: 申万行业层级。
+        model_version: 模型版本，属于快照唯一键的一部分。
+        run_id: 写入本批快照的运行审计 ID。
+    返回:
+        成功 upsert 的受影响行数；空 DataFrame 返回 0。
+    异常:
+        Exception: 任意写入失败时整批回滚后原样抛出。
+    """
     rows: list[tuple[Any, ...]] = []
     for sector_name, row in frame.iterrows():
         name = row.get("sector_name", sector_name)

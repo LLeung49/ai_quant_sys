@@ -22,7 +22,13 @@ class FrameValidation:
 
 
 def validate_sector_frame(frame: pd.DataFrame) -> FrameValidation:
-    """校验板块进入排名前必须满足的最小数据不变量。"""
+    """校验板块进入排名前必须满足的最小数据不变量。
+
+    参数:
+        frame: 索引为交易日，至少包含 close 和 amount 列的板块历史 DataFrame。
+    返回:
+        含 valid 布尔值和全部失败原因的 FrameValidation 对象。
+    """
     reasons: list[str] = []
     required = {"close", "amount"}
     missing = required.difference(frame.columns)
@@ -47,7 +53,12 @@ def build_market_benchmark(sector_panel: Mapping[str, pd.DataFrame]) -> pd.DataF
 
 每个板块收盘先归一到自身首个有效观察值，消除合成指数点位差异；
 成交额按市场实际规模求和而非平均。
-"""
+
+    参数:
+        sector_panel: 板块名到历史 DataFrame 的映射。
+    返回:
+        含 close、amount、eligible_sector_count 的市场基准 DataFrame；无有效板块时为空表。
+    """
     eligible = {name: frame for name, frame in sector_panel.items() if validate_sector_frame(frame).valid}
     if not eligible:
         return pd.DataFrame(columns=["close", "amount", "eligible_sector_count"])
@@ -70,7 +81,15 @@ def load_sector_panel(
 
 日期筛选先在 SQL 完成以减少载入量；随后按板块独立校验，因此单个异常历史
 不会污染市场基准或可排名样本集合。
-"""
+
+    参数:
+        level: 申万行业层级，1 为一级、2 为二级。
+        start_date: 可选起始交易日，格式 YYYY-MM-DD。
+        end_date: 可选截止交易日，格式 YYYY-MM-DD。
+        min_history_days: 每个板块入选面板所需的最少历史行数。
+    返回:
+        板块名到按 trade_date 升序索引的有效历史 DataFrame 映射。
+    """
     conditions = ["sector_level = %s"]
     params: list[object] = [level]
     if start_date:
@@ -109,7 +128,14 @@ def load_sector_stock_amounts(
 
 v1 明确使用当前行业映射，这是回测口径限制；返回结果因此逐行标记
 ``membership_asof_mode=current_mapping``，供快照与报告披露。
-"""
+
+    参数:
+        sector_name: 待查询的行业名称。
+        level: 申万行业层级，用于选择 sector_1 或 sector_2 映射列。
+        trade_dates: 需要查询的交易日字符串列表。
+    返回:
+        含 stock_code、trade_date、amount、close、membership_asof_mode 的 DataFrame。
+    """
     if not trade_dates:
         return pd.DataFrame(columns=["stock_code", "trade_date", "amount", "close", "membership_asof_mode"])
     field = "sector_1" if level == 1 else "sector_2"
@@ -134,7 +160,12 @@ def load_market_aggregates(sector_panel: Mapping[str, pd.DataFrame]) -> pd.DataF
 
 上涨广度取板块中位数，避免超大板块主导市场状态信号；涨跌停家数与成交额
 仍按市场总量求和。
-"""
+
+    参数:
+        sector_panel: 板块名到历史 DataFrame 的映射，仅有效板块参与聚合。
+    返回:
+        以交易日为索引、含 amount、limit_up、limit_down、breadth_up_median 的 DataFrame。
+    """
     eligible = [frame for frame in sector_panel.values() if validate_sector_frame(frame).valid]
     if not eligible:
         return pd.DataFrame(columns=["amount", "limit_up", "limit_down", "breadth_up_median"])

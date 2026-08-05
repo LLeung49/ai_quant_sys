@@ -48,6 +48,11 @@ def config_hash(config: ModelConfig) -> str:
     """返回唯一标识完整模型配置的确定性哈希。
 
     使用键排序的紧凑 JSON，避免字典插入顺序或空白字符在参数未变时改变指纹。
+
+    参数:
+        config: 待标识的不可变模型配置对象。
+    返回:
+        64 位十六进制 SHA-256 配置哈希。
     """
     payload = json.dumps(asdict(config), ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return sha256(payload.encode("utf-8")).hexdigest()

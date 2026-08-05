@@ -14,6 +14,12 @@ def signed_percentile(series: pd.Series, minimum_count: int = 20) -> pd.Series:
     """以对并列值安全的平均排名，将有效横截面映射到 [-1, 1]。
 
     常数列或样本过少时不存在可区分的排名信息，返回 NaN 而不是伪造为 0 分。
+
+    参数:
+        series: 单一交易日、以板块为索引的待标准化数值序列。
+        minimum_count: 允许形成有效截面的最少非空板块数。
+    返回:
+        与输入索引一致的浮点序列；有效值映射至 [-1, 1]，无效位置为 NaN。
     """
     result = pd.Series(float("nan"), index=series.index, dtype="float64")
     valid = series.dropna()
@@ -37,6 +43,15 @@ def weighted_available_mean(
 
     每个板块只对实际可用指标重新归一化；证据不足的行保持 NaN，
     后续不得获得综合排名。
+
+    参数:
+        frame: 行为板块、列为评分维度的特征 DataFrame。
+        weights: 评分维度到原始权重的映射，键必须全部存在于 frame。
+        minimum_weight: 单行参与综合评分所需的最小可用权重和。
+    返回:
+        与 frame 索引一致的加权均值序列；证据不足的行返回 NaN。
+    异常:
+        KeyError: weights 中任一评分维度不在 frame 列中时抛出。
     """
     columns = list(weights)
     # 评分权重中声明的字段必须全部存在；缺字段意味着调用方的特征面板契约被破坏。
