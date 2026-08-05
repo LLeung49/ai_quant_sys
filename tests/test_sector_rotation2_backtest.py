@@ -4,7 +4,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from morning_conference.sector_rotation2.backtest import build_forward_return_labels, evaluate_factor, make_forward_labels
+from morning_conference.sector_rotation2.backtest import build_forward_return_labels, evaluate_factor, make_forward_labels, rolling_oos_windows
 
 
 def test_label_uses_fifth_future_trade_date():
@@ -62,3 +62,33 @@ def test_build_forward_return_labels_keeps_only_mature_dates(monkeypatch):
 
     assert result["as_of_date"].tolist() == [dates[0], dates[1]]
     assert result["target_date"].tolist() == [dates[5], dates[6]]
+
+
+def test_evaluate_factor_reports_win_rate_drawdown_and_turnover():
+    """评估结果应包含 Top 组胜率、累计收益最大回撤和相邻日 Top 组换手。"""
+    dates = pd.bdate_range("2026-01-01", periods=3)
+    snapshots = pd.DataFrame(
+        [(date, f"S{rank}", rank) for date in dates for rank in range(10)],
+        columns=["as_of_date", "sector_name", "composite_score"],
+    )
+    labels = snapshots.rename(columns={"composite_score": "excess_return"}).copy()
+    labels["horizon"] = 5
+    labels["target_date"] = labels["as_of_date"] + pd.offsets.BDay(5)
+
+    result = evaluate_factor(snapshots, labels, "composite_score", 5)
+
+    assert result["top_group_win_rate"] == 1.0
+    assert result["top_group_turnover"] == 0.0
+    assert result["top_group_max_drawdown"] == 0.0
+
+
+def test_rolling_oos_windows_uses_252_63_21_contract():
+    """滚动样本外窗口固定为 252 日训练、63 日验证、21 日步长。"""
+    dates = pd.bdate_range("2024-01-01", periods=399)
+
+    windows = rolling_oos_windows(dates)
+
+    assert len(windows) == 5
+    assert windows[0]["train_start"] == dates[0]
+    assert windows[0]["validation_start"] == dates[252]
+    assert windows[1]["train_start"] == dates[21]

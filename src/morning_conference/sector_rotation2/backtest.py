@@ -59,6 +59,48 @@ def build_forward_return_labels(level: int, start_date: str, end_date: str, hori
     return pd.concat(rows, ignore_index=True).sort_values(["as_of_date", "sector_name", "horizon"])
 
 
+def rolling_oos_windows(trade_dates: pd.DatetimeIndex, train_days: int = 252, validation_days: int = 63, step_days: int = 21) -> list[dict[str, pd.Timestamp]]:
+    """按固定训练、验证和步长生成不重叠未来验证区间的滚动窗口。
+
+    参数:
+        trade_dates: 已去重的交易日序列。
+        train_days: 每个训练窗口的交易日数量。
+        validation_days: 紧随训练窗口的样本外验证日数量。
+        step_days: 相邻窗口起点的推进交易日数。
+    返回:
+        含训练/验证起止日期的窗口字典列表；历史不足时返回空列表。
+    """
+    dates = pd.DatetimeIndex(trade_dates).drop_duplicates().sort_values()
+    windows = []
+    for start in range(0, len(dates) - train_days - validation_days + 1, step_days):
+        windows.append({
+            "train_start": dates[start], "train_end": dates[start + train_days - 1],
+            "validation_start": dates[start + train_days], "validation_end": dates[start + train_days + validation_days - 1],
+        })
+    return windows
+
+
+def evaluate_by_regime(snapshots: pd.DataFrame, labels: pd.DataFrame, factor: str, horizon: int) -> pd.DataFrame:
+    """按市场状态分桶执行同口径因子评估。
+
+    参数:
+        snapshots: 含 ``market_regime`` 的日快照。
+        labels: 前瞻收益标签。
+        factor: 待评估因子列。
+        horizon: 标签期限。
+    返回:
+        每个市场状态一行的评估结果 DataFrame。
+    """
+    if "market_regime" not in snapshots:
+        return pd.DataFrame()
+    rows = []
+    for regime, group in snapshots.dropna(subset=["market_regime"]).groupby("market_regime"):
+        result = evaluate_factor(group, labels, factor, horizon)
+        result["market_regime"] = regime
+        rows.append(result)
+    return pd.DataFrame(rows)
+
+
 def _validate_unique(frame: pd.DataFrame, name: str) -> None:
     """验证评估输入按日期和板块唯一。
 
@@ -108,14 +150,24 @@ def evaluate_factor(snapshots: pd.DataFrame, labels: pd.DataFrame, factor: str, 
         include_groups=False,
     )
     group_returns = []
+    top_members: list[set[str]] = []
     for _, group in merged.groupby("as_of_date"):
         if group[factor].nunique() < 5:
             continue
         quantile = pd.qcut(group[factor], 5, labels=False, duplicates="drop")
-        group_returns.append((group.loc[quantile == quantile.max(), "excess_return"].mean(), group.loc[quantile == quantile.min(), "excess_return"].mean()))
+        top_group = group.loc[quantile == quantile.max()]
+        group_returns.append((top_group["excess_return"].mean(), group.loc[quantile == quantile.min(), "excess_return"].mean()))
+        top_members.append(set(top_group["sector_name"]))
     top = float(np.mean([item[0] for item in group_returns])) if group_returns else np.nan
     bottom = float(np.mean([item[1] for item in group_returns])) if group_returns else np.nan
+    top_returns = [item[0] for item in group_returns]
+    cumulative = pd.Series(top_returns).add(1.0).cumprod() if top_returns else pd.Series(dtype=float)
+    drawdown = cumulative / cumulative.cummax() - 1.0 if not cumulative.empty else pd.Series(dtype=float)
+    turnover = [1.0 - len(left & right) / max(1, len(left | right)) for left, right in zip(top_members, top_members[1:])]
     return {"ic_mean": daily_ic.mean(), "rank_ic_mean": daily_rank_ic.mean(),
             "icir": daily_ic.mean() / daily_ic.std(ddof=1) if len(daily_ic) > 1 and daily_ic.std(ddof=1) else np.nan,
             "top_group_return": top, "bottom_group_return": bottom, "top_bottom_return": top - bottom,
+            "top_group_win_rate": float(np.mean(np.array(top_returns) > 0)) if top_returns else np.nan,
+            "top_group_max_drawdown": float(drawdown.min()) if not drawdown.empty else np.nan,
+            "top_group_turnover": float(np.mean(turnover)) if turnover else 0.0,
             "sample_count": int(len(merged))}

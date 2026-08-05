@@ -8,7 +8,7 @@ import pandas as pd
 
 from data_ingestion.db_config import execute_query
 
-from .backtest import build_forward_return_labels, evaluate_factor
+from .backtest import build_forward_return_labels, evaluate_by_regime, evaluate_factor, rolling_oos_windows
 from .snapshot_store import persist_forward_returns
 
 
@@ -27,7 +27,7 @@ def run_research(level: int, start_date: str, end_date: str, model_version: str,
     labels = build_forward_return_labels(level, start_date, end_date)
     persist_forward_returns(labels, level)
     snapshots = execute_query(
-        "SELECT as_of_date, sector_name, composite_score FROM sector_rotation_sector_daily_snapshot "
+        "SELECT as_of_date, sector_name, composite_score, market_regime FROM sector_rotation_sector_daily_snapshot "
         "WHERE sector_level = %s AND model_version = %s AND as_of_date BETWEEN %s AND %s",
         (level, model_version, start_date, end_date),
     )
@@ -36,9 +36,17 @@ def run_research(level: int, start_date: str, end_date: str, model_version: str,
         result = evaluate_factor(snapshots, labels, "composite_score", horizon)
         result["horizon"] = horizon
         metrics.append(result)
+        regime_metrics = evaluate_by_regime(snapshots, labels, "composite_score", horizon)
+        if not regime_metrics.empty:
+            regime_metrics["horizon"] = horizon
+            regime_metrics["window_name"] = "regime_bucket"
+            metrics.extend(regime_metrics.to_dict("records"))
+    # 固化滚动样本外窗口边界，后续报告可据此复现验证区间，且不自动调权。
+    oos_windows = rolling_oos_windows(pd.to_datetime(snapshots["as_of_date"].unique())) if not snapshots.empty else []
     output = pd.DataFrame(metrics)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     output.to_csv(Path(output_dir) / f"sector_rotation2_research_{end_date}.csv", index=False, encoding="utf-8-sig")
+    pd.DataFrame(oos_windows).to_csv(Path(output_dir) / f"sector_rotation2_oos_windows_{end_date}.csv", index=False, encoding="utf-8-sig")
     return output
 
 
