@@ -7,6 +7,38 @@ from __future__ import annotations
 import pandas as pd
 
 
+def calculate_simple_return(close: pd.Series, periods: int) -> float:
+    """计算序列末日相对指定交易日滞后的简单收益率。
+
+    参数:
+        close: 按交易日升序的收盘价序列。
+        periods: 当前日与比较日之间的交易日间隔。
+    返回:
+        close[-1] / close[-periods-1] - 1；历史不足或比较价格非正时返回 NaN。
+    """
+    if len(close) <= periods:
+        return float("nan")
+    base = close.iloc[-periods - 1]
+    return float(close.iloc[-1] / base - 1.0) if pd.notna(base) and base > 0 else float("nan")
+
+
+def calculate_rvol(amount: pd.Series, recent_window: int, baseline_window: int) -> float:
+    """计算近期平均成交额相对较长基准窗口平均成交额的量比。
+
+    参数:
+        amount: 按交易日升序的成交额序列。
+        recent_window: 近期均值窗口，例如 5 日。
+        baseline_window: 历史基准均值窗口，例如 20 或 60 日。
+    返回:
+        最近 recent_window 日均额 / 最近 baseline_window 日均额；样本不足或基准非正时返回 NaN。
+    """
+    if len(amount) < baseline_window:
+        return float("nan")
+    recent_mean = amount.iloc[-recent_window:].mean()
+    baseline_mean = amount.iloc[-baseline_window:].mean()
+    return float(recent_mean / baseline_mean) if pd.notna(baseline_mean) and baseline_mean > 0 else float("nan")
+
+
 def calculate_amount_share(sector_amount: float, market_amount: float) -> float:
     """计算板块成交额占同日有效市场成交额的比例。
 
