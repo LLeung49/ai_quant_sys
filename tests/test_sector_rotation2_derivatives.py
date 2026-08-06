@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pandas as pd
 import pytest
 
@@ -27,6 +29,16 @@ def test_relative_strength_aligns_on_common_dates():
     result = relative_strength(sector, benchmark, periods=1)
 
     assert result.index.tolist() == list(pd.date_range("2026-01-02", periods=2))
+
+
+def test_relative_strength_accepts_mysql_decimal_close_values():
+    """MySQL DECIMAL 收盘价与 float 基准相减前必须统一为浮点数。"""
+    sector = pd.Series([Decimal("100.00"), Decimal("110.00"), Decimal("121.00")])
+    benchmark = pd.Series([100.0, 105.0, 110.0])
+
+    result = relative_strength(sector, benchmark, periods=2)
+
+    assert result.iloc[-1] == pytest.approx(0.11)
 
 
 def test_rs_acceleration_uses_relative_strength_series():

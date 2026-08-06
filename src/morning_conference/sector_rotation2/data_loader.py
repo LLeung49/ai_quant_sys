@@ -112,6 +112,10 @@ def load_sector_panel(
         return {}
     frame = pd.DataFrame(rows)
     frame["trade_date"] = pd.to_datetime(frame["trade_date"])
+    # MySQL DECIMAL 通常以 decimal.Decimal 返回；在数据边界统一转为 float，
+    # 避免后续 Pandas 收益率、均线和横截面运算与 float 基准混算时报类型错误。
+    numeric_columns = [column for column in frame.columns if column not in {"sector_name", "trade_date"}]
+    frame[numeric_columns] = frame[numeric_columns].apply(pd.to_numeric, errors="coerce")
     panel: dict[str, pd.DataFrame] = {}
     for sector_name, group in frame.groupby("sector_name", sort=True):
         sector_frame = group.drop(columns="sector_name").set_index("trade_date").sort_index()
@@ -152,6 +156,7 @@ v1 明确使用当前行业映射，这是回测口径限制；返回结果因�
     result = pd.DataFrame(rows, columns=["stock_code", "trade_date", "amount", "close"])
     if not result.empty:
         result["trade_date"] = pd.to_datetime(result["trade_date"])
+        result[["amount", "close"]] = result[["amount", "close"]].apply(pd.to_numeric, errors="coerce")
     result["membership_asof_mode"] = "current_mapping"
     return result
 

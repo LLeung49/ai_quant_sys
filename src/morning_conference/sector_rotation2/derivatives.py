@@ -71,6 +71,9 @@ def relative_strength(sector: pd.Series, benchmark: pd.Series, periods: int) -> 
         仅保留双方共同日期的相对强度序列；历史不足处为 NaN。
     """
     aligned_sector, aligned_benchmark = sector.align(benchmark, join="inner")
+    # 兼容 MySQL DECIMAL 与普通 float 输入；相对强度的输出口径固定为浮点收益差。
+    aligned_sector = pd.to_numeric(aligned_sector, errors="coerce").astype("float64")
+    aligned_benchmark = pd.to_numeric(aligned_benchmark, errors="coerce").astype("float64")
     return aligned_sector.pct_change(periods) - aligned_benchmark.pct_change(periods)
 
 
