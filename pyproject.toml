@@ -7,9 +7,8 @@ name = "ai_quant_sys"
 version = "0.1.0"
 description = "ai量化系统"
 dependencies = [
-    # 在这里列出你的第三方依赖，例如：
-    # "numpy>=1.20.0",
-    # "pandas",
+    "fastapi>=0.115",
+    "uvicorn[standard]>=0.30",
 ]
 
 [tool.setuptools.packages.find]

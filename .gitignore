@@ -45,6 +45,8 @@ backtest_results/
 # 构建产物
 dist/
 build/
+node_modules/
+*.tsbuildinfo
 *.whl
 
 # 备份文件

@@ -1,0 +1,17 @@
+/** 统一工作台 URL 状态契约测试。 */
+import { parseWorkbenchUrl, serializeWorkbenchUrl } from "./urlState";
+
+describe("workbench URL state", () => {
+  it("解析有效参数并对非法枚举安全回退", () => {
+    expect(parseWorkbenchUrl("?date=2026-08-04&level=1&mode=replay&phase=accel_up&q=教育&sector=教育&window=60&labels=all")).toEqual({
+      date: "2026-08-04", level: 1, mode: "replay", phase: "accel_up", query: "教育", sector: "教育", historyWindow: 60, labelDensity: "all",
+    });
+    expect(parseWorkbenchUrl("?level=9&mode=bad&window=7&labels=nope")).toMatchObject({ level: 2, mode: "snapshot", historyWindow: 20, labelDensity: "focus" });
+  });
+
+  it("序列化研究现场并省略空行业选择", () => {
+    const query = serializeWorkbenchUrl({ date: "2026-08-04", level: 2, mode: "snapshot", phase: "all", query: "", sector: null, historyWindow: 20, labelDensity: "focus" });
+    expect(query).toContain("date=2026-08-04");
+    expect(query).not.toContain("sector=");
+  });
+});
