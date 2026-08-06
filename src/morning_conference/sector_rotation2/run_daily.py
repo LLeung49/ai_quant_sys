@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import logging
 from pathlib import Path
 from uuid import uuid4
 
@@ -16,6 +17,9 @@ from .sector_features import build_daily_feature_panel
 from .snapshot_store import (
     create_run, load_previous_snapshots, mark_run_failed, mark_run_succeeded, persist_daily_snapshot,
 )
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def load_market_benchmark(level: int, as_of_date: str) -> pd.DataFrame:
@@ -61,25 +65,36 @@ def run_one_date(level: int, as_of_date: str, config: ModelConfig = DEFAULT_CONF
     """
     run_id = str(uuid4())
     try:
+        LOGGER.info("开始单日计算：run_id=%s, level=%s, as_of_date=%s, model=%s", run_id, level, as_of_date, config.model_version)
+        LOGGER.info("步骤 1/7：加载板块与个股原始数据并计算特征，请关注后续板块进度日志")
         features = build_daily_feature_panel(level=level, as_of_date=as_of_date)
+        LOGGER.info("步骤 1/7 完成：获得 %s 个板块特征", len(features))
+        LOGGER.info("步骤 2/7：加载市场基准历史")
         benchmark = load_market_benchmark(level=level, as_of_date=as_of_date)
         source_max_trade_date = pd.Timestamp(benchmark.index.max()).strftime("%Y-%m-%d")
         create_run(run_id, as_of_date, level, config.model_version, config_hash(config), source_max_trade_date)
+        LOGGER.info("步骤 3/7：已创建运行审计，source_max_trade_date=%s", source_max_trade_date)
         breadth = pd.Series([features["breadth_up"].median()], index=[pd.Timestamp(as_of_date)])
         aggregates = pd.DataFrame({"limit_up": [0], "limit_down": [0]}, index=[pd.Timestamp(as_of_date)])
         regime = classify_market_regime(benchmark, breadth, aggregates, pd.Timestamp(as_of_date))
+        LOGGER.info("步骤 4/7：市场状态=%s，风险乘数=%.2f", regime.market_regime, regime.regime_multiplier)
         scored = score_feature_panel(features, config)
         scored["market_regime"] = regime.market_regime
         scored["regime_multiplier"] = regime.regime_multiplier
         scored["composite_score"] = scored["base_score"] * regime.regime_multiplier
         previous = load_previous_snapshots(as_of_date=as_of_date, sector_level=level, model_version=config.model_version)
+        LOGGER.info("步骤 5/7：完成横截面评分，读取到 %s 条历史快照", 0 if previous is None else len(previous))
         final = apply_phase_history(scored, previous, config)
+        LOGGER.info("步骤 6/7：写入 %s 条板块快照", len(final))
         persist_daily_snapshot(final, as_of_date, level, config.model_version, run_id)
         eligible_count = int(final["score_eligible"].sum())
         mark_run_succeeded(run_id, eligible_count, len(final) - eligible_count)
+        LOGGER.info("步骤 7/7：快照提交成功，有效=%s，跳过=%s，开始生成晨会文件", eligible_count, len(final) - eligible_count)
         write_daily_reports(final, as_of_date, output_dir)
+        LOGGER.info("单日计算完成：输出目录=%s", output_dir)
         return final
     except Exception as error:
+        LOGGER.exception("单日计算失败：run_id=%s, error=%s", run_id, error)
         try:
             mark_run_failed(run_id, str(error))
         finally:
@@ -111,7 +126,9 @@ def main() -> None:
     parser.add_argument("--backfill-end")
     parser.add_argument("--model-version", default="v1")
     parser.add_argument("--output", default="outputs")
+    parser.add_argument("--log-level", default="INFO", choices=("DEBUG", "INFO", "WARNING", "ERROR"), help="终端日志级别")
     args = parser.parse_args()
+    logging.basicConfig(level=getattr(logging, args.log_level), format="%(asctime)s %(levelname)-8s %(name)s - %(message)s")
     config = ModelConfig(model_version=args.model_version)
     if args.backfill_start or args.backfill_end:
         if not (args.backfill_start and args.backfill_end):

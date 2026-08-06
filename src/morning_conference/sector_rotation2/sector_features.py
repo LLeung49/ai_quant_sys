@@ -4,10 +4,14 @@
 """
 from __future__ import annotations
 
+import logging
 import pandas as pd
 
 from .derivatives import macd_hist, ma_slope, relative_strength, rs_acceleration
 from .data_loader import build_market_benchmark, load_sector_panel, load_sector_stock_amounts
+
+
+LOGGER = logging.getLogger(__name__)
 
 
 def calculate_simple_return(close: pd.Series, periods: int) -> float:
@@ -191,12 +195,15 @@ def build_daily_feature_panel(level: int, as_of_date: str, min_history_days: int
         以 sector_name 为索引的原始特征 DataFrame；无有效板块时返回空表。
     """
     panel = load_sector_panel(level=level, end_date=as_of_date, min_history_days=min_history_days)
+    LOGGER.info("特征数据：已加载 %s 个有效板块，开始构建市场基准", len(panel))
     benchmark = build_market_benchmark(panel)
     if not panel or benchmark.empty:
         return pd.DataFrame()
     rows: dict[str, dict[str, float]] = {}
     date_strings = [date.strftime("%Y-%m-%d") for date in benchmark.index]
-    for sector_name, frame in panel.items():
+    total_sectors = len(panel)
+    for position, (sector_name, frame) in enumerate(panel.items(), start=1):
+        LOGGER.info("特征进度 %s/%s：%s（加载成分股历史并计算特征）", position, total_sectors, sector_name)
         share_history = frame["amount"].div(benchmark["amount"].reindex(frame.index))
         features = calculate_sector_features(frame, benchmark, float(benchmark["amount"].iloc[-1]), share_history.iloc[:-1])
         stock_history = load_sector_stock_amounts(sector_name, level, date_strings)
@@ -211,6 +218,7 @@ def build_daily_feature_panel(level: int, as_of_date: str, min_history_days: int
             "membership_asof_mode": "current_mapping",
         })
         rows[sector_name] = features
+    LOGGER.info("特征计算完成：已生成 %s 个板块的特征记录", len(rows))
     return pd.DataFrame.from_dict(rows, orient="index")
 
 
