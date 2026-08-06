@@ -112,3 +112,16 @@ def test_mark_run_failed_records_error_summary(monkeypatch):
     sql, params = connection.cursor_instance.calls[0]
     assert "status = %s" in sql
     assert params == ("failed", "source unavailable", "run-1")
+
+
+def test_load_previous_snapshots_converts_execute_query_tuple_to_dataframe(monkeypatch):
+    """既有 execute_query 返回字典元组，快照读取层必须转换为 DataFrame。"""
+    monkeypatch.setattr(snapshot_store, "execute_query", lambda *args, **kwargs: (
+        {"as_of_date": "2026-01-02", "sector_name": "电子", "phase_raw": "neutral"},
+    ))
+
+    result = snapshot_store.load_previous_snapshots("2026-01-03", 2, "v1")
+
+    assert isinstance(result, pd.DataFrame)
+    assert result.loc[0, "sector_name"] == "电子"
+    assert result.loc[0, "as_of_date"] == pd.Timestamp("2026-01-02")

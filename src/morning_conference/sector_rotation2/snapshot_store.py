@@ -143,7 +143,9 @@ def load_previous_snapshots(as_of_date: str, sector_level: int, model_version: s
         WHERE as_of_date < %s AND sector_level = %s AND model_version = %s
         ORDER BY as_of_date DESC
     """
-    history = execute_query(sql, (as_of_date, sector_level, model_version))
+    # 既有 data_ingestion.execute_query 契约是“字典列表/元组”，不是 DataFrame。
+    # 在持久化边界立即转换，避免调用方误将 tuple 当作 DataFrame 使用。
+    history = pd.DataFrame(execute_query(sql, (as_of_date, sector_level, model_version)))
     if history.empty:
         return history
     history["as_of_date"] = pd.to_datetime(history["as_of_date"])
