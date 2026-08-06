@@ -75,6 +75,20 @@ def test_persist_daily_snapshot_uses_one_parameterized_upsert_and_commits(monkey
     assert "rank_change_5d" in sql
 
 
+def test_persist_daily_snapshot_converts_nan_to_mysql_null(monkeypatch):
+    """可空特征历史不足时产生 NaN，写库参数必须转换为 None。"""
+    connection = FakeConnection()
+    monkeypatch.setattr(snapshot_store, "get_connection", lambda: connection)
+    frame = pd.DataFrame([{"sector_name": "电子", "rs_20": float("nan"), "phase_confidence": pd.NaT}])
+
+    snapshot_store.persist_daily_snapshot(frame, "2026-01-05", 2, "v1", "run-1")
+
+    _, rows = connection.cursor_instance.calls[0]
+    assert all(value is not float("nan") for value in rows[0])
+    assert rows[0][snapshot_store.SNAPSHOT_COLUMNS.index("rs_20")] is None
+    assert rows[0][snapshot_store.SNAPSHOT_COLUMNS.index("phase_confidence")] is None
+
+
 def test_persist_daily_snapshot_rolls_back_when_upsert_fails(monkeypatch):
     connection = FakeConnection()
     monkeypatch.setattr(snapshot_store, "get_connection", lambda: connection)

@@ -30,6 +30,20 @@ SNAPSHOT_UPDATE_COLUMNS = tuple(column for column in SNAPSHOT_COLUMNS if column 
 })
 
 
+def _mysql_nullable(value: Any) -> Any:
+    """将 Pandas 缺失值转换为 PyMySQL 可绑定的 SQL NULL。
+
+    参数:
+        value: 即将写入数据库的单个标量值，可能是 float NaN、pd.NA 或 pd.NaT。
+    返回:
+        缺失值返回 None；其他值原样返回。
+    """
+    if value is None:
+        return None
+    missing = pd.isna(value)
+    return None if isinstance(missing, bool) and missing else value
+
+
 def _execute_update(sql: str, params: tuple[Any, ...]) -> int:
     """执行一条运行审计写操作，并由本函数明确负责提交或回滚。
 
@@ -178,7 +192,7 @@ run_id，而不是新增重复快照。
     rows: list[tuple[Any, ...]] = []
     for sector_name, row in frame.iterrows():
         name = row.get("sector_name", sector_name)
-        rows.append((
+        row_values = (
             as_of_date, sector_level, name, model_version, run_id,
             row.get("membership_asof_mode", "current_mapping"), row.get("coverage_ratio"),
             row.get("rs_5"), row.get("rs_20"), row.get("rs_60"), row.get("distance_ma20"), row.get("distance_ma60"),
@@ -191,7 +205,9 @@ run_id，而不是新增重复快照。
             row.get("phase_confirmed"), row.get("phase_age"), row.get("phase_changed"),
             row.get("phase_confidence"), row.get("market_regime"), row.get("regime_multiplier"),
             row.get("rank_change_1d"), row.get("rank_change_5d"), row.get("top10_days_20"),
-        ))
+        )
+        # MySQL 的 DECIMAL/日期可为空；PyMySQL 不接受 float('nan')，必须显式传 None。
+        rows.append(tuple(_mysql_nullable(value) for value in row_values))
     if not rows:
         return 0
 
