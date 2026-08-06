@@ -39,6 +39,9 @@ def test_run_writes_reports_only_after_snapshot_persistence(monkeypatch, tmp_pat
     calls: list[str] = []
     monkeypatch.setattr(run_daily, "build_daily_feature_panel", lambda **_: _feature_panel())
     monkeypatch.setattr(run_daily, "load_market_benchmark", lambda **_: _benchmark())
+    market_aggregates = pd.DataFrame({"limit_up": [12], "limit_down": [3], "breadth_up_median": [0.65]}, index=_benchmark().index[-1:])
+    monkeypatch.setattr(run_daily, "load_market_aggregates", lambda _: market_aggregates)
+    monkeypatch.setattr(run_daily, "load_sector_panel", lambda **_: {"测试": pd.DataFrame({"close": _benchmark()["close"], "amount": _benchmark()["amount"]})})
     monkeypatch.setattr(run_daily, "load_previous_snapshots", lambda **_: None)
     monkeypatch.setattr(run_daily, "create_run", lambda *args, **kwargs: calls.append("create"))
     monkeypatch.setattr(run_daily, "persist_daily_snapshot", lambda *args, **kwargs: calls.append("persist") or 3)
@@ -60,6 +63,8 @@ def test_run_marks_failed_and_writes_no_success_report_when_snapshot_fails(monke
     failures: list[str] = []
     monkeypatch.setattr(run_daily, "build_daily_feature_panel", lambda **_: _feature_panel())
     monkeypatch.setattr(run_daily, "load_market_benchmark", lambda **_: _benchmark())
+    monkeypatch.setattr(run_daily, "load_market_aggregates", lambda _: pd.DataFrame({"limit_up": [1], "limit_down": [1], "breadth_up_median": [0.5]}, index=_benchmark().index[-1:]))
+    monkeypatch.setattr(run_daily, "load_sector_panel", lambda **_: {"测试": pd.DataFrame({"close": _benchmark()["close"], "amount": _benchmark()["amount"]})})
     monkeypatch.setattr(run_daily, "load_previous_snapshots", lambda **_: None)
     monkeypatch.setattr(run_daily, "create_run", lambda *args, **kwargs: None)
     monkeypatch.setattr(run_daily, "persist_daily_snapshot", lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("db down")))

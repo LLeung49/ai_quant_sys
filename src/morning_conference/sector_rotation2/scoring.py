@@ -204,8 +204,8 @@ def apply_phase_history(scored: pd.DataFrame, previous: pd.DataFrame | None, con
             prior_ranks.iloc[-5] - current_rank if len(prior_ranks) >= 5 and not pd.isna(current_rank) else float("nan")
         )
         was_top10 = not pd.isna(current_rank) and current_rank <= 10
-        prior_top10_days = history.iloc[-1].get("top10_days_20", 0) if not history.empty else 0
-        prior_rank = prior_ranks.iloc[-1] if not prior_ranks.empty else float("nan")
-        # 连续在榜才累计；昨日不在 Top10 或历史缺失时，本次重新从 1 开始。
-        result.loc[sector_name, "top10_days_20"] = int(prior_top10_days or 0) + 1 if was_top10 and prior_rank <= 10 else int(was_top10)
+        # 字段语义是“最近 20 个交易日累计在 Top10 的天数”，不是连续在榜天数；
+        # 历史最多保留 20 行，因此取最近 19 日再加当前日，避免窗口超长。
+        prior_top10_count = int((prior_ranks.tail(19) <= 10).sum())
+        result.loc[sector_name, "top10_days_20"] = prior_top10_count + int(was_top10)
     return result

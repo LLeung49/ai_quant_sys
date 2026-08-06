@@ -9,7 +9,7 @@ from uuid import uuid4
 import pandas as pd
 
 from .config import DEFAULT_CONFIG, ModelConfig, config_hash
-from .data_loader import build_market_benchmark, load_sector_panel
+from .data_loader import build_market_benchmark, load_market_aggregates, load_sector_panel
 from .market_regime import classify_market_regime
 from .report import write_daily_reports
 from .scoring import apply_phase_history, score_feature_panel
@@ -74,8 +74,10 @@ def run_one_date(level: int, as_of_date: str, config: ModelConfig = DEFAULT_CONF
         source_max_trade_date = pd.Timestamp(benchmark.index.max()).strftime("%Y-%m-%d")
         create_run(run_id, as_of_date, level, config.model_version, config_hash(config), source_max_trade_date)
         LOGGER.info("步骤 3/7：已创建运行审计，source_max_trade_date=%s", source_max_trade_date)
-        breadth = pd.Series([features["breadth_up"].median()], index=[pd.Timestamp(as_of_date)])
-        aggregates = pd.DataFrame({"limit_up": [0], "limit_down": [0]}, index=[pd.Timestamp(as_of_date)])
+        # 市场状态必须使用历史板块聚合的真实上涨广度和限涨跌，而非用固定常量替代。
+        market_panel = load_sector_panel(level=level, end_date=as_of_date, min_history_days=90)
+        aggregates = load_market_aggregates(market_panel)
+        breadth = aggregates["breadth_up_median"] if "breadth_up_median" in aggregates else pd.Series(dtype=float)
         regime = classify_market_regime(benchmark, breadth, aggregates, pd.Timestamp(as_of_date))
         LOGGER.info("步骤 4/7：市场状态=%s，风险乘数=%.2f", regime.market_regime, regime.regime_multiplier)
         scored = score_feature_panel(features, config)

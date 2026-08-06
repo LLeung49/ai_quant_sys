@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS sector_rotation_sector_daily_snapshot (
     base_score DECIMAL(18,8) NULL COMMENT '按可用主评分重归一后的基础综合分', composite_score DECIMAL(18,8) NULL COMMENT '基础分乘市场风险暴露系数后的综合分', composite_rank INT NULL COMMENT '按 base_score 降序的横截面名次，1 为最高',
     phase_raw VARCHAR(32) NULL COMMENT '迟滞阈值产生的未确认阶段候选', phase_confirmed VARCHAR(32) NULL COMMENT '三日两次规则确认后的阶段', phase_age INT NULL COMMENT '确认阶段连续持续的交易日数', phase_changed TINYINT(1) NULL COMMENT '确认阶段相对上一日是否变化', phase_confidence DECIMAL(18,8) NULL COMMENT '由速度、加速度、参与度和持续性合成的置信度',
     market_regime VARCHAR(32) NULL COMMENT '市场状态：risk_off、high_volatility、risk_on 或 range', regime_multiplier DECIMAL(18,8) NULL COMMENT '市场状态对应的风险暴露缩放系数',
-    rank_change_1d INT NULL COMMENT '昨日名次减今日名次，正值表示排名上升', rank_change_5d INT NULL COMMENT '五日前名次减今日名次，正值表示排名上升', top10_days_20 INT NULL COMMENT '最近口径内连续处于 Top10 的交易日数',
+    rank_change_1d INT NULL COMMENT '昨日名次减今日名次，正值表示排名上升', rank_change_5d INT NULL COMMENT '五日前名次减今日名次，正值表示排名上升', top10_days_20 INT NULL COMMENT '最近 20 个交易日累计处于 Top10 的天数',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '快照首次创建时间', updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '同版本重跑时的最后更新时间',
     UNIQUE KEY uq_snapshot (as_of_date, sector_level, sector_name, model_version),
     KEY idx_snapshot_run_id (run_id)
