@@ -19,6 +19,9 @@ def trade_date_to_shanghai_timestamp(trade_date: date) -> int:
 
     返回:
         对应 ``00:00:00 Asia/Shanghai`` 的 Unix 毫秒数。
+
+    异常:
+        无；调用方应传入已解析的交易日期。
     """
     return int(datetime.combine(trade_date, time.min, SHANGHAI_TIMEZONE).timestamp() * 1000)
 
@@ -34,6 +37,9 @@ def normalize_sector_kline_rows(
 
     返回:
         第一项为日期唯一且严格升序的有效行情；第二项为被排除的原始行数。
+
+    异常:
+        无；非法行由本函数计入跳过数。
     """
     candidates: list[dict[str, Any]] = []
     skipped = 0
@@ -41,11 +47,13 @@ def normalize_sector_kline_rows(
     for row in rows:
         trade_date = _parse_trade_date(row.get("trade_date"))
         if trade_date is None or trade_date > requested_end_date:
+            # 排除无法解析的日期和超出请求截止日的未来行情。
             skipped += 1
             continue
 
         values = _parse_numeric_values(row)
         if values is None or not _has_valid_ohlc(values):
+            # 排除数值非法、非有限或不满足 OHLC 关系的行情。
             skipped += 1
             continue
 
@@ -60,6 +68,7 @@ def normalize_sector_kline_rows(
     for candidate in sorted(candidates, key=lambda item: item["trade_date"]):
         trade_date = candidate["trade_date"]
         if trade_date in seen_dates:
+            # 同一交易日按稳定排序仅保留首次出现的有效行情。
             skipped += 1
             continue
         seen_dates.add(trade_date)
