@@ -74,10 +74,13 @@ def create_app() -> FastAPI:
         输入：原始请求和 FastAPI 参数校验异常。
         输出：状态码 422 的统一错误 JSON，并在 ``details`` 中保留字段定位信息。
         """
+        # 仅板块 K 线端点将 FastAPI 框架级校验统一映射为产品契约 INVALID_PARAMETER，
+        # 其余既有端点必须保留 REQUEST_VALIDATION_ERROR，避免破坏已发布的错误码。
+        code = "INVALID_PARAMETER" if request.url.path.endswith("/sector-kline") else "REQUEST_VALIDATION_ERROR"
         return JSONResponse(
             status_code=422,
             content={"error": {
-                "code": "REQUEST_VALIDATION_ERROR",
+                "code": code,
                 "message": "请求参数不合法",
                 "details": exc.errors(),
                 "request_id": request.state.request_id,
@@ -111,14 +114,19 @@ def create_app() -> FastAPI:
         输出：状态码 500、稳定错误码和请求追踪标识；异常堆栈仅记录在服务端日志。
         """
         LOGGER.exception("板块轮动 API 未处理异常，request_id=%s", request.state.request_id, exc_info=exc)
+        # 仅板块 K 线端点使用设计约定的 INTERNAL_ERROR；既有端点保持原错误码。
+        code = "INTERNAL_ERROR" if request.url.path.endswith("/sector-kline") else "INTERNAL_SERVER_ERROR"
         return JSONResponse(
             status_code=500,
             content={"error": {
-                "code": "INTERNAL_SERVER_ERROR",
+                "code": code,
                 "message": "板块轮动服务处理请求失败",
                 "details": None,
                 "request_id": request.state.request_id,
             }},
+            # 未预期异常会在 BaseHTTPMiddleware 的 call_next 中重新抛出，
+            # 因而不会回到请求标识中间件补写响应头，需在此处显式透传。
+            headers={"X-Request-ID": request.state.request_id},
         )
 
     @app.get("/healthz", tags=["系统"], summary="健康检查")

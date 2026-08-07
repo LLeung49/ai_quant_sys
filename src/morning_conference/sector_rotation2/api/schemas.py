@@ -71,3 +71,38 @@ class HistoryResponse(BaseModel):
     model_version: str
     meta: ResponseMeta
     points: list[dict[str, Any]]
+
+
+class SectorKlineBar(BaseModel):
+    """单根经过数据边界校验的板块合成日 K 线。"""
+
+    trade_date: str
+    timestamp: int
+    open: float
+    high: float
+    low: float
+    close: float
+    volume: float
+    amount: float
+
+
+class SectorKlineMeta(BaseModel):
+    """板块 K 线响应的字段版本、来源和清洗统计信息。"""
+
+    field_version: Literal["v1"] = "v1"
+    source: Literal["trade_sector_daily"] = "trade_sector_daily"
+    bar_count: int
+    skipped_bar_count: int
+    warmup_target: int = 100
+
+
+class SectorKlineResponse(BaseModel):
+    """板块合成日 K 线的完整 HTTP 成功响应。"""
+
+    sector_name: str
+    sector_level: int
+    requested_end_date: str
+    actual_end_date: str
+    price_basis: Literal["equal_weight_composite_index"] = "equal_weight_composite_index"
+    bars: list[SectorKlineBar]
+    meta: SectorKlineMeta
