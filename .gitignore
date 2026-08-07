@@ -70,3 +70,6 @@ Thumbs.db
 
 # Local Git worktrees
 .worktrees/
+
+# 本地需求设计可视化草稿，不属于产品源码
+.superpowers/
