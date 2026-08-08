@@ -1,14 +1,15 @@
 /** 统一工作台在确定性接口夹具下的关键用户路径集成测试。 */
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { vi } from "vitest";
+import { afterEach, vi } from "vitest";
 
 vi.mock("./useRotationData", () => ({
-  useRotationData: () => ({
-    latestDate: "2026-08-04",
+  useRotationData: (_level: 1 | 2, _modelVersion: string, selectedDate?: string) => ({
+    // mock 也按真实 Hook 的优先级返回历史单日所选日期，防止测试错误地始终拿最新日。
+    latestDate: selectedDate ?? "2026-08-04",
     dates: { data: ["2026-08-04", "2026-08-03"], isLoading: false, isError: false },
     snapshot: {
       data: {
-        as_of_date: "2026-08-04",
+        as_of_date: selectedDate ?? "2026-08-04",
         sector_level: 2,
         model_version: "v1",
         meta: { run_status: "succeeded", field_version: "v1", source_max_trade_date: "2026-08-04" },
@@ -36,7 +37,7 @@ vi.mock("./useHistoryData", () => ({
 }));
 
 vi.mock("./detail/SectorDetailDrawer", () => ({
-  SectorDetailDrawer: ({ asOfDate, level }: { asOfDate: string; level: number }) => <div data-testid="drawer-date">{asOfDate}|{level}</div>,
+  SectorDetailDrawer: ({ asOfDate, level, isLatestDate }: { asOfDate: string; level: number; isLatestDate: boolean }) => <div data-testid="drawer-date">{asOfDate}|{level}|{String(isLatestDate)}</div>,
 }));
 
 vi.mock("./chart/LazyQuadrantChart", () => ({
@@ -48,6 +49,11 @@ vi.mock("./history/LazySectorTrajectory", () => ({ LazySectorTrajectory: ({ traj
 import { SectorRotationPage } from "./SectorRotationPage";
 
 describe("SectorRotationPage 统一工作台", () => {
+  afterEach(() => {
+    // 每个用例都还原 URL，避免历史日期参数污染后续工作台初始化。
+    window.history.replaceState(null, "", "/");
+  });
+
   it("只保留一个主象限，并让回放帧、选择尾迹和轨迹分析同步", async () => {
     render(<SectorRotationPage />);
 
@@ -65,13 +71,15 @@ describe("SectorRotationPage 统一工作台", () => {
     expect(screen.getAllByTestId("quadrant")).toHaveLength(1);
   });
 
-  it("向已打开抽屉传递唯一的工作台显示日期，并在回放帧切换时同步更新", async () => {
-    window.history.replaceState(null, "", "/?sector=教育&date=2026-08-04");
+  it("向已打开抽屉传递历史单日日期，并在回放帧切换时同步更新", async () => {
+    // 单日观察明确选择不同于最新日期的历史快照，验证不会被 2026-08-04 覆盖。
+    window.history.replaceState(null, "", "/?sector=教育&date=2026-08-03");
     render(<SectorRotationPage />);
 
-    expect(screen.getByTestId("drawer-date")).toHaveTextContent("2026-08-04|2");
+    expect(screen.getByTestId("drawer-date")).toHaveTextContent("2026-08-03|2|false");
     fireEvent.click(screen.getByRole("button", { name: /动态回放/ }));
-    fireEvent.click(await screen.findByRole("button", { name: "上一帧" }));
-    await waitFor(() => expect(screen.getByTestId("drawer-date")).toHaveTextContent("2026-08-03|2"));
+    await waitFor(() => expect(screen.getByTestId("drawer-date")).toHaveTextContent("2026-08-03|2|false"));
+    fireEvent.click(await screen.findByRole("button", { name: "下一帧" }));
+    await waitFor(() => expect(screen.getByTestId("drawer-date")).toHaveTextContent("2026-08-04|2|true"));
   });
 });
