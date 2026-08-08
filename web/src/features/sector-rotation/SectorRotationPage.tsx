@@ -143,7 +143,13 @@ export function SectorRotationPage() {
       </article>
       <SectorRanking sectors={filteredSectors} selectedSectorName={selectedSectorName} onSelect={setSelectedSectorName} />
     </section>
-    {selected && <SectorDetailDrawer sector={selected} onClose={() => setSelectedSectorName(null)} />}
+    {selected && displayDate && <SectorDetailDrawer
+      sector={selected}
+      level={level}
+      asOfDate={displayDate}
+      isLatestDate={displayDate === dates.data?.[0]}
+      onClose={() => setSelectedSectorName(null)}
+    />}
     {comparisonSectors.length > 0 && <section className="sector-history content-panel"><header className="panel-header"><div><p>SECTOR TRAJECTORY</p><h2><History aria-hidden="true" />行业轨迹对比</h2></div><div className="segmented-control">{([5, 20, 60] as const).map((windowValue) => <button className={historyWindow === windowValue ? "is-active" : ""} key={windowValue} type="button" onClick={() => setHistoryWindow(windowValue)}>{windowValue} 日</button>)}</div></header><TrajectoryControls sectorNames={comparisonSectors} onRemove={(sectorName) => { setComparisonSectors((current) => current.filter((item) => item !== sectorName)); if (selectedSectorName === sectorName) setSelectedSectorName(null); }} />{history.isLoading ? <div className="trajectory-loading">正在加载行业历史轨迹…</div> : <LazySectorTrajectory trajectories={trajectories} />}{historyGaps.length > 0 && <div className="history-gaps"><strong>数据缺口</strong>{historyGaps.map((gap) => <span key={gap.sector_name}>{gap.sector_name}：{gap.dates.length} 个交易日缺少有效坐标（轨迹已断开）</span>)}</div>}</section>}
   </div>;
 }

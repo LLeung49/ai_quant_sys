@@ -35,6 +35,10 @@ vi.mock("./useHistoryData", () => ({
   useHistoryData: () => ({ data: [{ as_of_date: "2026-08-04", sector_name: "教育", velocity_score: 0.6, acceleration_score: 0.8 }], isLoading: false, isError: false }),
 }));
 
+vi.mock("./detail/SectorDetailDrawer", () => ({
+  SectorDetailDrawer: ({ asOfDate, level }: { asOfDate: string; level: number }) => <div data-testid="drawer-date">{asOfDate}|{level}</div>,
+}));
+
 vi.mock("./chart/LazyQuadrantChart", () => ({
   LazyQuadrantChart: ({ sectors, trail, onSelect }: { sectors: { sector_name: string }[]; trail: unknown[]; onSelect: (name: string) => void }) => <div data-testid="quadrant"><span>当前图表：{sectors.map((sector) => sector.sector_name).join("、")}</span><span>尾迹点：{trail.length}</span><button type="button" onClick={() => onSelect(sectors[0].sector_name)}>图中选择 {sectors[0].sector_name}</button></div>,
 }));
@@ -59,5 +63,15 @@ describe("SectorRotationPage 统一工作台", () => {
     await waitFor(() => expect(screen.getByText("当前图表：半导体")).toBeInTheDocument());
     expect(screen.getByText("尾迹点：1")).toBeInTheDocument();
     expect(screen.getAllByTestId("quadrant")).toHaveLength(1);
+  });
+
+  it("向已打开抽屉传递唯一的工作台显示日期，并在回放帧切换时同步更新", async () => {
+    window.history.replaceState(null, "", "/?sector=教育&date=2026-08-04");
+    render(<SectorRotationPage />);
+
+    expect(screen.getByTestId("drawer-date")).toHaveTextContent("2026-08-04|2");
+    fireEvent.click(screen.getByRole("button", { name: /动态回放/ }));
+    fireEvent.click(await screen.findByRole("button", { name: "上一帧" }));
+    await waitFor(() => expect(screen.getByTestId("drawer-date")).toHaveTextContent("2026-08-03|2"));
   });
 });
