@@ -30,6 +30,8 @@ describe("SectorKlineModal", () => {
 
     const dialog = screen.getByRole("dialog", { name: "半导体放大行情图" });
     expect(dialog.parentElement).toBe(document.body);
+    expect(dialog).toHaveClass("sector-kline-dialog");
+    expect(screen.getByTestId("expanded-kline-chart")).toHaveTextContent("expanded:120");
     fireEvent.click(screen.getByRole("button", { name: "关闭半导体放大行情" }));
 
     expect(onClose).toHaveBeenCalledOnce();

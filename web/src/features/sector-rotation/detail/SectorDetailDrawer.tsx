@@ -29,6 +29,25 @@ interface SectorDetailDrawerProps {
   /** 预留给 Task 8 行情弹窗的放大回调。 */
 }
 
+/** 已打开的行情弹窗与触发它的抽屉选择上下文。 */
+interface KlineModalSelection {
+  /** 由板块、层级和工作台日期确定的不可变身份。 */
+  identity: string;
+  /** 缩略行情卡已经加载并校验过的同一份响应。 */
+  data: SectorKlineResponse;
+}
+
+/**
+ * 构建行情弹窗与当前抽屉选择上下文的稳定身份。
+ *
+ * 参数：sectorName 为板块名称；level 为申万层级；asOfDate 为工作台截止日期。
+ * 返回：用于同步比较的“板块|层级|日期”身份字符串。
+ * 异常：无；调用方保证输入来自已验证的抽屉状态。
+ */
+export function buildKlineModalSelectionIdentity(sectorName: string, level: 1 | 2, asOfDate: string): string {
+  return `${sectorName}|${level}|${asOfDate}`;
+}
+
 /**
  * 展示单个板块的可解释研究详情。
  *
@@ -43,27 +62,30 @@ export function SectorDetailDrawer({ sector, level, asOfDate, isLatestDate, onCl
   // 窗口状态由抽屉统一持有，使缩略图和后续弹窗可共享同一观察区间且不重新读取行情。
   const [visibleCount, setVisibleCount] = useState<KlineWindow>(DEFAULT_KLINE_WINDOW);
   // Modal 只保存缩略卡已加载的响应；不持有独立 Query，确保放大时不产生第二个网络请求。
-  const [klineModalData, setKlineModalData] = useState<SectorKlineResponse | null>(null);
+  const [klineModalSelection, setKlineModalSelection] = useState<KlineModalSelection | null>(null);
+  const currentModalIdentity = buildKlineModalSelectionIdentity(sector.sector_name, level, asOfDate);
+  // 渲染期同步比对可阻止 React effect 执行前的一帧旧行情，不将旧响应交给新抽屉。
+  const activeKlineModal = klineModalSelection?.identity === currentModalIdentity ? klineModalSelection : null;
   const scores = [["趋势位置", sector.trend_level_score], ["趋势速度", sector.velocity_score], ["趋势加速度", sector.acceleration_score], ["参与度", sector.participation_score], ["量能活跃度", sector.volume_score]];
   useEffect(() => {
     closeRef.current?.focus();
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       // 最内层行情弹窗优先消费 Escape；下一次 Escape 才能关闭外层详情抽屉。
-      if (klineModalData) {
-        setKlineModalData(null);
+      if (activeKlineModal) {
+        setKlineModalSelection(null);
         return;
       }
       onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [klineModalData, onClose]);
+  }, [activeKlineModal, onClose]);
 
   useEffect(() => {
     // 行业、层级或工作台日期切换时关闭旧行情，防止历史数据闪现到新抽屉。
-    setKlineModalData(null);
-  }, [asOfDate, level, sector.sector_name]);
+    if (klineModalSelection && klineModalSelection.identity !== currentModalIdentity) setKlineModalSelection(null);
+  }, [currentModalIdentity, klineModalSelection]);
 
   return <div className="detail-layer" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
     <aside className="sector-detail" aria-label={`${sector.sector_name} 详情`}>
@@ -87,7 +109,7 @@ export function SectorDetailDrawer({ sector, level, asOfDate, isLatestDate, onCl
         visibleCount={visibleCount}
         onVisibleCountChange={setVisibleCount}
         expandButtonRef={expandButtonRef}
-        onExpand={setKlineModalData}
+        onExpand={(data) => setKlineModalSelection({ identity: currentModalIdentity, data })}
       />
       <section className="score-breakdown"><div className="detail-section-title"><span>评分拆解</span><small>-1 至 1 的当日截面相对得分</small></div>
         <dl>{scores.map(([name, value]) => <div key={name as string}><dt>{name}</dt><dd><span className="score-track"><i style={{ width: `${typeof value === "number" ? Math.max(0, Math.min(100, (value + 1) * 50)) : 0}%` }} /></span><b>{typeof value === "number" ? value.toFixed(2) : "数据不足"}</b></dd></div>)}</dl>
@@ -98,13 +120,14 @@ export function SectorDetailDrawer({ sector, level, asOfDate, isLatestDate, onCl
       </section>
       <footer className="detail-risk">模型阶段是研究观察信号，不代表未来收益；请结合自身风险承受能力独立判断。</footer>
     </aside>
-    {klineModalData && <SectorKlineModal
-      data={klineModalData}
+    {activeKlineModal && <SectorKlineModal
+      key={activeKlineModal.identity}
+      data={activeKlineModal.data}
       visibleCount={visibleCount}
       onVisibleCountChange={setVisibleCount}
       openerRef={expandButtonRef}
       phaseLabel={phaseMeta.label}
-      onClose={() => setKlineModalData(null)}
+      onClose={() => setKlineModalSelection(null)}
     />}
   </div>;
 }
