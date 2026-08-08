@@ -19,6 +19,7 @@ vi.mock("klinecharts", () => ({
 import {
   buildBollOverride,
   buildKlineStyles,
+  buildSystemMacdOverride,
   createSectorKlineRuntime,
 } from "./klinechartRuntime";
 import { SYSTEM_MACD_NAME } from "./indicatorParity";
@@ -110,5 +111,22 @@ describe("createSectorKlineRuntime", () => {
       expect.objectContaining({ color: "#9a8cff" }),
       expect.objectContaining({ color: "#ff8fc7" }),
     ]));
+    expect(styles.indicator?.bars).toEqual([expect.objectContaining({
+      upColor: "#ff7285", downColor: "#37d6b0", noChangeColor: "#8595ae",
+    })]);
+    const systemMacd = buildSystemMacdOverride();
+    expect(systemMacd.figures?.find((figure) => figure.key === "dif")?.styles?.({} as never)).toMatchObject({ color: "#f0b65a" });
+    expect(systemMacd.figures?.find((figure) => figure.key === "dea")?.styles?.({} as never)).toMatchObject({ color: "#67a9ff" });
+  });
+
+  it("图表创建成功后配置指标失败会释放实例并继续抛出原始异常", async () => {
+    const chart = createFakeChart();
+    const configurationError = new Error("指标创建失败");
+    chart.createIndicator.mockImplementation(() => { throw configurationError; });
+    klineMocks.init.mockReturnValue(chart);
+
+    await expect(createSectorKlineRuntime({ container: document.createElement("div"), bars: fixtureBars, mode: "compact", visibleCount: 120 }))
+      .rejects.toBe(configurationError);
+    expect(klineMocks.dispose).toHaveBeenCalledWith(chart);
   });
 });

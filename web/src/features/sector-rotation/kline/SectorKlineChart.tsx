@@ -29,8 +29,6 @@ export interface SectorKlineChartProps {
 export function SectorKlineChart({ bars, mode, visibleCount, ariaLabel }: SectorKlineChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<SectorKlineRuntime | null>(null);
-  const initializingRef = useRef(false);
-  const initializationFailedRef = useRef(false);
   const visibleCountRef = useRef(visibleCount);
   const [error, setError] = useState(false);
   visibleCountRef.current = visibleCount;
@@ -43,7 +41,9 @@ export function SectorKlineChart({ bars, mode, visibleCount, ariaLabel }: Sector
     const container = containerRef.current;
     if (!container) return undefined;
     let cancelled = false;
-    initializationFailedRef.current = false;
+    // 每次 bars/mode effect 都拥有独立的初始化状态，StrictMode 或快速切换不会被旧 Promise 卡住。
+    let initializing = false;
+    let initializationFailed = false;
     setError(false);
 
     const initializeOrResize = () => {
@@ -53,8 +53,8 @@ export function SectorKlineChart({ bars, mode, visibleCount, ariaLabel }: Sector
         return;
       }
       // 同一份 bars/mode 的失败只展示局部提示，不因连续 ResizeObserver 回调无休止重试。
-      if (initializingRef.current || initializationFailedRef.current) return;
-      initializingRef.current = true;
+      if (initializing || initializationFailed) return;
+      initializing = true;
       void createSectorKlineRuntime({ container, bars, mode, visibleCount: visibleCountRef.current })
         .then((runtime) => {
           // 异步加载期间若已切换板块/模式或卸载，立即释放迟到实例，禁止旧图闪现。
@@ -67,12 +67,12 @@ export function SectorKlineChart({ bars, mode, visibleCount, ariaLabel }: Sector
         })
         .catch(() => {
           if (!cancelled) {
-            initializationFailedRef.current = true;
+            initializationFailed = true;
             setError(true);
           }
         })
         .finally(() => {
-          initializingRef.current = false;
+          initializing = false;
         });
     };
 
@@ -87,10 +87,11 @@ export function SectorKlineChart({ bars, mode, visibleCount, ariaLabel }: Sector
     };
   }, [bars, mode]);
 
-  if (error) {
-    return <div className="sector-kline-chart__fallback" role="alert">行情图初始化失败，请重试</div>;
-  }
-  return <div ref={containerRef} className={`sector-kline-chart sector-kline-chart--${mode}`} role="img" aria-label={ariaLabel} />;
+  return <div className={`sector-kline-chart-shell sector-kline-chart-shell--${mode}`}>
+    {/* 容器在失败时仍须保留，后续切换板块、日期或模式才能重新获得 ref 并初始化。 */}
+    <div ref={containerRef} className={`sector-kline-chart sector-kline-chart--${mode}`} role="img" aria-label={ariaLabel} />
+    {error && <div className="sector-kline-chart__fallback" role="alert">行情图初始化失败，请重试</div>}
+  </div>;
 }
 
 export default SectorKlineChart;

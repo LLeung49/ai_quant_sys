@@ -61,6 +61,12 @@ export function buildKlineStyles(mode: SectorKlineChartMode): NonNullable<Option
         downColor: KLINE_COLORS.down,
         noChangeColor: "#8595ae",
       },
+      // VOL 与 MACD 的柱图读取 indicator.bars，而非 ohlc；这里固定为 A 股红涨绿跌。
+      bars: [{
+        upColor: KLINE_COLORS.up,
+        downColor: KLINE_COLORS.down,
+        noChangeColor: "#8595ae",
+      }],
       lines: [
         { color: KLINE_COLORS.ma5, size: 1 },
         { color: KLINE_COLORS.ma10, size: 1 },
@@ -115,6 +121,25 @@ export function buildBollOverride(): IndicatorCreate {
 }
 
 /**
+ * 创建系统 MACD 覆盖配置，明确 DIF/DEA 的业务配色而不依赖通用线条数组位置。
+ *
+ * 输入：无。
+ * 输出：SYSTEM_MACD 指标覆盖对象；柱体涨跌色继续由 ``indicator.bars`` 统一控制。
+ * 异常：无；由 KLineChart 处理指标不存在的情况。
+ */
+export function buildSystemMacdOverride(): IndicatorCreate {
+  return {
+    name: SYSTEM_MACD_NAME,
+    calcParams: [...INDICATOR_PARAMS.macd],
+    figures: [
+      { key: "dif", title: "DIF: ", type: "line", styles: () => ({ color: KLINE_COLORS.dif }) },
+      { key: "dea", title: "DEA: ", type: "line", styles: () => ({ color: KLINE_COLORS.dea }) },
+      { key: "macd", title: "MACD: ", type: "bar", baseValue: 0 },
+    ],
+  };
+}
+
+/**
  * 将后端契约日 K 线映射成 KLineChart 10 所需字段。
  *
  * 输入：已通过前端契约校验的日 K 线列表。
@@ -163,56 +188,63 @@ export async function createSectorKlineRuntime(options: CreateSectorKlineRuntime
     throw new Error("KLineChart 未能创建图表实例");
   }
 
-  const data = toKlineData(options.bars);
-  chart.setDataLoader({
-    // 图表仅消费本次 Query 已校验的数据，禁止网络补数或实时订阅，以保证历史回放不泄漏未来 K 线。
-    getBars: ({ type, callback }) => callback(type === "init" ? data : [], false),
-  });
-  chart.setSymbol({ ticker: "SECTOR_INDEX", pricePrecision: 4, volumePrecision: 0 });
-  chart.setPeriod({ span: 1, type: "day" });
-  chart.createIndicator({ name: "MA", calcParams: [...INDICATOR_PARAMS.ma], paneId: CANDLE_PANE_ID }, true);
-  chart.createIndicator({ name: "BOLL", calcParams: [...INDICATOR_PARAMS.boll], paneId: CANDLE_PANE_ID }, true);
-  const volumePaneId = chart.createIndicator({ name: "VOL", calcParams: [...INDICATOR_PARAMS.vol] });
-  const macdPaneId = chart.createIndicator({ name: SYSTEM_MACD_NAME, calcParams: [...INDICATOR_PARAMS.macd] });
-  chart.overrideIndicator(buildMaOverride());
-  chart.overrideIndicator(buildBollOverride());
+  try {
+    const data = toKlineData(options.bars);
+    chart.setDataLoader({
+      // 图表仅消费本次 Query 已校验的数据，禁止网络补数或实时订阅，以保证历史回放不泄漏未来 K 线。
+      getBars: ({ type, callback }) => callback(type === "init" ? data : [], false),
+    });
+    chart.setSymbol({ ticker: "SECTOR_INDEX", pricePrecision: 4, volumePrecision: 0 });
+    chart.setPeriod({ span: 1, type: "day" });
+    chart.createIndicator({ name: "MA", calcParams: [...INDICATOR_PARAMS.ma], paneId: CANDLE_PANE_ID }, true);
+    chart.createIndicator({ name: "BOLL", calcParams: [...INDICATOR_PARAMS.boll], paneId: CANDLE_PANE_ID }, true);
+    const volumePaneId = chart.createIndicator({ name: "VOL", calcParams: [...INDICATOR_PARAMS.vol] });
+    const macdPaneId = chart.createIndicator({ name: SYSTEM_MACD_NAME, calcParams: [...INDICATOR_PARAMS.macd] });
+    chart.overrideIndicator(buildMaOverride());
+    chart.overrideIndicator(buildBollOverride());
+    chart.overrideIndicator(buildSystemMacdOverride());
 
-  // 放大图给足副图高度以便读数；缩略图压缩副图，仍保留成交量和 MACD 的业务信息。
-  if (volumePaneId) {
-    chart.setPaneOptions({ id: volumePaneId, height: options.mode === "expanded" ? 160 : 72, minHeight: 48 });
+    // 放大图给足副图高度以便读数；缩略图压缩副图，仍保留成交量和 MACD 的业务信息。
+    if (volumePaneId) {
+      chart.setPaneOptions({ id: volumePaneId, height: options.mode === "expanded" ? 160 : 72, minHeight: 48 });
+    }
+    if (macdPaneId) {
+      chart.setPaneOptions({ id: macdPaneId, height: options.mode === "expanded" ? 180 : 88, minHeight: 56 });
+    }
+    const interactionEnabled = options.mode === "expanded";
+    chart.setZoomEnabled(interactionEnabled);
+    chart.setScrollEnabled(interactionEnabled);
+
+    let disposed = false;
+    let visibleCount = normalizeVisibleCount(options.visibleCount);
+    const applyVisibleCount = () => {
+      const size = chart.getSize(CANDLE_PANE_ID, "main");
+      if (!size || size.width <= 0) return;
+      chart.setBarSpace(Math.min(50, Math.max(1, size.width / visibleCount)));
+      chart.scrollToRealTime(0);
+    };
+    applyVisibleCount();
+
+    return {
+      resize() {
+        if (disposed) return;
+        chart.resize();
+        applyVisibleCount();
+      },
+      setVisibleCount(count) {
+        if (disposed) return;
+        visibleCount = normalizeVisibleCount(count);
+        applyVisibleCount();
+      },
+      dispose() {
+        if (disposed) return;
+        disposed = true;
+        klinecharts.dispose(chart);
+      },
+    };
+  } catch (error) {
+    // init 已创建 Canvas 后任一配置失败都必须立即释放，避免后续重试叠加事件监听和 DOM 资源。
+    klinecharts.dispose(chart);
+    throw error;
   }
-  if (macdPaneId) {
-    chart.setPaneOptions({ id: macdPaneId, height: options.mode === "expanded" ? 180 : 88, minHeight: 56 });
-  }
-  const interactionEnabled = options.mode === "expanded";
-  chart.setZoomEnabled(interactionEnabled);
-  chart.setScrollEnabled(interactionEnabled);
-
-  let disposed = false;
-  let visibleCount = normalizeVisibleCount(options.visibleCount);
-  const applyVisibleCount = () => {
-    const size = chart.getSize(CANDLE_PANE_ID, "main");
-    if (!size || size.width <= 0) return;
-    chart.setBarSpace(Math.min(50, Math.max(1, size.width / visibleCount)));
-    chart.scrollToRealTime(0);
-  };
-  applyVisibleCount();
-
-  return {
-    resize() {
-      if (disposed) return;
-      chart.resize();
-      applyVisibleCount();
-    },
-    setVisibleCount(count) {
-      if (disposed) return;
-      visibleCount = normalizeVisibleCount(count);
-      applyVisibleCount();
-    },
-    dispose() {
-      if (disposed) return;
-      disposed = true;
-      klinecharts.dispose(chart);
-    },
-  };
 }
