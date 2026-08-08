@@ -26,7 +26,6 @@ interface SectorDetailDrawerProps {
   isLatestDate: boolean;
   /** 关闭详情抽屉的回调。 */
   onClose: () => void;
-  /** 预留给 Task 8 行情弹窗的放大回调。 */
 }
 
 /** 已打开的行情弹窗与触发它的抽屉选择上下文。 */
@@ -68,7 +67,11 @@ export function SectorDetailDrawer({ sector, level, asOfDate, isLatestDate, onCl
   const activeKlineModal = klineModalSelection?.identity === currentModalIdentity ? klineModalSelection : null;
   const scores = [["趋势位置", sector.trend_level_score], ["趋势速度", sector.velocity_score], ["趋势加速度", sector.acceleration_score], ["参与度", sector.participation_score], ["量能活跃度", sector.volume_score]];
   useEffect(() => {
+    // 仅在抽屉首次挂载或切换至另一板块/层级时聚焦关闭控件；Modal 状态变更不得抢回焦点。
     closeRef.current?.focus();
+  }, [level, sector.sector_name]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       // 最内层行情弹窗优先消费 Escape；下一次 Escape 才能关闭外层详情抽屉。

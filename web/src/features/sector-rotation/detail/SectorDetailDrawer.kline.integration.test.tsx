@@ -25,7 +25,8 @@ const response = {
 /** 使用关闭重试的独立 QueryClient 渲染真实抽屉组合，隔离网络层。 */
 function renderDrawer(asOfDate = "2026-08-06") {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={client}><SectorDetailDrawer sector={sector} level={2} asOfDate={asOfDate} isLatestDate onClose={vi.fn()} /></QueryClientProvider>);
+  const onClose = vi.fn();
+  return { ...render(<QueryClientProvider client={client}><SectorDetailDrawer sector={sector} level={2} asOfDate={asOfDate} isLatestDate onClose={onClose} /></QueryClientProvider>), onClose };
 }
 
 describe("SectorDetailDrawer K 线组合", () => {
@@ -48,5 +49,21 @@ describe("SectorDetailDrawer K 线组合", () => {
   it("选择身份改变时同步判定旧 modal 不可渲染，避免旧行情在新抽屉闪现", () => {
     expect(buildKlineModalSelectionIdentity("半导体", 2, "2026-08-06")).toBe("半导体|2|2026-08-06");
     expect(buildKlineModalSelectionIdentity("半导体", 2, "2026-08-06")).not.toBe(buildKlineModalSelectionIdentity("电子", 2, "2026-08-06"));
+  });
+
+  it("第一次 Escape 的原生 cancel 关闭弹窗并恢复放大按钮焦点，第二次才关闭抽屉", async () => {
+    apiMocks.fetchSectorKline.mockResolvedValue(response);
+    const { onClose } = renderDrawer();
+
+    const expandButton = await screen.findByRole("button", { name: "放大查看半导体行情" });
+    fireEvent.click(expandButton);
+    const dialog = await screen.findByRole("dialog", { name: "半导体放大行情图" });
+    fireEvent(dialog, new Event("cancel", { bubbles: false, cancelable: true }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByRole("complementary", { name: "半导体 详情" })).toBeInTheDocument();
+    expect(expandButton).toHaveFocus();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });
