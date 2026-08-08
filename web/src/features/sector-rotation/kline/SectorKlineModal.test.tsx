@@ -1,8 +1,13 @@
 /** 板块 K 线放大行情弹窗的原生 dialog、焦点恢复和快捷窗口交互测试。 */
 import { fireEvent, render, screen } from "@testing-library/react";
 import { createRef } from "react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import type { SectorKlineResponse } from "./sectorKlineApi";
+
+// 测试工作目录固定为 web；以该目录解析可避开 Vitest 的非 file import.meta.url 限制。
+const globalStyles = readFileSync(resolve(process.cwd(), "src/styles/globals.css"), "utf8");
 
 vi.mock("./LazySectorKlineChart", () => ({
   LazySectorKlineChart: ({ mode, visibleCount }: { mode: string; visibleCount: number }) => (
@@ -23,6 +28,13 @@ const response: SectorKlineResponse = {
 };
 
 describe("SectorKlineModal", () => {
+  it("放大图填满 grid 分配的可用轨道，不引入会造成裁剪的桌面最小高度", () => {
+    const expandedChartRule = globalStyles.match(/\.sector-kline-chart--expanded\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(expandedChartRule).toContain("height: 100%");
+    expect(expandedChartRule).toContain("min-height: 0");
+    expect(expandedChartRule).not.toContain("clamp(300px");
+  });
+
   it("通过 body Portal 显示原生 dialog，并在关闭后恢复打开按钮焦点", () => {
     const onClose = vi.fn();
     const openerRef = createRef<HTMLButtonElement>();

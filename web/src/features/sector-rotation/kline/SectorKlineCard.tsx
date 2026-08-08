@@ -22,7 +22,6 @@ export interface SectorKlineCardProps {
   visibleCount: KlineWindow;
   /** 用户切换 60/120/250 日窗口时的回调。 */
   onVisibleCountChange: (visibleCount: KlineWindow) => void;
-  /** 用户点击放大查看时的回调；弹窗由后续任务接入。 */
   /** 父级抽屉接收已加载 response 并打开放大 dialog，弹窗不得重新发起行情请求。 */
   onExpand: (data: SectorKlineResponse) => void;
   /** 放大按钮的焦点引用，供原生 dialog 关闭后恢复焦点。 */
