@@ -1,10 +1,12 @@
 /** 板块详情抽屉中的日 K 线缩略卡：只负责查询状态外壳和缩略图入口。 */
 import { Expand, RefreshCw } from "lucide-react";
+import type { RefObject } from "react";
 import { SectorRotationApiError } from "../api";
 import { KlineErrorBoundary } from "./KlineErrorBoundary";
 import { LazySectorKlineChart } from "./LazySectorKlineChart";
 import { KLINE_WINDOWS, type KlineWindow } from "./sectorKlineConfig";
 import { useSectorKline } from "./useSectorKline";
+import type { SectorKlineResponse } from "./sectorKlineApi";
 
 /** 板块行情缩略卡的输入属性。 */
 export interface SectorKlineCardProps {
@@ -21,7 +23,9 @@ export interface SectorKlineCardProps {
   /** 用户切换 60/120/250 日窗口时的回调。 */
   onVisibleCountChange: (visibleCount: KlineWindow) => void;
   /** 用户点击放大查看时的回调；弹窗由后续任务接入。 */
-  onExpand: () => void;
+  onExpand: (data: SectorKlineResponse) => void;
+  /** 放大按钮的焦点引用，供原生 dialog 关闭后恢复焦点。 */
+  expandButtonRef?: RefObject<HTMLButtonElement | null>;
 }
 
 /**
@@ -50,6 +54,7 @@ export function SectorKlineCard({
   visibleCount,
   onVisibleCountChange,
   onExpand,
+  expandButtonRef,
 }: SectorKlineCardProps) {
   // 缩略图与后续弹窗共享同一 Query Key；窗口切换仅传给图表，不会重复请求 API。
   const query = useSectorKline({ sectorName, level, endDate: asOfDate, enabled: true, isLatestDate });
@@ -91,7 +96,7 @@ export function SectorKlineCard({
         <h3>板块行情</h3>
         <p>截至 {data.actual_end_date} · {getPriceBasisLabel(data.price_basis)}</p>
       </div>
-      <button type="button" className="sector-kline-card__expand" onClick={onExpand} aria-label={`放大查看${sectorName}行情`}>
+      <button ref={expandButtonRef} type="button" className="sector-kline-card__expand" onClick={() => onExpand(data)} aria-label={`放大查看${sectorName}行情`}>
         <Expand aria-hidden="true" size={14} />放大查看
       </button>
     </header>

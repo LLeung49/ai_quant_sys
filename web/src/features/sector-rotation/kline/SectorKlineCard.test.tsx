@@ -43,7 +43,8 @@ describe("SectorKlineCard", () => {
     ))).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "显示最近 120 个交易日" })).toHaveAttribute("aria-pressed", "true");
     fireEvent.click(screen.getByRole("button", { name: "放大查看半导体行情" }));
-    expect(onExpand).toHaveBeenCalledOnce();
+    // 弹窗只能复用缩略卡已获取的响应；若此处丢失数据，父级只能重新发起网络请求。
+    expect(onExpand).toHaveBeenCalledWith(response);
   });
 
   it("切换可见窗口只更新本地窗口状态，行情查询上下文保持不变", () => {
