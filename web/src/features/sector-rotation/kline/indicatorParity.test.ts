@@ -62,7 +62,7 @@ describe("板块 K 线指标口径", () => {
     expect(() => calculateSystemMacd([100, 101], 26, 12, 9)).toThrow(RangeError);
   });
 
-  it("通过 KLineChart 公共 Chart API 取出内置 MACD 并确认其 EMA 初始化与 Python 不同", async () => {
+  it("通过真实 KLineChart API 验证系统 MACD 精确对齐 Python，内置 MACD 三项均有初始化差异", async () => {
     // JSDOM 不提供 Canvas 2D；此处只补齐 KLineChart 初始化和取指标所需的无副作用绘图接口。
     const canvasContext = new Proxy({
       measureText: () => ({ width: 0 }),
@@ -89,8 +89,11 @@ describe("板块 K 线指标口径", () => {
       chart = init(host);
 
       expect(chart).not.toBeNull();
+      ensureSystemMacdRegistered();
       chart?.createIndicator("MACD");
+      chart?.createIndicator(SYSTEM_MACD_NAME);
       const builtin = chart?.getIndicators({ name: "MACD" })[0];
+      const adapter = chart?.getIndicators({ name: SYSTEM_MACD_NAME })[0];
       const bars: KLineData[] = createCloses().map((close, index) => ({
         timestamp: index + 1,
         open: close,
@@ -99,12 +102,25 @@ describe("板块 K 线指标口径", () => {
         close,
       }));
 
-      const builtinResult = await builtin?.calc(bars, builtin);
-      const builtinTail = builtinResult?.slice(-3) as Array<Record<string, number>> | undefined;
-      const systemTail = calculateSystemMacd(createCloses()).slice(-3);
+      expect(builtin).toBeDefined();
+      expect(adapter).toBeDefined();
+      if (!builtin || !adapter) {
+        throw new Error("KLineChart 未能创建内置或系统 MACD 指标");
+      }
+      const builtinResult = await builtin.calc(bars, builtin);
+      const adapterResult = await adapter.calc(bars, adapter);
+      const builtinTail = builtinResult.slice(-3) as Array<Record<string, number>>;
+      const adapterTail = adapterResult.slice(-3) as Array<Record<string, number>>;
 
       expect(builtinTail).toHaveLength(3);
-      expect(builtinTail?.map((item) => item.dif)).not.toEqual(systemTail.map((item) => item.dif));
+      expect(adapterTail).toHaveLength(3);
+      expectCloseTo(adapterTail.map((item) => item.dif), PYTHON_MACD_TAIL.dif);
+      expectCloseTo(adapterTail.map((item) => item.dea), PYTHON_MACD_TAIL.dea);
+      expectCloseTo(adapterTail.map((item) => item.macd), PYTHON_MACD_TAIL.hist);
+      // 内置 MACD 从各周期 SMA 预热，系统 MACD 则从首个 DIF 以 adjust=False 递推，三列都必须保留差异证据。
+      expect(builtinTail.map((item) => item.dif)).not.toEqual(PYTHON_MACD_TAIL.dif);
+      expect(builtinTail.map((item) => item.dea)).not.toEqual(PYTHON_MACD_TAIL.dea);
+      expect(builtinTail.map((item) => item.macd)).not.toEqual(PYTHON_MACD_TAIL.hist);
     } finally {
       if (chart) {
         dispose(chart);
