@@ -124,6 +124,68 @@ def load_sector_panel(
     return panel
 
 
+def load_historical_sector_panel(level: int, start_date: str, end_date: str, warmup_days: int = 90) -> dict[str, pd.DataFrame]:
+    """一次读取目标区间及预热日的全部有效行业历史面板。"""
+    sql = """
+        WITH selected_dates AS (
+            SELECT DISTINCT trade_date FROM trade_sector_daily
+            WHERE sector_level = %s AND trade_date BETWEEN %s AND %s
+            UNION
+            SELECT trade_date FROM (
+                SELECT DISTINCT trade_date FROM trade_sector_daily
+                WHERE sector_level = %s AND trade_date < %s
+                ORDER BY trade_date DESC LIMIT %s
+            ) warmup
+        )
+        SELECT sector_name, trade_date, close_idx AS close, total_amount AS amount,
+               stock_count, kline_stock_count, rise_count, fall_count, flat_count, limit_up, limit_down
+        FROM trade_sector_daily
+        WHERE sector_level = %s AND trade_date IN (SELECT trade_date FROM selected_dates)
+        ORDER BY sector_name, trade_date
+    """
+    rows = execute_query(sql, (level, start_date, end_date, level, start_date, warmup_days, level))
+    frame = pd.DataFrame(rows)
+    if frame.empty:
+        return {}
+    frame["trade_date"] = pd.to_datetime(frame["trade_date"])
+    numeric_columns = [column for column in frame.columns if column not in {"sector_name", "trade_date"}]
+    frame[numeric_columns] = frame[numeric_columns].apply(pd.to_numeric, errors="coerce")
+    return {
+        str(name): group.drop(columns="sector_name").set_index("trade_date").sort_index()
+        for name, group in frame.groupby("sector_name", sort=True)
+    }
+
+
+def load_historical_sector_stock_panel(level: int, start_date: str, end_date: str, warmup_days: int = 20) -> pd.DataFrame:
+    """一次读取所有当前行业成员的目标区间及预热个股历史。"""
+    field = "sector_1" if level == 1 else "sector_2"
+    sql = f"""
+        WITH selected_dates AS (
+            SELECT DISTINCT trade_date FROM trade_sector_daily
+            WHERE sector_level = %s AND trade_date BETWEEN %s AND %s
+            UNION
+            SELECT trade_date FROM (
+                SELECT DISTINCT trade_date FROM trade_sector_daily
+                WHERE sector_level = %s AND trade_date < %s
+                ORDER BY trade_date DESC LIMIT %s
+            ) warmup
+        )
+        SELECT status.{field} AS sector_name, daily.stock_code, daily.trade_date,
+               daily.amount, daily.close_price AS close
+        FROM trade_stock_daily_qfq AS daily
+        INNER JOIN trade_stock_status AS status ON status.stock_code = daily.stock_code
+        WHERE status.{field} IS NOT NULL AND daily.trade_date IN (SELECT trade_date FROM selected_dates)
+        ORDER BY status.{field}, daily.stock_code, daily.trade_date
+    """
+    rows = execute_query(sql, (level, start_date, end_date, level, start_date, warmup_days))
+    frame = pd.DataFrame(rows, columns=["sector_name", "stock_code", "trade_date", "amount", "close"])
+    if not frame.empty:
+        frame["trade_date"] = pd.to_datetime(frame["trade_date"])
+        frame[["amount", "close"]] = frame[["amount", "close"]].apply(pd.to_numeric, errors="coerce")
+    frame["membership_asof_mode"] = "current_mapping"
+    return frame
+
+
 def load_sector_stock_amounts(
     sector_name: str,
     level: int,

@@ -8,7 +8,13 @@ import logging
 import pandas as pd
 
 from .derivatives import macd_hist, ma_slope, relative_strength, rs_acceleration
-from .data_loader import build_market_benchmark, load_sector_panel, load_sector_stock_amounts
+from .data_loader import (
+    build_market_benchmark,
+    load_historical_sector_panel,
+    load_historical_sector_stock_panel,
+    load_sector_panel,
+    load_sector_stock_amounts,
+)
 
 
 LOGGER = logging.getLogger(__name__)
@@ -141,6 +147,28 @@ def calculate_sector_features(
     return features
 
 
+def calculate_historical_sector_features(sector_frame: pd.DataFrame, benchmark_frame: pd.DataFrame) -> pd.DataFrame:
+    """一次滚动计算单行业全历史的价格、趋势和量能特征。"""
+    close, amount = sector_frame["close"], sector_frame["amount"]
+    benchmark_close, benchmark_amount = benchmark_frame["close"], benchmark_frame["amount"]
+    ma20, ma60 = close.rolling(20, min_periods=20).mean(), close.rolling(60, min_periods=60).mean()
+    rs5, rs20, rs60 = relative_strength(close, benchmark_close, 5), relative_strength(close, benchmark_close, 20), relative_strength(close, benchmark_close, 60)
+    slope = ma_slope(close)
+    share = amount / benchmark_amount.reindex(amount.index)
+    return pd.DataFrame({
+        "ret_5": close / close.shift(5) - 1.0,
+        "ret_20": close / close.shift(20) - 1.0,
+        "rs_5": rs5, "rs_20": rs20, "rs_60": rs60,
+        "distance_ma20": close / ma20 - 1.0, "distance_ma60": close / ma60 - 1.0,
+        "ma20_slope": slope, "rs20_accel": rs_acceleration(rs20, lag=5),
+        "ma20_accel": slope - slope.shift(5), "macd_hist": macd_hist(close),
+        "macd_hist_delta": macd_hist(close).diff(),
+        "rvol_5_20": amount.rolling(5).mean() / amount.rolling(20).mean(),
+        "rvol_5_60": amount.rolling(5).mean() / amount.rolling(60).mean(),
+        "amount_share": share, "share_impulse": share / share.shift(1).rolling(20).mean(),
+    }, index=close.index)
+
+
 def calculate_stock_participation_features(stock_history: pd.DataFrame) -> dict[str, float]:
     """计算成分股层面的量能和价格参与度。
 
@@ -182,6 +210,66 @@ def calculate_stock_participation_features(stock_history: pd.DataFrame) -> dict[
         "breadth_above_ma20": float(latest["above_ma20"].mean()),
         "breadth_new_high_20": float(latest["new_high_20"].mean()),
     }
+
+
+def calculate_historical_stock_participation(stock_history: pd.DataFrame) -> pd.DataFrame:
+    """一次计算所有个股滚动指标，并按行业和交易日聚合参与度。"""
+    columns = ["sector_name", "trade_date", "median_stock_rvol", "breadth_rvol", "breadth_above_ma20", "breadth_new_high_20"]
+    if stock_history.empty:
+        return pd.DataFrame(columns=columns)
+    ordered = stock_history.sort_values(["stock_code", "trade_date"]).copy()
+    groups = ordered.groupby("stock_code", sort=False)
+    amount_ma20 = groups["amount"].transform(lambda values: values.rolling(20, min_periods=20).mean())
+    close_ma20 = groups["close"].transform(lambda values: values.rolling(20, min_periods=20).mean())
+    high20 = groups["close"].transform(lambda values: values.rolling(20, min_periods=20).max())
+    valid = amount_ma20.notna() & close_ma20.notna() & high20.notna()
+    enriched = ordered.loc[valid, ["sector_name", "trade_date"]].copy()
+    enriched["stock_rvol"] = ordered.loc[valid, "amount"] / amount_ma20.loc[valid]
+    enriched["above_ma20"] = (ordered.loc[valid, "close"] > close_ma20.loc[valid]).astype(float)
+    enriched["new_high_20"] = (ordered.loc[valid, "close"] >= high20.loc[valid]).astype(float)
+    if enriched.empty:
+        return pd.DataFrame(columns=columns)
+    return enriched.groupby(["sector_name", "trade_date"], as_index=False).agg(
+        median_stock_rvol=("stock_rvol", "median"),
+        breadth_rvol=("stock_rvol", lambda values: float((values > 1.0).mean())),
+        breadth_above_ma20=("above_ma20", "mean"),
+        breadth_new_high_20=("new_high_20", "mean"),
+    )
+
+
+def build_historical_feature_panels(level: int, start_date: str, end_date: str) -> dict[str, pd.DataFrame]:
+    """用一次批量读取预计算目标区间每日特征面板。"""
+    panel = load_historical_sector_panel(level, start_date, end_date)
+    stock_panel = load_historical_sector_stock_panel(level, start_date, end_date)
+    stock_participation = calculate_historical_stock_participation(stock_panel)
+    benchmark = build_market_benchmark(panel)
+    sector_features = {name: calculate_historical_sector_features(frame, benchmark) for name, frame in panel.items()}
+    target_dates = benchmark.loc[(benchmark.index >= pd.Timestamp(start_date)) & (benchmark.index <= pd.Timestamp(end_date))].index
+    result: dict[str, pd.DataFrame] = {}
+    for target_date in target_dates:
+        rows = {}
+        for sector_name, frame in panel.items():
+            history = frame.loc[:target_date]
+            if len(history) < 90:
+                continue
+            features = sector_features[sector_name].loc[target_date].to_dict()
+            participation = stock_participation.loc[
+                (stock_participation["sector_name"] == sector_name) & (stock_participation["trade_date"] == target_date)
+            ]
+            if participation.empty:
+                features.update({key: float("nan") for key in ("median_stock_rvol", "breadth_rvol", "breadth_above_ma20", "breadth_new_high_20")})
+            else:
+                features.update(participation.iloc[0].drop(labels=["sector_name", "trade_date"]).to_dict())
+            latest = history.iloc[-1]
+            denominator = latest.get("rise_count", 0) + latest.get("fall_count", 0) + latest.get("flat_count", 0)
+            features.update({
+                "coverage_ratio": float(latest.get("kline_stock_count") / latest.get("stock_count")) if latest.get("stock_count", 0) > 0 else float("nan"),
+                "breadth_up": float(latest.get("rise_count", 0) / denominator) if denominator > 0 else float("nan"),
+                "membership_asof_mode": "current_mapping",
+            })
+            rows[sector_name] = features
+        result[target_date.strftime("%Y-%m-%d")] = pd.DataFrame.from_dict(rows, orient="index")
+    return result
 
 
 def build_daily_feature_panel(level: int, as_of_date: str, min_history_days: int = 90) -> pd.DataFrame:

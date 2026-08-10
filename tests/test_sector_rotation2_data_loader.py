@@ -71,3 +71,27 @@ def test_load_market_aggregates_sums_limits_and_uses_median_breadth():
     aggregates = load_market_aggregates(panel)
     assert aggregates.loc[pd.Timestamp("2026-01-02"), "limit_up"] == 2
     assert aggregates.loc[pd.Timestamp("2026-01-02"), "limit_down"] == 2
+
+
+def test_historical_loaders_fetch_sector_and_stock_history_once_with_warmup(monkeypatch):
+    """历史回填必须批量读取，并把预热交易日带入行业和个股面板。"""
+    from morning_conference.sector_rotation2 import data_loader
+
+    calls = []
+    sector_rows = [{"sector_name": "电子", "trade_date": "2026-01-01", "close": 100.0, "amount": 10.0,
+                    "stock_count": 1, "kline_stock_count": 1, "rise_count": 1, "fall_count": 0, "flat_count": 0,
+                    "limit_up": 0, "limit_down": 0}]
+    stock_rows = [{"sector_name": "电子", "stock_code": "000001.SZ", "trade_date": "2026-01-01", "amount": 10.0, "close": 10.0}]
+    def query(sql, params):
+        calls.append((sql, params))
+        return stock_rows if "trade_stock_daily_qfq" in sql else sector_rows
+    monkeypatch.setattr(data_loader, "execute_query", query)
+
+    sector_panel = data_loader.load_historical_sector_panel(2, "2026-01-04", "2026-01-31", warmup_days=90)
+    stock_panel = data_loader.load_historical_sector_stock_panel(2, "2026-01-04", "2026-01-31", warmup_days=20)
+
+    assert list(sector_panel) == ["电子"]
+    assert stock_panel.loc[0, "membership_asof_mode"] == "current_mapping"
+    assert len(calls) == 2
+    assert 90 in calls[0][1]
+    assert 20 in calls[1][1]
