@@ -29,7 +29,14 @@ const response: SectorKlineResponse = {
 
 describe("SectorKlineModal", () => {
   it("放大图填满 grid 分配的可用轨道，不引入会造成裁剪的桌面最小高度", () => {
+    const chartWrapRule = globalStyles.match(/\.sector-kline-modal__chart-wrap\s*\{[^}]*\}/)?.[0] ?? "";
+    const expandedShellRule = globalStyles.match(/\.sector-kline-chart-shell--expanded\s*\{[^}]*\}/)?.[0] ?? "";
     const expandedChartRule = globalStyles.match(/\.sector-kline-chart--expanded\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(chartWrapRule).toContain("height: 100%");
+    expect(chartWrapRule).toContain("min-height: 0");
+    expect(chartWrapRule).toContain("box-sizing: border-box");
+    expect(expandedShellRule).toContain("height: 100%");
+    expect(expandedShellRule).toContain("min-height: 0");
     expect(expandedChartRule).toContain("height: 100%");
     expect(expandedChartRule).toContain("min-height: 0");
     expect(expandedChartRule).not.toContain("clamp(300px");

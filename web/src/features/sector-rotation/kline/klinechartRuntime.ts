@@ -1,6 +1,6 @@
 /** 板块 K 线三窗格的 KLineChart 10 运行时适配、指标配置与资源生命周期。 */
 import type { IndicatorCreate, KLineData, Options } from "klinecharts";
-import { SYSTEM_MACD_NAME, ensureSystemMacdRegistered } from "./indicatorParity";
+import { calculateSystemMacd, SYSTEM_MACD_NAME, ensureSystemMacdRegistered, type SystemMacdValue } from "./indicatorParity";
 import { INDICATOR_PARAMS, KLINE_COLORS } from "./sectorKlineConfig";
 import type { SectorKlineResponse } from "./sectorKlineApi";
 
@@ -40,8 +40,13 @@ export interface SectorKlineRuntime {
  * 异常：无；调用方仅可使用 ``compact`` 或 ``expanded`` 两种模式。
  */
 export function buildKlineStyles(mode: SectorKlineChartMode): NonNullable<Options["styles"]> {
-  const textColor = mode === "compact" ? "#8fa5c6" : "#b7c8df";
+  const textColor = mode === "compact" ? "#7890ad" : "#9cafc8";
   return {
+    grid: {
+      show: true,
+      horizontal: { show: true, style: "solid", size: 1, color: "rgba(133, 161, 194, .14)", dashedValue: [2, 6] },
+      vertical: { show: true, style: "solid", size: 1, color: "rgba(133, 161, 194, .12)", dashedValue: [2, 6] },
+    },
     candle: {
       bar: {
         upColor: KLINE_COLORS.up,
@@ -54,6 +59,8 @@ export function buildKlineStyles(mode: SectorKlineChartMode): NonNullable<Option
         downWickColor: KLINE_COLORS.down,
         noChangeWickColor: "#8595ae",
       },
+      priceMark: { show: false },
+      tooltip: { showRule: "always", showType: "standard" },
     },
     indicator: {
       ohlc: {
@@ -61,7 +68,6 @@ export function buildKlineStyles(mode: SectorKlineChartMode): NonNullable<Option
         downColor: KLINE_COLORS.down,
         noChangeColor: "#8595ae",
       },
-      // VOL 与 MACD 的柱图读取 indicator.bars，而非 ohlc；这里固定为 A 股红涨绿跌。
       bars: [{
         upColor: KLINE_COLORS.up,
         downColor: KLINE_COLORS.down,
@@ -73,6 +79,8 @@ export function buildKlineStyles(mode: SectorKlineChartMode): NonNullable<Option
         { color: KLINE_COLORS.ma20, size: 1 },
         { color: KLINE_COLORS.ma60, size: 1 },
       ],
+      lastValueMark: { show: false },
+      tooltip: { showRule: "always", showType: "standard" },
     },
     xAxis: { tickText: { color: textColor } },
     yAxis: { tickText: { color: textColor } },
@@ -134,7 +142,7 @@ export function buildSystemMacdOverride(): IndicatorCreate {
     figures: [
       { key: "dif", title: "DIF: ", type: "line", styles: () => ({ color: KLINE_COLORS.dif }) },
       { key: "dea", title: "DEA: ", type: "line", styles: () => ({ color: KLINE_COLORS.dea }) },
-      { key: "macd", title: "MACD: ", type: "bar", baseValue: 0 },
+      { key: "macd", title: "MACD: ", type: "bar", baseValue: 0, styles: ({ data }) => ({ color: ((data.current as SystemMacdValue | null)?.macd ?? 0) >= 0 ? KLINE_COLORS.up : KLINE_COLORS.down }) },
     ],
   };
 }
@@ -178,7 +186,7 @@ function normalizeVisibleCount(count: number): number {
  */
 export async function createSectorKlineRuntime(options: CreateSectorKlineRuntimeOptions): Promise<SectorKlineRuntime> {
   const klinecharts = await import("klinecharts");
-  ensureSystemMacdRegistered();
+  await ensureSystemMacdRegistered();
   const chart = klinecharts.init(options.container, {
     locale: "zh-CN",
     timezone: "Asia/Shanghai",
@@ -200,16 +208,19 @@ export async function createSectorKlineRuntime(options: CreateSectorKlineRuntime
     chart.createIndicator({ name: "BOLL", calcParams: [...INDICATOR_PARAMS.boll], paneId: CANDLE_PANE_ID }, true);
     const volumePaneId = chart.createIndicator({ name: "VOL", calcParams: [...INDICATOR_PARAMS.vol] });
     const macdPaneId = chart.createIndicator({ name: SYSTEM_MACD_NAME, calcParams: [...INDICATOR_PARAMS.macd] });
+    chart.overrideYAxis({ paneId: CANDLE_PANE_ID, gap: { top: 72, bottom: 12 } });
     chart.overrideIndicator(buildMaOverride());
     chart.overrideIndicator(buildBollOverride());
-    chart.overrideIndicator(buildSystemMacdOverride());
+    const macdValues = calculateSystemMacd(data.map((bar) => bar.close));
+    const macdMaxAbs = Math.max(1, ...macdValues.flatMap((value) => [Math.abs(value.dif), Math.abs(value.dea), Math.abs(value.macd)]));
+    chart.overrideIndicator({ ...buildSystemMacdOverride(), minValue: -macdMaxAbs, maxValue: macdMaxAbs });
 
     // 放大图给足副图高度以便读数；缩略图压缩副图，仍保留成交量和 MACD 的业务信息。
     if (volumePaneId) {
-      chart.setPaneOptions({ id: volumePaneId, height: options.mode === "expanded" ? 160 : 72, minHeight: 48 });
+      chart.setPaneOptions({ id: volumePaneId, height: options.mode === "expanded" ? 128 : 72, minHeight: 48 });
     }
     if (macdPaneId) {
-      chart.setPaneOptions({ id: macdPaneId, height: options.mode === "expanded" ? 180 : 88, minHeight: 56 });
+      chart.setPaneOptions({ id: macdPaneId, height: options.mode === "expanded" ? 152 : 88, minHeight: 56 });
     }
     const interactionEnabled = options.mode === "expanded";
     chart.setZoomEnabled(interactionEnabled);

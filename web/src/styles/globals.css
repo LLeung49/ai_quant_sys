@@ -168,6 +168,7 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
 .sector-kline-card--empty, .sector-kline-card--error { color: var(--muted); font-size: 11px; }
 .sector-kline-card--error button { margin-top: 8px; border: 0; background: transparent; color: var(--blue); font-size: 10px; }
 .sector-kline-chart-shell { position: relative; width: 100%; }
+.sector-kline-chart-shell--expanded { display: flex; flex-direction: column; flex: 1 1 auto; height: 100%; min-height: 0; }
 .sector-kline-chart--compact { width: 100%; height: 340px; min-height: 340px; }
 .sector-kline-chart--expanded { width: 100%; height: 100%; min-height: 0; }
 .sector-kline-chart__fallback { display: grid; position: absolute; inset: 0; place-items: center; border: 1px dashed rgba(255,114,133,.34); border-radius: 8px; background: rgba(8,18,32,.92); color: #cf93a1; font-size: 11px; }
@@ -189,7 +190,7 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
 .sector-kline-window-buttons { display: flex; gap: 6px; }
 .sector-kline-range-label { display: flex; align-items: center; gap: 8px; color: var(--subtle); font-size: 9px; }
 .sector-kline-range-label input { width: 130px; accent-color: var(--teal); }
-.sector-kline-modal__chart-wrap { min-height: 0; padding: 10px 14px 14px; }
+.sector-kline-modal__chart-wrap { display: flex; flex-direction: column; height: 100%; min-height: 0; box-sizing: border-box; padding: 10px 14px 14px; }
 @keyframes kline-shimmer { from { background-position: 100% 0; } to { background-position: -80% 0; } }
 
 .content-panel { padding: 18px; }
@@ -269,7 +270,7 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
   .sector-kline-window-buttons { justify-content: space-between; }
   .sector-kline-range-label { justify-content: space-between; }
   .sector-kline-range-label input { width: min(68vw, 260px); }
-  .sector-kline-modal__chart-wrap { flex: 1 0 min(420px, calc(100dvh - 216px)); min-height: min(420px, calc(100dvh - 216px)); padding: 6px 8px 10px; }
+  .sector-kline-modal__chart-wrap { flex: 1 1 min(420px, calc(100dvh - 216px)); height: auto; min-height: min(420px, calc(100dvh - 216px)); padding: 6px 8px 10px; }
   .sector-kline-chart--expanded { height: 100%; min-height: 0; }
   .disclaimer { display: grid; }
 }

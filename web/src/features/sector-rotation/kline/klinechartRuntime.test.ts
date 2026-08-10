@@ -33,7 +33,7 @@ function createFakeChart() {
   return {
     setDataLoader: vi.fn(), setSymbol: vi.fn(), setPeriod: vi.fn(),
     createIndicator: vi.fn((indicator: { name: string }) => indicator.name === "VOL" ? "volume_pane" : indicator.name === SYSTEM_MACD_NAME ? "macd_pane" : null),
-    overrideIndicator: vi.fn(), setZoomEnabled: vi.fn(), setScrollEnabled: vi.fn(),
+    overrideIndicator: vi.fn(), overrideYAxis: vi.fn(), setZoomEnabled: vi.fn(), setScrollEnabled: vi.fn(),
     setPaneOptions: vi.fn(),
     getSize: vi.fn(() => ({ width: 960, height: 400, left: 0, right: 960, top: 0, bottom: 400 })),
     setBarSpace: vi.fn(), scrollToRealTime: vi.fn(), resize: vi.fn(),
@@ -61,6 +61,8 @@ describe("createSectorKlineRuntime", () => {
     expect(chart.createIndicator).toHaveBeenCalledWith(expect.objectContaining({ name: SYSTEM_MACD_NAME, calcParams: [12, 26, 9] }));
     expect(chart.setPaneOptions).toHaveBeenCalledWith(expect.objectContaining({ id: "volume_pane", height: 72 }));
     expect(chart.setPaneOptions).toHaveBeenCalledWith(expect.objectContaining({ id: "macd_pane", height: 88 }));
+    expect(chart.overrideYAxis).toHaveBeenCalledWith({ paneId: "candle_pane", gap: { top: 72, bottom: 12 } });
+    expect(chart.overrideIndicator).toHaveBeenCalledWith(expect.objectContaining({ name: SYSTEM_MACD_NAME, minValue: expect.any(Number), maxValue: expect.any(Number) }));
     expect(chart.setZoomEnabled).toHaveBeenCalledWith(false);
     expect(chart.setScrollEnabled).toHaveBeenCalledWith(false);
 
@@ -105,6 +107,12 @@ describe("createSectorKlineRuntime", () => {
       throw new Error("板块 K 线样式必须返回局部配置对象，而非预注册样式名称");
     }
     expect(styles.candle?.bar).toMatchObject({ upColor: "#ff7285", downColor: "#37d6b0" });
+    expect(styles.grid?.horizontal).toMatchObject({ color: "rgba(133, 161, 194, .14)" });
+    expect(styles.grid?.vertical).toMatchObject({ color: "rgba(133, 161, 194, .12)" });
+    expect(styles.candle?.priceMark?.show).toBe(false);
+    expect(styles.candle?.tooltip).toMatchObject({ showRule: "always", showType: "standard" });
+    expect(styles.indicator?.lastValueMark?.show).toBe(false);
+    expect(styles.indicator?.tooltip).toMatchObject({ showRule: "always", showType: "standard" });
     expect(styles.indicator?.lines).toEqual(expect.arrayContaining([
       expect.objectContaining({ color: "#f0b65a" }),
       expect.objectContaining({ color: "#67a9ff" }),

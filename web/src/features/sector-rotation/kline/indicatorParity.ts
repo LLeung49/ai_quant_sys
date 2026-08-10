@@ -1,10 +1,5 @@
 /** 板块 K 线系统 MACD 适配器：锁定与 Python ``adjust=False`` 一致的计算口径。 */
-import {
-  getSupportedIndicators,
-  registerIndicator,
-  type IndicatorTemplate,
-  type KLineData,
-} from "klinecharts";
+import type { IndicatorTemplate, KLineData } from "klinecharts";
 import { INDICATOR_PARAMS } from "./sectorKlineConfig";
 
 /** 当内置 MACD 初始化方式与 Python 不一致时，系统注册的薄适配器名称。 */
@@ -105,7 +100,8 @@ const SYSTEM_MACD_TEMPLATE: IndicatorTemplate<SystemMacdValue, number> = {
  * 输出：无；首次调用注册 ``SYSTEM_MACD``，重复调用不改变全局注册表。
  * 异常：KLineChart 注册表不可用时由第三方库抛出原始异常。
  */
-export function ensureSystemMacdRegistered(): void {
+export async function ensureSystemMacdRegistered(): Promise<void> {
+  const { getSupportedIndicators, registerIndicator } = await import("klinecharts");
   if (!getSupportedIndicators().includes(SYSTEM_MACD_NAME)) {
     registerIndicator(SYSTEM_MACD_TEMPLATE);
   }

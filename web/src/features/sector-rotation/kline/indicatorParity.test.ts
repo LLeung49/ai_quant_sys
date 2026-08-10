@@ -53,9 +53,9 @@ describe("板块 K 线指标口径", () => {
     expect(SYSTEM_MACD_NAME).toBe("SYSTEM_MACD");
   });
 
-  it("幂等注册系统 MACD，并拒绝无效收盘价和周期参数", () => {
-    ensureSystemMacdRegistered();
-    ensureSystemMacdRegistered();
+  it("幂等注册系统 MACD，并拒绝无效收盘价和周期参数", async () => {
+    await ensureSystemMacdRegistered();
+    await ensureSystemMacdRegistered();
 
     expect(getSupportedIndicators().filter((name) => name === SYSTEM_MACD_NAME)).toHaveLength(1);
     expect(() => calculateSystemMacd([100, Number.NaN])).toThrow(RangeError);
@@ -89,7 +89,7 @@ describe("板块 K 线指标口径", () => {
       chart = init(host);
 
       expect(chart).not.toBeNull();
-      ensureSystemMacdRegistered();
+      await ensureSystemMacdRegistered();
       chart?.createIndicator("MACD");
       chart?.createIndicator(SYSTEM_MACD_NAME);
       const builtin = chart?.getIndicators({ name: "MACD" })[0];
