@@ -6,7 +6,23 @@ from decimal import Decimal
 import pandas as pd
 import pytest
 
-from morning_conference.sector_rotation2.backtest import build_forward_return_labels, evaluate_factor, make_forward_labels, rolling_oos_windows
+from morning_conference.sector_rotation2.backtest import build_forward_return_labels, evaluate_factor, evaluate_lifecycle_states, make_forward_labels, rolling_oos_windows
+
+
+def test_evaluate_lifecycle_states_reports_conditional_returns():
+    snapshots = pd.DataFrame([
+        ("2026-01-05", "A", "trending"), ("2026-01-05", "B", "exit"),
+        ("2026-01-06", "A", "trending"), ("2026-01-06", "B", "exit"),
+    ], columns=["as_of_date", "sector_name", "lifecycle_state"])
+    labels = pd.DataFrame([
+        ("2026-01-05", "A", "2026-01-06", 1, 0.02), ("2026-01-05", "B", "2026-01-06", 1, -0.01),
+        ("2026-01-06", "A", "2026-01-07", 1, 0.03), ("2026-01-06", "B", "2026-01-07", 1, -0.02),
+    ], columns=["as_of_date", "sector_name", "target_date", "horizon", "excess_return"])
+
+    result = evaluate_lifecycle_states(snapshots, labels, 1)
+
+    assert result.loc[result["lifecycle_state"] == "trending", "mean_excess_return"].iloc[0] == pytest.approx(0.025)
+    assert result.loc[result["lifecycle_state"] == "exit", "sample_count"].iloc[0] == 2
 
 
 def test_label_uses_fifth_future_trade_date():
@@ -204,8 +220,8 @@ def test_run_research_writes_alpha_decay_report(tmp_path, monkeypatch):
 
     dates = pd.bdate_range("2026-01-01", periods=3)
     snapshots = pd.DataFrame(
-        [(date, f"S{rank}", rank, "range") for date in dates for rank in range(10)],
-        columns=["as_of_date", "sector_name", "composite_score", "market_regime"],
+        [(date, f"S{rank}", rank, "range", "trending") for date in dates for rank in range(10)],
+        columns=["as_of_date", "sector_name", "composite_score", "market_regime", "lifecycle_state"],
     )
     labels = snapshots.rename(columns={"composite_score": "excess_return"}).drop(columns=["market_regime"])
     labels["horizon"] = 1
@@ -220,6 +236,7 @@ def test_run_research_writes_alpha_decay_report(tmp_path, monkeypatch):
     report = (tmp_path / "sector_rotation2_alpha_decay_2026-12-31.md").read_text(encoding="utf-8")
     assert "current_mapping" in report
     assert "不产生交易指令" in report
+    assert (tmp_path / "sector_rotation2_lifecycle_2026-12-31.csv").exists()
 
 
 def test_run_research_accepts_database_dictionary_rows(tmp_path, monkeypatch):

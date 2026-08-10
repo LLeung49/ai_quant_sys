@@ -11,6 +11,19 @@ from .data_loader import build_market_benchmark, load_sector_panel
 DEFAULT_ALPHA_DECAY_HORIZONS = (1, 2, 3, 5, 10, 20, 40)
 
 
+def evaluate_lifecycle_states(snapshots: pd.DataFrame, labels: pd.DataFrame, horizon: int) -> pd.DataFrame:
+    """按 Lifecycle 状态统计同一 Score 快照日可得的成熟前瞻超额收益。"""
+    selected = labels.loc[labels["horizon"] == horizon, ["as_of_date", "sector_name", "excess_return"]]
+    merged = snapshots[["as_of_date", "sector_name", "lifecycle_state"]].merge(
+        selected, on=["as_of_date", "sector_name"], how="inner"
+    ).dropna(subset=["lifecycle_state", "excess_return"])
+    if merged.empty:
+        return pd.DataFrame(columns=["lifecycle_state", "mean_excess_return", "sample_count"])
+    return merged.groupby("lifecycle_state", as_index=False).agg(
+        mean_excess_return=("excess_return", "mean"), sample_count=("excess_return", "size")
+    )
+
+
 def make_forward_labels(close: pd.Series, horizon: int, benchmark_close: pd.Series | None = None) -> pd.DataFrame:
     """用索引中的未来第 N 个交易日生成收益标签。
 

@@ -23,6 +23,7 @@ SNAPSHOT_COLUMNS = (
     "composite_score", "composite_rank", "phase_raw", "phase_confirmed",
     "phase_age", "phase_changed", "phase_confidence", "market_regime",
     "regime_multiplier", "rank_change_1d", "rank_change_5d", "top10_days_20",
+    "lifecycle_state", "lifecycle_action", "lifecycle_position_multiplier", "lifecycle_reason", "lifecycle_changed", "lifecycle_age",
 )
 # 同日同版本重跑需覆盖所有计算结果；唯一键标识列不可更新。
 SNAPSHOT_UPDATE_COLUMNS = tuple(column for column in SNAPSHOT_COLUMNS if column not in {
@@ -152,7 +153,7 @@ def load_previous_snapshots(as_of_date: str, sector_level: int, model_version: s
     """
     sql = """
         SELECT as_of_date, sector_name, phase_raw, phase_confirmed, phase_age,
-               velocity_score, composite_rank, top10_days_20
+               velocity_score, composite_rank, top10_days_20, lifecycle_state, lifecycle_age
         FROM sector_rotation_sector_daily_snapshot
         WHERE as_of_date < %s AND sector_level = %s AND model_version = %s
         ORDER BY as_of_date DESC
@@ -205,6 +206,8 @@ run_id，而不是新增重复快照。
             row.get("phase_confirmed"), row.get("phase_age"), row.get("phase_changed"),
             row.get("phase_confidence"), row.get("market_regime"), row.get("regime_multiplier"),
             row.get("rank_change_1d"), row.get("rank_change_5d"), row.get("top10_days_20"),
+            row.get("lifecycle_state"), row.get("lifecycle_action"), row.get("lifecycle_position_multiplier"),
+            row.get("lifecycle_reason"), row.get("lifecycle_changed"), row.get("lifecycle_age"),
         )
         # MySQL 的 DECIMAL/日期可为空；PyMySQL 不接受 float('nan')，必须显式传 None。
         rows.append(tuple(_mysql_nullable(value) for value in row_values))

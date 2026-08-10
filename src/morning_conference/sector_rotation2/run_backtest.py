@@ -13,6 +13,7 @@ from .backtest import (
     build_forward_return_labels,
     evaluate_by_regime,
     evaluate_factor,
+    evaluate_lifecycle_states,
     evaluate_rolling_oos,
     rolling_oos_windows,
     simulate_top_group_strategy,
@@ -73,6 +74,12 @@ def run_research(level: int, start_date: str, end_date: str, model_version: str,
     output = pd.DataFrame(metrics)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     output.to_csv(Path(output_dir) / f"sector_rotation2_research_{end_date}.csv", index=False, encoding="utf-8-sig")
+    lifecycle = pd.concat(
+        [evaluate_lifecycle_states(snapshots, labels, horizon).assign(horizon=horizon)
+         for horizon in DEFAULT_ALPHA_DECAY_HORIZONS],
+        ignore_index=True,
+    )
+    lifecycle.to_csv(Path(output_dir) / f"sector_rotation2_lifecycle_{end_date}.csv", index=False, encoding="utf-8-sig")
     pd.DataFrame(oos_windows).to_csv(Path(output_dir) / f"sector_rotation2_oos_windows_{end_date}.csv", index=False, encoding="utf-8-sig")
     _write_alpha_decay_report(output, level, start_date, end_date, model_version, Path(output_dir))
     return output

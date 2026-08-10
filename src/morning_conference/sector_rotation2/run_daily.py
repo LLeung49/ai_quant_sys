@@ -19,6 +19,7 @@ import pandas as pd
 from .config import DEFAULT_CONFIG, ModelConfig, config_hash
 from .data_loader import build_market_benchmark, load_historical_sector_panel, load_market_aggregates, load_sector_panel
 from .market_regime import classify_market_regime
+from .lifecycle import apply_lifecycle_v0
 from .report import write_daily_reports
 from .scoring import apply_phase_history, score_feature_panel
 from .sector_features import build_daily_feature_panel, build_historical_feature_panels
@@ -93,7 +94,7 @@ def run_one_date(level: int, as_of_date: str, config: ModelConfig = DEFAULT_CONF
         scored["composite_score"] = scored["base_score"] * regime.regime_multiplier
         previous = load_previous_snapshots(as_of_date=as_of_date, sector_level=level, model_version=config.model_version)
         LOGGER.info("步骤 5/7：完成横截面评分，读取到 %s 条历史快照", 0 if previous is None else len(previous))
-        final = apply_phase_history(scored, previous, config)
+        final = apply_lifecycle_v0(apply_phase_history(scored, previous, config), previous)
         LOGGER.info("步骤 6/7：写入 %s 条板块快照", len(final))
         persist_daily_snapshot(final, as_of_date, level, config.model_version, run_id)
         eligible_count = int(final["score_eligible"].sum())
