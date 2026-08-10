@@ -69,3 +69,28 @@ def apply_lifecycle_v0(frame: pd.DataFrame, previous: pd.DataFrame | None = None
         result.loc[sector_name, "lifecycle_changed"] = changed
         result.loc[sector_name, "lifecycle_age"] = 1 if changed else prior_age + 1
     return result
+
+
+def rebuild_lifecycle_history_v0(snapshots: pd.DataFrame) -> pd.DataFrame:
+    """按交易日顺序从历史快照重建 Lifecycle V0，避免使用未来状态。"""
+    required_columns = {"as_of_date", "sector_name"}
+    if not required_columns.issubset(snapshots):
+        raise ValueError("历史快照缺少 Lifecycle 重建所需键列")
+    dated = snapshots.copy()
+    dated["as_of_date"] = pd.to_datetime(dated["as_of_date"])
+    rows: list[pd.DataFrame] = []
+    previous: pd.DataFrame | None = None
+    for _, daily in dated.sort_values(["as_of_date", "sector_name"]).groupby("as_of_date", sort=True):
+        evaluated = apply_lifecycle_v0(daily.set_index("sector_name", drop=False), previous)
+        rows.append(evaluated.reset_index(drop=True))
+        previous = evaluated.reset_index(drop=True)
+    if not rows:
+        return dated.assign(
+            lifecycle_state=pd.Series(dtype=str),
+            lifecycle_action=pd.Series(dtype=str),
+            lifecycle_position_multiplier=pd.Series(dtype=float),
+            lifecycle_reason=pd.Series(dtype=str),
+            lifecycle_changed=pd.Series(dtype=bool),
+            lifecycle_age=pd.Series(dtype=int),
+        )
+    return pd.concat(rows, ignore_index=True)

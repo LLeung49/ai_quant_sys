@@ -6,7 +6,7 @@ from decimal import Decimal
 import pandas as pd
 import pytest
 
-from morning_conference.sector_rotation2.backtest import build_forward_return_labels, evaluate_factor, evaluate_lifecycle_states, make_forward_labels, rolling_oos_windows
+from morning_conference.sector_rotation2.backtest import build_forward_return_labels, evaluate_factor, evaluate_lifecycle_score_bucket_oos, evaluate_lifecycle_score_buckets, evaluate_lifecycle_states, make_forward_labels, rolling_oos_windows
 
 
 def test_evaluate_lifecycle_states_reports_conditional_returns():
@@ -23,6 +23,105 @@ def test_evaluate_lifecycle_states_reports_conditional_returns():
 
     assert result.loc[result["lifecycle_state"] == "trending", "mean_excess_return"].iloc[0] == pytest.approx(0.025)
     assert result.loc[result["lifecycle_state"] == "exit", "sample_count"].iloc[0] == 2
+
+
+def test_evaluate_lifecycle_score_buckets_controls_for_daily_score_quintile():
+    """Lifecycle 条件收益必须在同日 Score 五分位内比较，而不是跨 Score 混合。"""
+    snapshots = pd.DataFrame(
+        [("2026-01-05", f"S{rank}", rank, "trending" if rank == 8 else "crowded") for rank in range(10)],
+        columns=["as_of_date", "sector_name", "composite_score", "lifecycle_state"],
+    )
+    labels = pd.DataFrame(
+        [("2026-01-05", f"S{rank}", "2026-01-06", 1, 0.03 if rank == 8 else 0.01) for rank in range(10)],
+        columns=["as_of_date", "sector_name", "target_date", "horizon", "excess_return"],
+    )
+
+    result = evaluate_lifecycle_score_buckets(snapshots, labels, 1)
+
+    trending = result.loc[(result["score_bucket"] == 5) & (result["lifecycle_state"] == "trending")].iloc[0]
+    crowded = result.loc[(result["score_bucket"] == 5) & (result["lifecycle_state"] == "crowded")].iloc[0]
+    assert trending["mean_excess_return"] == pytest.approx(0.03)
+    assert crowded["mean_excess_return"] == pytest.approx(0.01)
+    assert trending["sample_count"] == 1
+
+
+def test_lifecycle_score_bucket_oos_uses_validation_dates_only():
+    """Lifecycle 条件收益的样本外统计只能使用每个窗口的验证日期。"""
+    dates = pd.bdate_range("2026-01-05", periods=4)
+    snapshots = pd.DataFrame(
+        [(date, f"S{rank}", rank, "trending" if rank == 8 else "crowded") for date in dates for rank in range(10)],
+        columns=["as_of_date", "sector_name", "composite_score", "lifecycle_state"],
+    )
+    labels = pd.DataFrame(
+        [(date, f"S{rank}", date + pd.offsets.BDay(1), 1, 0.03 if date == dates[2] and rank == 8 else 0.01)
+         for date in dates for rank in range(10)],
+        columns=["as_of_date", "sector_name", "target_date", "horizon", "excess_return"],
+    )
+    windows = [{
+        "train_start": dates[0], "train_end": dates[1],
+        "validation_start": dates[2], "validation_end": dates[3],
+    }]
+
+    result = evaluate_lifecycle_score_bucket_oos(snapshots, labels, 1, windows)
+
+    trending = result.loc[(result["score_bucket"] == 5) & (result["lifecycle_state"] == "trending")].iloc[0]
+    assert trending["window_name"] == "oos_001"
+    assert trending["sample_count"] == 2
+    assert trending["mean_excess_return"] == pytest.approx(0.02)
+
+
+def test_run_research_writes_lifecycle_score_bucket_oos_rows(tmp_path, monkeypatch):
+    """研究入口必须把 Lifecycle 受控条件收益的 OOS 行写入独立文件。"""
+    from morning_conference.sector_rotation2 import run_backtest
+
+    dates = pd.bdate_range("2026-01-05", periods=4)
+    snapshots = pd.DataFrame(
+        [(date, f"S{rank}", rank, "range", "trending" if rank == 8 else "crowded") for date in dates for rank in range(10)],
+        columns=["as_of_date", "sector_name", "composite_score", "market_regime", "lifecycle_state"],
+    )
+    labels = snapshots.rename(columns={"composite_score": "excess_return"}).drop(columns=["market_regime", "lifecycle_state"])
+    labels["horizon"] = 1
+    labels["target_date"] = labels["as_of_date"] + pd.offsets.BDay(1)
+    windows = [{
+        "train_start": dates[0], "train_end": dates[1],
+        "validation_start": dates[2], "validation_end": dates[3],
+    }]
+    monkeypatch.setattr(run_backtest, "build_forward_return_labels", lambda *_: labels)
+    monkeypatch.setattr(run_backtest, "persist_forward_returns", lambda *_: 0)
+    monkeypatch.setattr(run_backtest, "execute_query", lambda *_: snapshots)
+    monkeypatch.setattr(run_backtest, "rolling_oos_windows", lambda _: windows)
+
+    run_backtest.run_research(2, "2026-01-05", "2026-01-08", "v1", tmp_path)
+
+    output = pd.read_csv(tmp_path / "sector_rotation2_lifecycle_score_buckets_2026-01-08.csv")
+    assert "oos_001" in set(output["window_name"].dropna())
+
+
+def test_run_research_rebuilds_lifecycle_when_database_has_raw_fields_only(tmp_path, monkeypatch):
+    """尚未迁移 Lifecycle 派生列时，P2 研究可从历史原始快照即时重建状态。"""
+    from morning_conference.sector_rotation2 import run_backtest
+
+    dates = pd.bdate_range("2026-01-05", periods=2)
+    snapshots = pd.DataFrame(
+        [(date, f"S{rank}", rank, "range", True, "accel_up", "neutral", 0.3, 1, 0)
+         for date in dates for rank in range(10)],
+        columns=[
+            "as_of_date", "sector_name", "composite_score", "market_regime", "score_eligible",
+            "phase_confirmed", "phase_raw", "participation_score", "rank_change_1d", "top10_days_20",
+        ],
+    )
+    labels = snapshots.rename(columns={"composite_score": "excess_return"}).loc[:, ["as_of_date", "sector_name", "excess_return"]]
+    labels["horizon"] = 1
+    labels["target_date"] = labels["as_of_date"] + pd.offsets.BDay(1)
+    monkeypatch.setattr(run_backtest, "build_forward_return_labels", lambda *_: labels)
+    monkeypatch.setattr(run_backtest, "persist_forward_returns", lambda *_: 0)
+    monkeypatch.setattr(run_backtest, "execute_query", lambda *_: snapshots)
+    monkeypatch.setattr(run_backtest, "rolling_oos_windows", lambda _: [])
+
+    run_backtest.run_research(2, "2026-01-05", "2026-01-06", "v1", tmp_path)
+
+    lifecycle = pd.read_csv(tmp_path / "sector_rotation2_lifecycle_2026-01-06.csv")
+    assert "trending" in set(lifecycle["lifecycle_state"])
 
 
 def test_label_uses_fifth_future_trade_date():
@@ -237,6 +336,7 @@ def test_run_research_writes_alpha_decay_report(tmp_path, monkeypatch):
     assert "current_mapping" in report
     assert "不产生交易指令" in report
     assert (tmp_path / "sector_rotation2_lifecycle_2026-12-31.csv").exists()
+    assert (tmp_path / "sector_rotation2_lifecycle_score_buckets_2026-12-31.csv").exists()
 
 
 def test_run_research_accepts_database_dictionary_rows(tmp_path, monkeypatch):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pandas as pd
 
-from morning_conference.sector_rotation2.lifecycle import apply_lifecycle_v0
+from morning_conference.sector_rotation2.lifecycle import apply_lifecycle_v0, rebuild_lifecycle_history_v0
 
 
 def test_lifecycle_v0_prioritizes_exit_over_all_positive_signals():
@@ -109,3 +109,23 @@ def test_lifecycle_v0_records_state_transition_and_age_from_prior_snapshot():
     assert result.loc["changed", "lifecycle_age"] == 1
     assert bool(result.loc["continued", "lifecycle_changed"]) is False
     assert result.loc["continued", "lifecycle_age"] == 4
+
+
+def test_rebuild_lifecycle_history_preserves_date_order_and_state_age():
+    """历史重建必须逐日传递前一日状态，不能把后续状态泄漏给过去。"""
+    snapshots = pd.DataFrame(
+        [
+            ("2026-01-05", "A", True, "accel_up", "neutral", 0.2, 1, 0),
+            ("2026-01-06", "A", True, "accel_up", "neutral", 0.3, 1, 0),
+        ],
+        columns=[
+            "as_of_date", "sector_name", "score_eligible", "phase_confirmed", "phase_raw",
+            "participation_score", "rank_change_1d", "top10_days_20",
+        ],
+    )
+
+    result = rebuild_lifecycle_history_v0(snapshots)
+
+    assert result["as_of_date"].tolist() == [pd.Timestamp("2026-01-05"), pd.Timestamp("2026-01-06")]
+    assert result["lifecycle_state"].tolist() == ["trending", "trending"]
+    assert result["lifecycle_age"].tolist() == [1, 2]
