@@ -277,7 +277,8 @@ def rebuild_one_sector(sector_name: str, sector_level: int,
 
 def rebuild_all_sectors(level: int = 2,
                          days: Optional[int] = None,
-                         full: bool = False) -> int:
+                         full: bool = False,
+                         start_date: Optional[str] = None) -> int:
     """
     重算所有板块的 trade_sector_daily
 
@@ -285,6 +286,7 @@ def rebuild_all_sectors(level: int = 2,
         level: 1=申万一级, 2=申万二级 (默认 2)
         days:  增量重算最近 N 个交易日 (含 prev close 校正)
         full:  True=全量回填所有历史交易日
+        start_date: 全量回填起始日 YYYYMMDD；为空时回填全部历史
     返回: 累计写入行数
     """
     print(f"\n{'='*70}")
@@ -299,9 +301,15 @@ def rebuild_all_sectors(level: int = 2,
 
     if full:
         target_dates = all_dates
+        if start_date:
+            target_dates = [d for d in all_dates if d.strftime("%Y%m%d") >= start_date]
     else:
         n = days or 30
         target_dates = all_dates[-n:]
+
+    if not target_dates:
+        print(f"[INFO] No trade dates on or after {start_date}; nothing to rebuild")
+        return 0
 
     sectors = list_sectors_from_db(level=level)
     print(f"[INDEX] 待重算板块: {len(sectors)}, 日期范围: "

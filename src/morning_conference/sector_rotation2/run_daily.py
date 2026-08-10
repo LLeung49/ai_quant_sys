@@ -1,4 +1,12 @@
-"""板块轮动的每日和指定区间回填入口。"""
+"""板块轮动的每日和指定区间回填入口。
+
+
+$env:PYTHONPATH = "src"
+D:\Programs\Python\Python313\python.exe -m morning_conference.sector_rotation2.run_daily --level 1 --backfill-start 2026-07-10 --backfill-end 2026-08-06
+D:\Programs\Python\Python313\python.exe -m morning_conference.sector_rotation2.run_daily --level 1 --as-of-date 2026-08-06
+D:\Programs\Python\Python313\python.exe -m morning_conference.sector_rotation2.run_daily --level 2 --as-of-date 2026-08-06
+
+"""
 from __future__ import annotations
 
 import argparse

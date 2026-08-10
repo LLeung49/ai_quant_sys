@@ -1,7 +1,7 @@
 # Sector Rotation2 单日验证与断点 Review 指南
 
 > 验证对象：`2026-08-04`、申万二级行业（`--level 2`）、模型版本 `v1`。
->
+> 
 > 目标：按“数据源 → 特征 → 市场状态 → 评分/phase → 落库 → 输出 → 标签与研究”的顺序，既验证业务口径，也理解代码的输入、处理和输出。首次仅运行单日；确认无误后再进入历史回填。
 
 ## 0. 验证原则与边界
@@ -72,17 +72,17 @@ WHERE trade_date = '2026-08-04';
 
 使用 PyCharm 或 VS Code 以仓库根目录为工作目录，环境变量设置为 `PYTHONPATH=src`。建议按以下顺序设置断点：
 
-| 顺序 | 文件 / 方法 | 要观察的变量 | 业务验证点 |
-| --- | --- | --- | --- |
-| 1 | `run_daily.py / run_one_date` | `level`、`as_of_date`、`run_id` | 本次确实是 level=2、日期为 2026-08-04，且运行 ID 唯一。 |
-| 2 | `data_loader.py / load_sector_panel` | 每个板块的行数、`close`、`amount` | 只读取上游数据；日期升序，无重复日期、负成交额或非正收盘价。 |
-| 3 | `data_loader.py / build_market_benchmark` | `normalized`、输出 `close/amount` | 每个板块先除以自身首日收盘价，再等权平均为市场价格基准；成交额为各板块求和。 |
-| 4 | `sector_features.py / build_daily_feature_panel` | 单板块 feature 行 | 核对 RS、均线距离、RVOL、份额冲量与广度是否符合人工计算。 |
-| 5 | `market_regime.py / classify_market_regime` | `ma20`、`ma60`、广度、限涨跌、结果 | 按 `risk_off → high_volatility → risk_on → range` 的优先顺序判断。 |
-| 6 | `scoring.py / score_feature_panel` | 四类 `*_score`、`base_score`、`composite_rank` | 分数为横截面标准化；排名按 `base_score`，不能由 phase 改变。 |
-| 7 | `scoring.py / apply_phase_history` | `phase_raw`、`phase_confirmed`、`phase_age` | 新状态遵循进入/保持迟滞和三日两次确认；首次运行通常无历史确认。 |
-| 8 | `snapshot_store.py / persist_daily_snapshot` | `rows`、SQL、受影响行数 | 所有值参数化写入；唯一键重跑时 upsert，不重复插入。 |
-| 9 | `report.py / write_daily_reports` | `final`、输出文件路径 | 仅在快照成功提交后生成文件。 |
+| 顺序  | 文件 / 方法                                          | 要观察的变量                                     | 业务验证点                                                     |
+| --- | ------------------------------------------------ | ------------------------------------------ | --------------------------------------------------------- |
+| 1   | `run_daily.py / run_one_date`                    | `level`、`as_of_date`、`run_id`              | 本次确实是 level=2、日期为 2026-08-04，且运行 ID 唯一。                   |
+| 2   | `data_loader.py / load_sector_panel`             | 每个板块的行数、`close`、`amount`                   | 只读取上游数据；日期升序，无重复日期、负成交额或非正收盘价。                            |
+| 3   | `data_loader.py / build_market_benchmark`        | `normalized`、输出 `close/amount`             | 每个板块先除以自身首日收盘价，再等权平均为市场价格基准；成交额为各板块求和。                    |
+| 4   | `sector_features.py / build_daily_feature_panel` | 单板块 feature 行                              | 核对 RS、均线距离、RVOL、份额冲量与广度是否符合人工计算。                          |
+| 5   | `market_regime.py / classify_market_regime`      | `ma20`、`ma60`、广度、限涨跌、结果                    | 按 `risk_off → high_volatility → risk_on → range` 的优先顺序判断。 |
+| 6   | `scoring.py / score_feature_panel`               | 四类 `*_score`、`base_score`、`composite_rank` | 分数为横截面标准化；排名按 `base_score`，不能由 phase 改变。                  |
+| 7   | `scoring.py / apply_phase_history`               | `phase_raw`、`phase_confirmed`、`phase_age`  | 新状态遵循进入/保持迟滞和三日两次确认；首次运行通常无历史确认。                          |
+| 8   | `snapshot_store.py / persist_daily_snapshot`     | `rows`、SQL、受影响行数                           | 所有值参数化写入；唯一键重跑时 upsert，不重复插入。                             |
+| 9   | `report.py / write_daily_reports`                | `final`、输出文件路径                             | 仅在快照成功提交后生成文件。                                            |
 
 ## 3. 执行单日计算
 
@@ -97,6 +97,8 @@ python -m morning_conference.sector_rotation2.run_daily `
   --model-version v1 `
   --output outputs\sector_rotation2_validation_20260804
 ```
+
+`python -m morning_conference.sector_rotation2.run_daily  --level 2  --as-of-date 2026-08-05  --model-version v1  --output outputs\sector_rotation2_validation_20260805`
 
 验证标准：
 

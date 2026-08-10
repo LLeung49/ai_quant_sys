@@ -6,13 +6,21 @@
 2. 在仓库根目录启动只读 API：
 
 ```powershell
+cd D:\aiQuant\ai_quant_sys
 $env:PYTHONPATH = 'src'
 uvicorn morning_conference.sector_rotation2.api.app:create_app --factory --host 127.0.0.1 --port 8000
 ```
+-验证健康检查：
+  Invoke-RestMethod http://127.0.0.1:8000/healthz
+-预期：
+  {"status":"ok"}
+-验证数据接口：
+  http://127.0.0.1:8000/api/v1/sector-rotation/available-dates?level=2&model_version=v1
 
 3. 新开 PowerShell，进入本目录并启动前端：
 
 ```powershell
+cd D:\aiQuant\ai_quant_sys\web
 npm run dev
 ```
 

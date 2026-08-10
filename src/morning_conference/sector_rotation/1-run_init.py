@@ -54,7 +54,7 @@ def main():
     parser.add_argument("--skip-kline",  action="store_true", help="跳过 K 线下载")
     parser.add_argument("--skip-index",  action="store_true", help="跳过板块指数合成")
     parser.add_argument("--start", default=None,
-                        help="K 线同步起始日 YYYYMMDD, 默认读 .env 的 SW_INIT_START_DATE")
+                        help="初始化起始日 YYYYMMDD；同时限制 K 线下载和板块指数回填")
     parser.add_argument("--level", type=int, choices=[1, 2], default=2,
                         help="板块指数级别 (默认 2 申万二级)")
     args = parser.parse_args()
@@ -79,7 +79,7 @@ def main():
         print("\n[SKIP] 跳过 K 线下载\n")
 
     if not args.skip_index:
-        rebuild_all_sectors(level=args.level, full=True)
+        rebuild_all_sectors(level=args.level, full=True, start_date=args.start)
     else:
         print("\n[SKIP] 跳过板块指数合成\n")
 
