@@ -88,6 +88,93 @@ def rolling_oos_windows(trade_dates: pd.DatetimeIndex, train_days: int = 252, va
     return windows
 
 
+def expanding_outer_windows(
+    trade_dates: pd.DatetimeIndex,
+    train_days: int = 504,
+    validation_days: int = 126,
+    step_days: int = 126,
+) -> list[dict[str, pd.Timestamp]]:
+    """生成训练起点固定、验证区间不重叠的扩展外层窗口。"""
+    dates = pd.DatetimeIndex(trade_dates).drop_duplicates().sort_values()
+    windows = []
+    for validation_start in range(train_days, len(dates) - validation_days + 1, step_days):
+        windows.append({
+            "train_start": dates[0],
+            "train_end": dates[validation_start - 1],
+            "validation_start": dates[validation_start],
+            "validation_end": dates[validation_start + validation_days - 1],
+        })
+    return windows
+
+
+def select_inner_candidate(
+    snapshots: pd.DataFrame,
+    labels: pd.DataFrame,
+    candidates: tuple[str, ...],
+    horizons: tuple[int, ...],
+    inner_windows: list[dict[str, pd.Timestamp]],
+    cost_bps: float = 10,
+) -> dict[str, object]:
+    """仅依据内层滚动窗口的冻结 Gate 选择一个候选与期限。"""
+    passing: list[dict[str, object]] = []
+    for candidate_index, candidate in enumerate(candidates):
+        for horizon in horizons:
+            metrics = evaluate_rolling_oos(snapshots, labels, candidate, horizon, inner_windows)
+            if metrics.empty:
+                continue
+            rank_ic = pd.to_numeric(metrics["rank_ic_mean"], errors="coerce").dropna()
+            top_group = pd.to_numeric(metrics["top_group_return"], errors="coerce").dropna()
+            if rank_ic.empty or top_group.empty:
+                continue
+            strategy = simulate_top_group_strategy(snapshots, labels, candidate, rebalance_every=1, cost_bps=cost_bps)
+            mean_rank_ic = float(rank_ic.mean())
+            median_rank_ic = float(rank_ic.median())
+            positive_rank_ic_share = float((rank_ic > 0).mean())
+            mean_top_group_return = float(top_group.mean())
+            net_return = float(strategy["net_return"])
+            selected = (
+                mean_rank_ic > 0
+                and median_rank_ic > 0
+                and positive_rank_ic_share > 0.5
+                and mean_top_group_return > 0
+                and net_return > 0
+            )
+            if selected:
+                passing.append({
+                    "selected": True,
+                    "candidate": candidate,
+                    "horizon": horizon,
+                    "mean_rank_ic": mean_rank_ic,
+                    "median_rank_ic": median_rank_ic,
+                    "positive_rank_ic_share": positive_rank_ic_share,
+                    "mean_top_group_return": mean_top_group_return,
+                    "net_return": net_return,
+                    "candidate_index": candidate_index,
+                })
+    if not passing:
+        return {
+            "selected": False,
+            "candidate": None,
+            "horizon": None,
+            "mean_rank_ic": np.nan,
+            "median_rank_ic": np.nan,
+            "positive_rank_ic_share": np.nan,
+            "mean_top_group_return": np.nan,
+            "net_return": np.nan,
+        }
+    winner = sorted(
+        passing,
+        key=lambda row: (
+            -float(row["median_rank_ic"]),
+            -float(row["mean_rank_ic"]),
+            -float(row["net_return"]),
+            int(row["candidate_index"]),
+            int(row["horizon"]),
+        ),
+    )[0]
+    return {key: value for key, value in winner.items() if key != "candidate_index"}
+
+
 def evaluate_rolling_oos(
     snapshots: pd.DataFrame,
     labels: pd.DataFrame,
