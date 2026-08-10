@@ -8,6 +8,9 @@ from scipy.stats import spearmanr
 from .data_loader import build_market_benchmark, load_sector_panel
 
 
+DEFAULT_ALPHA_DECAY_HORIZONS = (1, 2, 3, 5, 10, 20, 40)
+
+
 def make_forward_labels(close: pd.Series, horizon: int, benchmark_close: pd.Series | None = None) -> pd.DataFrame:
     """用索引中的未来第 N 个交易日生成收益标签。
 
@@ -33,7 +36,12 @@ def make_forward_labels(close: pd.Series, horizon: int, benchmark_close: pd.Seri
     return pd.DataFrame(rows, columns=["as_of_date", "target_date", "sector_return", "benchmark_return", "excess_return"]).set_index("as_of_date")
 
 
-def build_forward_return_labels(level: int, start_date: str, end_date: str, horizons: tuple[int, ...] = (5, 10)) -> pd.DataFrame:
+def build_forward_return_labels(
+    level: int,
+    start_date: str,
+    end_date: str,
+    horizons: tuple[int, ...] = DEFAULT_ALPHA_DECAY_HORIZONS,
+) -> pd.DataFrame:
     """从只读板块历史构建指定区间内所有已成熟的前瞻收益标签。
 
     参数:
@@ -78,6 +86,106 @@ def rolling_oos_windows(trade_dates: pd.DatetimeIndex, train_days: int = 252, va
             "validation_start": dates[start + train_days], "validation_end": dates[start + train_days + validation_days - 1],
         })
     return windows
+
+
+def evaluate_rolling_oos(
+    snapshots: pd.DataFrame,
+    labels: pd.DataFrame,
+    factor: str,
+    horizon: int,
+    windows: list[dict[str, pd.Timestamp]],
+) -> pd.DataFrame:
+    """仅在每个滚动窗口的验证期计算已冻结因子的研究指标。"""
+    rows = []
+    dated_snapshots = snapshots.copy()
+    dated_snapshots["as_of_date"] = pd.to_datetime(dated_snapshots["as_of_date"])
+    for index, window in enumerate(windows, start=1):
+        validation = dated_snapshots.loc[
+            dated_snapshots["as_of_date"].between(window["validation_start"], window["validation_end"])
+        ]
+        metrics = evaluate_factor(validation, labels, factor, horizon)
+        rows.append({
+            **window,
+            "window_name": f"oos_{index:03d}",
+            "factor": factor,
+            "horizon": horizon,
+            **metrics,
+        })
+    return pd.DataFrame(rows)
+
+
+def simulate_top_group_strategy(
+    snapshots: pd.DataFrame,
+    one_day_labels: pd.DataFrame,
+    factor: str,
+    rebalance_every: int,
+    cost_bps: float,
+) -> dict[str, float]:
+    """用前一交易日 Score 选择 Top 五分位，并模拟下一交易日的成本后收益。"""
+    if rebalance_every <= 0:
+        raise ValueError("rebalance_every 必须为正整数")
+    if cost_bps < 0:
+        raise ValueError("cost_bps 不能为负数")
+    _validate_unique(snapshots, "快照")
+    _validate_unique(one_day_labels, "标签")
+    if factor not in snapshots:
+        raise ValueError(f"快照缺少因子列: {factor}")
+
+    signals = snapshots[["as_of_date", "sector_name", factor]].copy()
+    signals["as_of_date"] = pd.to_datetime(signals["as_of_date"])
+    labels = one_day_labels.loc[one_day_labels["horizon"] == 1, ["as_of_date", "sector_name", "excess_return"]].copy()
+    labels["as_of_date"] = pd.to_datetime(labels["as_of_date"])
+    signal_dates = pd.DatetimeIndex(signals["as_of_date"].unique()).sort_values()
+    active_members: set[str] = set()
+    gross_returns: list[float] = []
+    net_returns: list[float] = []
+    turnover_values: list[float] = []
+    transaction_cost = 0.0
+
+    for execution_index, execution_date in enumerate(sorted(labels["as_of_date"].unique())):
+        prior_dates = signal_dates[signal_dates < execution_date]
+        if prior_dates.empty:
+            continue
+        if execution_index % rebalance_every == 0 or not active_members:
+            signal = signals.loc[signals["as_of_date"] == prior_dates[-1]]
+            if signal[factor].nunique() < 5:
+                continue
+            buckets = pd.qcut(signal[factor], 5, labels=False, duplicates="drop")
+            next_members = set(signal.loc[buckets == buckets.max(), "sector_name"])
+            turnover = 1.0 if not active_members else 1.0 - len(active_members & next_members) / len(active_members | next_members)
+            active_members = next_members
+        else:
+            turnover = 0.0
+        day_labels = labels.loc[(labels["as_of_date"] == execution_date) & labels["sector_name"].isin(active_members)]
+        if day_labels.empty:
+            continue
+        gross_return = float(day_labels["excess_return"].mean())
+        cost = turnover * cost_bps / 10_000
+        gross_returns.append(gross_return)
+        net_returns.append(gross_return - cost)
+        turnover_values.append(turnover)
+        transaction_cost += cost
+
+    if not net_returns:
+        return {
+            "gross_return": np.nan, "net_return": np.nan, "average_turnover": np.nan,
+            "transaction_cost": np.nan, "max_drawdown": np.nan, "downside_volatility": np.nan, "cvar_5": np.nan,
+        }
+    gross_nav = pd.Series(gross_returns).add(1.0).cumprod()
+    net_nav = pd.Series(net_returns).add(1.0).cumprod()
+    drawdown = net_nav / net_nav.cummax() - 1.0
+    net_array = np.array(net_returns)
+    downside = np.minimum(net_array, 0.0)
+    cvar_cutoff = np.quantile(net_array, 0.05)
+    return {
+        "gross_return": float(gross_nav.iloc[-1] - 1.0),
+        "net_return": float(net_nav.iloc[-1] - 1.0),
+        "average_turnover": float(np.mean(turnover_values)),
+        "transaction_cost": float(transaction_cost),
+        "max_drawdown": float(drawdown.min()),
+        "downside_volatility": float(np.std(downside, ddof=0) * np.sqrt(252)),
+        "cvar_5": float(net_array[net_array <= cvar_cutoff].mean()),
+    }
 
 
 def evaluate_by_regime(snapshots: pd.DataFrame, labels: pd.DataFrame, factor: str, horizon: int) -> pd.DataFrame:
@@ -131,10 +239,10 @@ def evaluate_factor(snapshots: pd.DataFrame, labels: pd.DataFrame, factor: str, 
         包含 Pearson/Rank IC 均值、ICIR、五分组收益、Top-Bottom、样本数的字典。
     """
     _validate_unique(snapshots, "快照")
-    _validate_unique(labels, "标签")
     if factor not in snapshots:
         raise ValueError(f"快照缺少因子列: {factor}")
     selected = labels.loc[labels["horizon"] == horizon].copy()
+    _validate_unique(selected, "标签")
     if (pd.to_datetime(selected["target_date"]) <= pd.to_datetime(selected["as_of_date"])).any():
         raise ValueError("标签 target_date 必须晚于 as_of_date")
     merged = snapshots[["as_of_date", "sector_name", factor]].merge(

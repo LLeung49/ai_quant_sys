@@ -8,12 +8,20 @@ import pandas as pd
 
 from data_ingestion.db_config import execute_query
 
-from .backtest import build_forward_return_labels, evaluate_by_regime, evaluate_factor, rolling_oos_windows
+from .backtest import (
+    DEFAULT_ALPHA_DECAY_HORIZONS,
+    build_forward_return_labels,
+    evaluate_by_regime,
+    evaluate_factor,
+    evaluate_rolling_oos,
+    rolling_oos_windows,
+    simulate_top_group_strategy,
+)
 from .snapshot_store import persist_forward_returns
 
 
 def run_research(level: int, start_date: str, end_date: str, model_version: str, output_dir: str | Path) -> pd.DataFrame:
-    """构建标签、持久化并对 composite_score 输出 5/10 日基础评估。
+    """构建标签、持久化并输出 Score Alpha Decay 研究结果。
 
     参数:
         level: 板块层级。
@@ -32,22 +40,84 @@ def run_research(level: int, start_date: str, end_date: str, model_version: str,
         (level, model_version, start_date, end_date),
     )
     metrics = []
-    for horizon in (5, 10):
+    for horizon in DEFAULT_ALPHA_DECAY_HORIZONS:
         result = evaluate_factor(snapshots, labels, "composite_score", horizon)
-        result["horizon"] = horizon
+        result.update({"horizon": horizon, "factor": "composite_score", "window_name": "full_sample"})
         metrics.append(result)
         regime_metrics = evaluate_by_regime(snapshots, labels, "composite_score", horizon)
         if not regime_metrics.empty:
             regime_metrics["horizon"] = horizon
+            regime_metrics["factor"] = "composite_score"
             regime_metrics["window_name"] = "regime_bucket"
             metrics.extend(regime_metrics.to_dict("records"))
     # 固化滚动样本外窗口边界，后续报告可据此复现验证区间，且不自动调权。
     oos_windows = rolling_oos_windows(pd.to_datetime(snapshots["as_of_date"].unique())) if not snapshots.empty else []
+    for horizon in DEFAULT_ALPHA_DECAY_HORIZONS:
+        if oos_windows:
+            metrics.extend(
+                evaluate_rolling_oos(snapshots, labels, "composite_score", horizon, oos_windows).to_dict("records")
+            )
+    for rebalance_every in (1, 2, 3, 5):
+        for cost_bps in (0, 5, 10, 20):
+            metrics.append({
+                "window_name": "cost_sensitivity",
+                "factor": "composite_score",
+                "horizon": 1,
+                "rebalance_every": rebalance_every,
+                "cost_bps": cost_bps,
+                **simulate_top_group_strategy(snapshots, labels, "composite_score", rebalance_every, cost_bps),
+            })
     output = pd.DataFrame(metrics)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     output.to_csv(Path(output_dir) / f"sector_rotation2_research_{end_date}.csv", index=False, encoding="utf-8-sig")
     pd.DataFrame(oos_windows).to_csv(Path(output_dir) / f"sector_rotation2_oos_windows_{end_date}.csv", index=False, encoding="utf-8-sig")
+    _write_alpha_decay_report(output, level, start_date, end_date, model_version, Path(output_dir))
     return output
+
+
+def _write_alpha_decay_report(
+    metrics: pd.DataFrame,
+    level: int,
+    start_date: str,
+    end_date: str,
+    model_version: str,
+    output_dir: Path,
+) -> None:
+    """将研究指标输出为披露数据限制的 Markdown 报告。"""
+    full_sample = metrics.loc[metrics.get("window_name", pd.Series(dtype=str)) == "full_sample"]
+    lines = [
+        "# Sector Rotation2 Score Alpha Decay 研究报告",
+        "",
+        "## 运行口径",
+        "",
+        f"- 模型版本：`{model_version}`",
+        f"- 行业层级：`{level}`",
+        f"- 研究区间：`{start_date}` 至 `{end_date}`",
+        "- 预测期限：`1/2/3/5/10/20/40` 个交易日",
+        "- 成员映射口径：`current_mapping`；历史结果未使用严格历史行业成分。",
+        "- 本报告仅用于研究，不产生交易指令，也不构成收益承诺。",
+        "",
+        "## 全样本 Score 指标",
+        "",
+    ]
+    if full_sample.empty:
+        lines.append("无可评估的成熟标签。")
+    else:
+        lines.extend(["| 期限 | Rank IC | ICIR | Top-Bottom | 样本数 |", "| --- | ---: | ---: | ---: | ---: |"])
+        for row in full_sample.sort_values("horizon").itertuples(index=False):
+            lines.append(
+                f"| {row.horizon}D | {getattr(row, 'rank_ic_mean', float('nan')):.6f} | "
+                f"{getattr(row, 'icir', float('nan')):.6f} | {getattr(row, 'top_bottom_return', float('nan')):.6f} | "
+                f"{getattr(row, 'sample_count', 0)} |"
+            )
+    lines.extend([
+        "",
+        "## 研究边界",
+        "",
+        "- 市场状态分桶、滚动样本外指标和成本敏感性详见同目录 CSV。",
+        "- P1 不修改 Sector Score，不接入 Lifecycle 仓位规则，不执行 ETF 下单。",
+    ])
+    (output_dir / f"sector_rotation2_alpha_decay_{end_date}.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
 def main() -> None:

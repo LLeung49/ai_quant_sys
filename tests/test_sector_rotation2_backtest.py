@@ -34,6 +34,23 @@ def test_evaluate_factor_reports_positive_ic_and_quintile_spread():
     assert result["sample_count"] == 20
 
 
+def test_evaluate_factor_accepts_multi_horizon_labels_when_evaluating_one_horizon():
+    """多期限标签应以日期、行业、期限联合唯一，不能被误判为重复。"""
+    dates = pd.bdate_range("2026-01-01", periods=2)
+    snapshots = pd.DataFrame(
+        [(date, f"S{rank}", rank) for date in dates for rank in range(10)],
+        columns=["as_of_date", "sector_name", "composite_score"],
+    )
+    labels = snapshots.rename(columns={"composite_score": "excess_return"}).copy()
+    labels["horizon"] = 1
+    labels["target_date"] = labels["as_of_date"] + pd.offsets.BDay(1)
+    labels = pd.concat([labels, labels.assign(horizon=2, target_date=labels["target_date"] + pd.offsets.BDay(1))])
+
+    result = evaluate_factor(snapshots, labels, "composite_score", 1)
+
+    assert result["sample_count"] == 20
+
+
 def test_evaluate_factor_rejects_duplicate_snapshot_keys():
     """同日同板块重复快照会破坏一对一标签关联，必须拒绝。"""
     snapshots = pd.DataFrame(
@@ -64,6 +81,25 @@ def test_build_forward_return_labels_keeps_only_mature_dates(monkeypatch):
     assert result["target_date"].tolist() == [dates[5], dates[6]]
 
 
+def test_build_forward_return_labels_uses_all_alpha_decay_horizons_by_default(monkeypatch):
+    """默认研究标签必须覆盖短、中期全部 Alpha Decay 期限。"""
+    from morning_conference.sector_rotation2 import backtest
+
+    dates = pd.bdate_range("2026-01-01", periods=45)
+    panel = {
+        "电子": pd.DataFrame(
+            {"close": range(100, 145), "amount": 1.0},
+            index=dates,
+        )
+    }
+    monkeypatch.setattr(backtest, "load_sector_panel", lambda **_: panel)
+    monkeypatch.setattr(backtest, "build_market_benchmark", lambda _: pd.DataFrame({"close": [100.0] * 45}, index=dates))
+
+    result = build_forward_return_labels(2, "2026-01-01", "2026-03-31")
+
+    assert sorted(result["horizon"].unique()) == [1, 2, 3, 5, 10, 20, 40]
+
+
 def test_evaluate_factor_reports_win_rate_drawdown_and_turnover():
     """评估结果应包含 Top 组胜率、累计收益最大回撤和相邻日 Top 组换手。"""
     dates = pd.bdate_range("2026-01-01", periods=3)
@@ -92,3 +128,73 @@ def test_rolling_oos_windows_uses_252_63_21_contract():
     assert windows[0]["train_start"] == dates[0]
     assert windows[0]["validation_start"] == dates[252]
     assert windows[1]["train_start"] == dates[21]
+
+
+def test_evaluate_rolling_oos_scores_only_validation_dates():
+    """逐窗口 OOS 指标只能使用验证区间，不能混入训练日期。"""
+    from morning_conference.sector_rotation2 import backtest
+
+    dates = pd.bdate_range("2026-01-01", periods=4)
+    snapshots = pd.DataFrame(
+        [(date, f"S{rank}", rank) for date in dates for rank in range(10)],
+        columns=["as_of_date", "sector_name", "composite_score"],
+    )
+    labels = snapshots.rename(columns={"composite_score": "excess_return"}).copy()
+    labels["horizon"] = 1
+    labels["target_date"] = labels["as_of_date"] + pd.offsets.BDay(1)
+    windows = [{
+        "train_start": dates[0], "train_end": dates[1],
+        "validation_start": dates[2], "validation_end": dates[3],
+    }]
+
+    result = backtest.evaluate_rolling_oos(snapshots, labels, "composite_score", 1, windows)
+
+    assert result.loc[0, "sample_count"] == 20
+    assert result.loc[0, "validation_start"] == dates[2]
+
+
+def test_top_group_strategy_charges_turnover_cost_after_lagged_signal_changes():
+    """换组时必须扣除成本，且持仓只能由前一交易日的 Score 决定。"""
+    from morning_conference.sector_rotation2 import backtest
+
+    dates = pd.bdate_range("2026-01-01", periods=4)
+    snapshots = pd.DataFrame(
+        [(dates[0], f"S{rank}", rank) for rank in range(10)]
+        + [(dates[1], f"S{rank}", 9 - rank) for rank in range(10)]
+        + [(dates[2], f"S{rank}", 9 - rank) for rank in range(10)],
+        columns=["as_of_date", "sector_name", "composite_score"],
+    )
+    labels = pd.DataFrame(
+        [(date, f"S{rank}", date + pd.offsets.BDay(1), 0.01) for date in dates[1:] for rank in range(10)],
+        columns=["as_of_date", "sector_name", "target_date", "excess_return"],
+    )
+    labels["horizon"] = 1
+
+    result = backtest.simulate_top_group_strategy(snapshots, labels, "composite_score", rebalance_every=1, cost_bps=10)
+
+    assert result["transaction_cost"] > 0
+    assert result["net_return"] < result["gross_return"]
+
+
+def test_run_research_writes_alpha_decay_report(tmp_path, monkeypatch):
+    """研究入口必须输出披露数据口径和非交易性质的 Alpha Decay 报告。"""
+    from morning_conference.sector_rotation2 import run_backtest
+
+    dates = pd.bdate_range("2026-01-01", periods=3)
+    snapshots = pd.DataFrame(
+        [(date, f"S{rank}", rank, "range") for date in dates for rank in range(10)],
+        columns=["as_of_date", "sector_name", "composite_score", "market_regime"],
+    )
+    labels = snapshots.rename(columns={"composite_score": "excess_return"}).drop(columns=["market_regime"])
+    labels["horizon"] = 1
+    labels["target_date"] = labels["as_of_date"] + pd.offsets.BDay(1)
+    monkeypatch.setattr(run_backtest, "build_forward_return_labels", lambda *_: labels)
+    monkeypatch.setattr(run_backtest, "persist_forward_returns", lambda *_: 0)
+    monkeypatch.setattr(run_backtest, "execute_query", lambda *_: snapshots)
+    monkeypatch.setattr(run_backtest, "rolling_oos_windows", lambda _: [])
+
+    run_backtest.run_research(2, "2026-01-01", "2026-12-31", "v1", tmp_path)
+
+    report = (tmp_path / "sector_rotation2_alpha_decay_2026-12-31.md").read_text(encoding="utf-8")
+    assert "current_mapping" in report
+    assert "不产生交易指令" in report
