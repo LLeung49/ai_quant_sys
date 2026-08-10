@@ -60,9 +60,20 @@ export class SectorRotationApiError extends Error {
  * 输入：相对 API 路径与查询参数。
  * 输出：未经业务转换的成功 JSON；失败时抛出 ``SectorRotationApiError``。
  */
-async function requestJson(path: string, query: Record<string, string | number> | URLSearchParams): Promise<unknown> {
+/**
+ * 发送只读请求并处理统一错误信封。
+ *
+ * 输入：相对 API 路径、查询参数，以及由 TanStack Query 提供的可选取消信号。
+ * 输出：未经业务转换的成功 JSON；失败时抛出 ``SectorRotationApiError``。
+ * 异常：网络异常原样抛出；非成功 HTTP 响应转换为统一的 API 异常。
+ */
+export async function requestJson(
+  path: string,
+  query: Record<string, string | number> | URLSearchParams,
+  signal?: AbortSignal,
+): Promise<unknown> {
   const params = query instanceof URLSearchParams ? query : new URLSearchParams(Object.entries(query).map(([key, value]) => [key, String(value)]));
-  const response = await fetch(`${apiBaseUrl}${path}?${params.toString()}`, { headers: { Accept: "application/json" } });
+  const response = await fetch(`${apiBaseUrl}${path}?${params.toString()}`, { headers: { Accept: "application/json" }, signal });
   const body: unknown = await response.json();
   if (!response.ok) {
     const parsed = errorSchema.safeParse(body);

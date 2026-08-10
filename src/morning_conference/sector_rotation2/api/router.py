@@ -6,8 +6,17 @@ from datetime import date
 
 from fastapi import APIRouter, HTTPException, Query
 
+from .kline import normalize_sector_kline_rows
 from .repository import MAX_HISTORY_SECTORS, SectorRotationRepository
-from .schemas import AvailableDatesResponse, HistoryResponse, ResponseMeta, SnapshotResponse, normalize_json_numbers
+from .schemas import (
+    AvailableDatesResponse,
+    HistoryResponse,
+    ResponseMeta,
+    SectorKlineMeta,
+    SectorKlineResponse,
+    SnapshotResponse,
+    normalize_json_numbers,
+)
 
 
 router = APIRouter(prefix="/api/v1/sector-rotation", tags=["板块轮动"])
@@ -20,6 +29,41 @@ def _not_found(code: str, message: str) -> HTTPException:
     输出：由应用异常处理器封装为统一错误 JSON 的 404 异常。
     """
     return HTTPException(status_code=404, detail={"code": code, "message": message})
+
+
+def _invalid_parameter(message: str) -> HTTPException:
+    """构造板块 K 线端点专用的参数错误。
+
+    参数：
+        message: 面向调用方的中文参数校验提示。
+    返回：
+        由应用异常处理器序列化为统一错误信封的 422 异常。
+    异常：
+        无；调用方应直接抛出返回的异常。
+    """
+    return HTTPException(status_code=422, detail={"code": "INVALID_PARAMETER", "message": message})
+
+
+def _parse_sector_kline_request(sector_name: str, level: int, end_date: str) -> tuple[str, int, date]:
+    """清洗并校验板块 K 线的业务参数。
+
+    参数：
+        sector_name: 经 FastAPI 长度校验后的行业名称。
+        level: 经 FastAPI 整数与范围校验后的行业层级。
+        end_date: 待解析为 ISO 日期的行情截止日期。
+    返回：
+        已去除首尾空白的行业名称、合法层级和解析后的截止日期。
+    异常：
+        HTTPException: 行业名称为空或日期不是 YYYY-MM-DD 时抛出。
+    """
+    clean_name = sector_name.strip()
+    if not clean_name:
+        raise _invalid_parameter("行业名称不能为空白")
+    try:
+        parsed_end_date = date.fromisoformat(end_date)
+    except ValueError as exc:
+        raise _invalid_parameter("日期必须使用 YYYY-MM-DD 格式") from exc
+    return clean_name, level, parsed_end_date
 
 
 def _split_run_metadata(rows: list[dict]) -> tuple[ResponseMeta, list[dict]]:
@@ -57,6 +101,38 @@ def _validate_date_range(start_date: str, end_date: str) -> None:
         raise HTTPException(status_code=422, detail={"code": "INVALID_DATE_RANGE", "message": "日期必须使用 YYYY-MM-DD 格式"}) from exc
     if start > end:
         raise HTTPException(status_code=422, detail={"code": "INVALID_DATE_RANGE", "message": "开始日期不能晚于结束日期"})
+
+
+@router.get("/sector-kline", response_model=SectorKlineResponse, summary="读取板块合成日 K 线")
+def get_sector_kline(
+    sector_name: str = Query(min_length=1, max_length=64, description="行业名称"),
+    level: int = Query(ge=1, le=2, description="申万行业层级，只允许 1 或 2"),
+    end_date: str = Query(description="行情截止日，格式 YYYY-MM-DD"),
+) -> SectorKlineResponse:
+    """读取指定行业在截止日或之前的有效板块合成日 K 线。
+
+    参数：
+        sector_name: 行业完整名称，首尾空白会被移除。
+        level: 申万行业层级，仅允许 1 或 2。
+        end_date: ISO 格式的行情截止日期。
+    返回：
+        含有效升序 K 线、实际末日和清洗统计的成功响应。
+    异常：
+        HTTPException: 参数非法时返回 422；无有效 K 线时返回 404。
+    """
+    clean_name, parsed_level, parsed_end_date = _parse_sector_kline_request(sector_name, level, end_date)
+    rows = SectorRotationRepository().load_sector_kline(clean_name, parsed_level, parsed_end_date.isoformat())
+    bars, skipped = normalize_sector_kline_rows(rows, parsed_end_date)
+    if not bars:
+        raise _not_found("SECTOR_KLINE_NOT_FOUND", "未找到该板块在指定日期前的有效行情")
+    return SectorKlineResponse(
+        sector_name=clean_name,
+        sector_level=parsed_level,
+        requested_end_date=parsed_end_date.isoformat(),
+        actual_end_date=bars[-1]["trade_date"],
+        bars=bars,
+        meta=SectorKlineMeta(bar_count=len(bars), skipped_bar_count=skipped),
+    )
 
 
 @router.get("/available-dates", response_model=AvailableDatesResponse, summary="读取可查看的交易日")

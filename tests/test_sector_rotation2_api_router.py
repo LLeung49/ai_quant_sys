@@ -2,11 +2,190 @@
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 import pytest
 from fastapi.testclient import TestClient
 from pymysql import MySQLError
+
+
+def test_sector_kline_returns_validated_numeric_bars(monkeypatch) -> None:
+    """输入：有效 Decimal K 线；输出：严格的数值 bar 与稳定元数据。"""
+    from morning_conference.sector_rotation2.api.app import create_app
+    from morning_conference.sector_rotation2.api.repository import SectorRotationRepository
+
+    monkeypatch.setattr(SectorRotationRepository, "load_sector_kline", lambda *_: [{
+        "trade_date": date(2026, 8, 6),
+        "open": Decimal("10"), "high": Decimal("11"),
+        "low": Decimal("9"), "close": Decimal("10.5"),
+        "volume": Decimal("1000"), "amount": Decimal("2000"),
+    }])
+
+    response = TestClient(create_app()).get(
+        "/api/v1/sector-rotation/sector-kline",
+        params={"sector_name": " 半导体 ", "level": "2", "end_date": "2026-08-06"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert set(payload) == {
+        "sector_name", "sector_level", "requested_end_date", "actual_end_date",
+        "price_basis", "bars", "meta",
+    }
+    assert payload["sector_name"] == "半导体"
+    assert payload["actual_end_date"] == "2026-08-06"
+    assert payload["price_basis"] == "equal_weight_composite_index"
+    assert set(payload["bars"][0]) == {
+        "trade_date", "timestamp", "open", "high", "low", "close", "volume", "amount",
+    }
+    assert payload["bars"][0]["timestamp"] == 1785945600000
+    assert isinstance(payload["bars"][0]["close"], float)
+    assert payload["meta"] == {
+        "field_version": "v1",
+        "source": "trade_sector_daily",
+        "bar_count": 1,
+        "skipped_bar_count": 0,
+        "warmup_target": 100,
+    }
+
+
+@pytest.mark.parametrize(
+    ("params", "break_name"),
+    [
+        ({"sector_name": "   ", "level": "2", "end_date": "2026-08-06"}, "空白行业名称进入仓储"),
+        ({"sector_name": "A" * 65, "level": "2", "end_date": "2026-08-06"}, "超长行业名称进入仓储"),
+        ({"sector_name": "半导体", "level": "3", "end_date": "2026-08-06"}, "超出范围层级进入仓储"),
+        ({"sector_name": "半导体", "level": "x", "end_date": "2026-08-06"}, "非整数层级进入仓储"),
+        ({"sector_name": "半导体", "level": "2", "end_date": "2026-99-99"}, "非法日期进入仓储"),
+    ],
+)
+def test_sector_kline_rejects_invalid_parameters_before_repository(monkeypatch, params, break_name: str) -> None:
+    """输入：非法 K 线查询参数；输出：端点专用 422，且不查询仓储。"""
+    from morning_conference.sector_rotation2.api.app import create_app
+    from morning_conference.sector_rotation2.api.repository import SectorRotationRepository
+
+    monkeypatch.setattr(
+        SectorRotationRepository,
+        "load_sector_kline",
+        lambda *_: pytest.fail(break_name),
+    )
+
+    response = TestClient(create_app()).get("/api/v1/sector-rotation/sector-kline", params=params)
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_PARAMETER"
+    assert response.json()["error"]["request_id"] == response.headers["x-request-id"]
+
+
+@pytest.mark.parametrize(
+    "rows",
+    [
+        [],
+        [{
+            "trade_date": date(2026, 8, 6),
+            "open": Decimal("10"), "high": Decimal("9"),
+            "low": Decimal("8"), "close": Decimal("10"),
+            "volume": Decimal("1000"), "amount": Decimal("2000"),
+        }],
+    ],
+)
+def test_sector_kline_returns_not_found_for_empty_or_unusable_rows(monkeypatch, rows) -> None:
+    """输入：空结果或全部无效候选行；输出：统一 K 线未找到错误。"""
+    from morning_conference.sector_rotation2.api.app import create_app
+    from morning_conference.sector_rotation2.api.repository import SectorRotationRepository
+
+    monkeypatch.setattr(SectorRotationRepository, "load_sector_kline", lambda *_: rows)
+
+    response = TestClient(create_app()).get(
+        "/api/v1/sector-rotation/sector-kline",
+        params={"sector_name": "半导体", "level": "2", "end_date": "2026-08-06"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["error"]["code"] == "SECTOR_KLINE_NOT_FOUND"
+    assert response.json()["error"]["request_id"] == response.headers["x-request-id"]
+
+
+def test_sector_kline_excludes_future_rows_and_counts_them_as_skipped(monkeypatch) -> None:
+    """输入：仓储误返回未来数据；输出：响应不泄露未来 bar 且统计跳过行。"""
+    from morning_conference.sector_rotation2.api.app import create_app
+    from morning_conference.sector_rotation2.api.repository import SectorRotationRepository
+
+    monkeypatch.setattr(SectorRotationRepository, "load_sector_kline", lambda *_: [
+        {
+            "trade_date": date(2026, 8, 6),
+            "open": Decimal("10"), "high": Decimal("11"), "low": Decimal("9"),
+            "close": Decimal("10"), "volume": Decimal("1000"), "amount": Decimal("2000"),
+        },
+        {
+            "trade_date": date(2026, 8, 7),
+            "open": Decimal("11"), "high": Decimal("12"), "low": Decimal("10"),
+            "close": Decimal("11"), "volume": Decimal("1100"), "amount": Decimal("2200"),
+        },
+    ])
+
+    response = TestClient(create_app()).get(
+        "/api/v1/sector-rotation/sector-kline",
+        params={"sector_name": "半导体", "level": "2", "end_date": "2026-08-06"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["actual_end_date"] == "2026-08-06"
+    assert response.json()["meta"]["skipped_bar_count"] == 1
+    assert [bar["trade_date"] for bar in response.json()["bars"]] == ["2026-08-06"]
+
+
+def test_sector_kline_maps_database_and_unexpected_failures_to_endpoint_contract(monkeypatch) -> None:
+    """输入：K 线仓储的数据库与未知异常；输出：专用安全错误码和请求标识。"""
+    from morning_conference.sector_rotation2.api.app import create_app
+    from morning_conference.sector_rotation2.api.repository import SectorRotationRepository
+
+    def raise_database_error(*_args):
+        raise MySQLError("password=secret; SELECT * FROM trade_sector_daily")
+
+    monkeypatch.setattr(SectorRotationRepository, "load_sector_kline", raise_database_error)
+    database_response = TestClient(create_app(), raise_server_exceptions=False).get(
+        "/api/v1/sector-rotation/sector-kline",
+        params={"sector_name": "半导体", "level": "2", "end_date": "2026-08-06"},
+    )
+
+    assert database_response.status_code == 503
+    assert database_response.json()["error"]["code"] == "DATABASE_UNAVAILABLE"
+    assert "secret" not in database_response.text
+    assert database_response.json()["error"]["request_id"] == database_response.headers["x-request-id"]
+
+    monkeypatch.setattr(SectorRotationRepository, "load_sector_kline", lambda *_: (_ for _ in ()).throw(RuntimeError("internal secret")))
+    unexpected_response = TestClient(create_app(), raise_server_exceptions=False).get(
+        "/api/v1/sector-rotation/sector-kline",
+        params={"sector_name": "半导体", "level": "2", "end_date": "2026-08-06"},
+    )
+
+    assert unexpected_response.status_code == 500
+    assert unexpected_response.json()["error"]["code"] == "INTERNAL_ERROR"
+    assert "secret" not in unexpected_response.text
+    assert unexpected_response.json()["error"]["request_id"] == unexpected_response.headers["x-request-id"]
+
+
+def test_non_kline_validation_and_unexpected_errors_keep_existing_codes(monkeypatch) -> None:
+    """输入：既有端点的框架校验和未知异常；输出：原有错误码不被 K 线规则影响。"""
+    from morning_conference.sector_rotation2.api.app import create_app
+    from morning_conference.sector_rotation2.api.repository import SectorRotationRepository
+
+    validation_response = TestClient(create_app()).get(
+        "/api/v1/sector-rotation/snapshot",
+        params={"as_of_date": "2026-08-06", "level": "3", "model_version": "v1"},
+    )
+    monkeypatch.setattr(SectorRotationRepository, "list_available_dates", lambda *_: (_ for _ in ()).throw(RuntimeError("internal secret")))
+    unexpected_response = TestClient(create_app(), raise_server_exceptions=False).get(
+        "/api/v1/sector-rotation/available-dates",
+        params={"level": "2", "model_version": "v1"},
+    )
+
+    assert validation_response.status_code == 422
+    assert validation_response.json()["error"]["code"] == "REQUEST_VALIDATION_ERROR"
+    assert unexpected_response.status_code == 500
+    assert unexpected_response.json()["error"]["code"] == "INTERNAL_SERVER_ERROR"
 
 
 def test_snapshot_returns_not_found_when_no_successful_snapshot(monkeypatch) -> None:

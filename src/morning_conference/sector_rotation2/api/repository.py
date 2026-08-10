@@ -14,6 +14,8 @@ from data_ingestion.db_config import execute_query
 # 行业轨迹接口的统一查询上限。路由层和仓储层共同使用该常量，既给用户明确反馈，
 # 也防止绕过 HTTP 层后形成无界 IN 查询。
 MAX_HISTORY_SECTORS: Final[int] = 5
+# 板块 K 线接口固定返回最近 350 根候选日线，避免无界查询。
+KLINE_BAR_LIMIT: Final[int] = 350
 
 
 class SectorRotationRepository:
@@ -54,6 +56,37 @@ class SectorRotationRepository:
             ORDER BY s.composite_rank IS NULL, s.composite_rank, s.sector_name
         """
         return list(execute_query(sql, ("succeeded", as_of_date, sector_level, model_version)))
+
+    def load_sector_kline(
+        self, sector_name: str, sector_level: int, end_date: str
+    ) -> list[dict[str, Any]]:
+        """读取指定截止日前最近 350 根板块合成日线。
+
+        参数:
+            sector_name: 完整行业名称，不做模糊匹配。
+            sector_level: 申万行业层级，只允许 1 或 2。
+            end_date: ISO 截止日期；查询不得返回该日之后的数据。
+        返回:
+            按交易日升序的 OHLCV/成交额候选行；不在仓储层修复坏数据。
+        异常:
+            ValueError: 当行业层级不是 1 或 2 时抛出。
+        """
+        self._validate_level(sector_level)
+        # 内层先倒序截取最近 350 根，外层再升序以满足 K 线图时间轴。
+        sql = """
+            SELECT trade_date, open, high, low, close, volume, amount
+            FROM (
+                SELECT trade_date,
+                       open_idx AS open, high_idx AS high, low_idx AS low,
+                       close_idx AS close, total_volume AS volume, total_amount AS amount
+                FROM trade_sector_daily
+                WHERE sector_name = %s AND sector_level = %s AND trade_date <= %s
+                ORDER BY trade_date DESC
+                LIMIT %s
+            ) AS recent_bars
+            ORDER BY trade_date ASC
+        """
+        return list(execute_query(sql, (sector_name, sector_level, end_date, KLINE_BAR_LIMIT)))
 
     def list_available_dates(self, sector_level: int, model_version: str) -> list[str]:
         """读取存在成功快照的可选交易日。

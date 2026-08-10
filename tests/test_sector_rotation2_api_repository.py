@@ -64,6 +64,41 @@ def test_load_snapshot_rejects_unsupported_sector_level() -> None:
         SectorRotationRepository().load_snapshot("2026-08-04", 3, "v1")
 
 
+def test_load_sector_kline_is_parameterized_bounded_and_ascending(monkeypatch: pytest.MonkeyPatch) -> None:
+    """参数：行业、层级与截止日；返回：参数化的 350 根升序 K 线查询结果。"""
+    from morning_conference.sector_rotation2.api.repository import SectorRotationRepository
+
+    captured: dict[str, object] = {}
+
+    def fake_execute_query(sql: str, params: tuple[object, ...]) -> list[dict[str, object]]:
+        captured["sql"], captured["params"] = sql, params
+        return []
+
+    monkeypatch.setattr("morning_conference.sector_rotation2.api.repository.execute_query", fake_execute_query)
+    result = SectorRotationRepository().load_sector_kline("半导体' OR 1=1", 2, "2026-08-06")
+
+    assert result == []
+    assert "trade_date <= %s" in str(captured["sql"])
+    assert "ORDER BY trade_date DESC" in str(captured["sql"])
+    assert "LIMIT %s" in str(captured["sql"])
+    assert str(captured["sql"]).rstrip().endswith("ORDER BY trade_date ASC")
+    assert captured["params"] == ("半导体' OR 1=1", 2, "2026-08-06", 350)
+    assert "OR 1=1" not in str(captured["sql"])
+
+
+def test_load_sector_kline_rejects_unsupported_sector_level_before_query(monkeypatch: pytest.MonkeyPatch) -> None:
+    """参数：三级行业；返回：执行 SQL 前抛出 ValueError 异常。"""
+    from morning_conference.sector_rotation2.api.repository import SectorRotationRepository
+
+    def fail_execute_query(sql: str, params: tuple[object, ...]) -> list[dict[str, object]]:
+        raise AssertionError("非法层级不应执行 SQL")
+
+    monkeypatch.setattr("morning_conference.sector_rotation2.api.repository.execute_query", fail_execute_query)
+
+    with pytest.raises(ValueError, match="行业层级只能为 1 或 2"):
+        SectorRotationRepository().load_sector_kline("半导体", 3, "2026-08-06")
+
+
 def test_list_available_dates_returns_only_successful_run_dates(monkeypatch: pytest.MonkeyPatch) -> None:
     """输入：层级与版本；输出：去重、倒序的成功运行日期。"""
     from morning_conference.sector_rotation2.api.repository import SectorRotationRepository
