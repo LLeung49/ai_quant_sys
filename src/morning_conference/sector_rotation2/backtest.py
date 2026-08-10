@@ -127,14 +127,18 @@ def simulate_top_group_strategy(
     if cost_bps < 0:
         raise ValueError("cost_bps 不能为负数")
     _validate_unique(snapshots, "快照")
-    _validate_unique(one_day_labels, "标签")
     if factor not in snapshots:
         raise ValueError(f"快照缺少因子列: {factor}")
 
     signals = snapshots[["as_of_date", "sector_name", factor]].copy()
     signals["as_of_date"] = pd.to_datetime(signals["as_of_date"])
+    signals[factor] = pd.to_numeric(signals[factor], errors="coerce")
+    signals = signals.dropna(subset=[factor])
     labels = one_day_labels.loc[one_day_labels["horizon"] == 1, ["as_of_date", "sector_name", "excess_return"]].copy()
+    _validate_unique(labels, "标签")
     labels["as_of_date"] = pd.to_datetime(labels["as_of_date"])
+    labels["excess_return"] = pd.to_numeric(labels["excess_return"], errors="coerce")
+    labels = labels.dropna(subset=["excess_return"])
     signal_dates = pd.DatetimeIndex(signals["as_of_date"].unique()).sort_values()
     active_members: set[str] = set()
     gross_returns: list[float] = []
@@ -174,7 +178,7 @@ def simulate_top_group_strategy(
     gross_nav = pd.Series(gross_returns).add(1.0).cumprod()
     net_nav = pd.Series(net_returns).add(1.0).cumprod()
     drawdown = net_nav / net_nav.cummax() - 1.0
-    net_array = np.array(net_returns)
+    net_array = np.asarray(net_returns, dtype=float)
     downside = np.minimum(net_array, 0.0)
     cvar_cutoff = np.quantile(net_array, 0.05)
     return {
@@ -248,6 +252,9 @@ def evaluate_factor(snapshots: pd.DataFrame, labels: pd.DataFrame, factor: str, 
     merged = snapshots[["as_of_date", "sector_name", factor]].merge(
         selected[["as_of_date", "sector_name", "excess_return"]], on=["as_of_date", "sector_name"], how="inner"
     ).dropna()
+    merged[factor] = pd.to_numeric(merged[factor], errors="coerce")
+    merged["excess_return"] = pd.to_numeric(merged["excess_return"], errors="coerce")
+    merged = merged.dropna(subset=[factor, "excess_return"])
     if merged.empty:
         return {"ic_mean": np.nan, "rank_ic_mean": np.nan, "icir": np.nan, "top_group_return": np.nan,
                 "bottom_group_return": np.nan, "top_bottom_return": np.nan, "sample_count": 0}

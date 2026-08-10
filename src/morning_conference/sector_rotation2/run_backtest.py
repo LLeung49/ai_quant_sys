@@ -33,12 +33,15 @@ def run_research(level: int, start_date: str, end_date: str, model_version: str,
         每个预测周期一行的基础指标 DataFrame。
     """
     labels = build_forward_return_labels(level, start_date, end_date)
+    labels["as_of_date"] = pd.to_datetime(labels["as_of_date"])
+    labels["target_date"] = pd.to_datetime(labels["target_date"])
     persist_forward_returns(labels, level)
-    snapshots = execute_query(
+    snapshots = pd.DataFrame(execute_query(
         "SELECT as_of_date, sector_name, composite_score, market_regime FROM sector_rotation_sector_daily_snapshot "
         "WHERE sector_level = %s AND model_version = %s AND as_of_date BETWEEN %s AND %s",
         (level, model_version, start_date, end_date),
-    )
+    ))
+    snapshots["as_of_date"] = pd.to_datetime(snapshots["as_of_date"])
     metrics = []
     for horizon in DEFAULT_ALPHA_DECAY_HORIZONS:
         result = evaluate_factor(snapshots, labels, "composite_score", horizon)

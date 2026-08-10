@@ -1,6 +1,8 @@
 """板块轮动前瞻标签与因子评估的纯数据测试。"""
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pandas as pd
 import pytest
 
@@ -176,6 +178,26 @@ def test_top_group_strategy_charges_turnover_cost_after_lagged_signal_changes():
     assert result["net_return"] < result["gross_return"]
 
 
+def test_top_group_strategy_accepts_decimal_scores_from_database():
+    """数据库 DECIMAL 类型的 Score 必须能参与分位选组。"""
+    from morning_conference.sector_rotation2 import backtest
+
+    dates = pd.bdate_range("2026-01-01", periods=2)
+    snapshots = pd.DataFrame(
+        [(dates[0], f"S{rank}", Decimal(str(rank))) for rank in range(10)],
+        columns=["as_of_date", "sector_name", "composite_score"],
+    )
+    labels = pd.DataFrame(
+        [(dates[1], f"S{rank}", dates[1] + pd.offsets.BDay(1), Decimal("0.01")) for rank in range(10)],
+        columns=["as_of_date", "sector_name", "target_date", "excess_return"],
+    )
+    labels["horizon"] = 1
+
+    result = backtest.simulate_top_group_strategy(snapshots, labels, "composite_score", rebalance_every=1, cost_bps=10)
+
+    assert result["net_return"] == pytest.approx(0.009)
+
+
 def test_run_research_writes_alpha_decay_report(tmp_path, monkeypatch):
     """研究入口必须输出披露数据口径和非交易性质的 Alpha Decay 报告。"""
     from morning_conference.sector_rotation2 import run_backtest
@@ -198,3 +220,17 @@ def test_run_research_writes_alpha_decay_report(tmp_path, monkeypatch):
     report = (tmp_path / "sector_rotation2_alpha_decay_2026-12-31.md").read_text(encoding="utf-8")
     assert "current_mapping" in report
     assert "不产生交易指令" in report
+
+
+def test_run_research_accepts_database_dictionary_rows(tmp_path, monkeypatch):
+    from morning_conference.sector_rotation2 import run_backtest
+    dates = pd.bdate_range("2026-01-01", periods=2)
+    rows = [{"as_of_date": date.date(), "sector_name": f"S{rank}", "composite_score": rank, "market_regime": "range"} for date in dates for rank in range(10)]
+    labels = pd.DataFrame(rows).rename(columns={"composite_score": "excess_return"}).drop(columns=["market_regime"])
+    labels["horizon"] = 1; labels["target_date"] = labels["as_of_date"] + pd.offsets.BDay(1)
+    monkeypatch.setattr(run_backtest, "build_forward_return_labels", lambda *_: labels)
+    monkeypatch.setattr(run_backtest, "persist_forward_returns", lambda *_: 0)
+    monkeypatch.setattr(run_backtest, "execute_query", lambda *_: rows)
+    monkeypatch.setattr(run_backtest, "rolling_oos_windows", lambda _: [])
+    run_backtest.run_research(2, "2026-01-01", "2026-01-02", "v1", tmp_path)
+    assert (tmp_path / "sector_rotation2_research_2026-01-02.csv").exists()
