@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from morning_conference.sector_rotation2.etf_sources import fetch_etf_holdings, normalize_etf_code
+from morning_conference.sector_rotation2.etf_sources import fetch_etf_holdings, fetch_etf_universe, normalize_etf_code
 
 
 def test_normalize_etf_code_adds_exchange_suffix_and_rejects_unknown_prefix():
@@ -29,3 +29,13 @@ def test_fetch_etf_holdings_records_failed_request_without_evidence_rows():
         "failure_reason": "RuntimeError: rate limited",
         "attempt_count": 1,
     }]
+
+
+def test_fetch_etf_universe_normalizes_akshare_snapshot():
+    result = fetch_etf_universe(
+        lambda: pd.DataFrame({"代码": ["510300"], "名称": ["沪深300ETF"]}),
+        pd.Timestamp("2026-08-11"),
+    )
+
+    assert result.loc[0, "etf_code"] == "510300.SH"
+    assert result.loc[0, "source"] == "akshare.fund_etf_spot_em"

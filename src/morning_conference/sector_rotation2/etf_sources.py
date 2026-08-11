@@ -18,6 +18,21 @@ def normalize_etf_code(code: str) -> str:
     raise ValueError(f"unsupported ETF code: {code}")
 
 
+def fetch_etf_universe(
+    fetcher: Callable[[], pd.DataFrame], fetched_at: pd.Timestamp
+) -> pd.DataFrame:
+    """Normalize an AkShare ETF spot snapshot into an auditable universe."""
+    snapshot = fetcher().copy()
+    missing = {"代码", "名称"}.difference(snapshot.columns)
+    if missing:
+        raise ValueError(f"missing ETF universe columns: {sorted(missing)}")
+    snapshot["etf_code"] = snapshot["代码"].map(normalize_etf_code)
+    snapshot["etf_name"] = snapshot["名称"].astype(str)
+    snapshot["source"] = "akshare.fund_etf_spot_em"
+    snapshot["fetched_at"] = fetched_at
+    return snapshot
+
+
 def fetch_etf_holdings(
     etf_codes: list[str],
     holdings_fetcher: Callable[[str], pd.DataFrame],
