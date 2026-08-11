@@ -106,7 +106,7 @@ export function buildQuadrantOption(sectors: QuadrantSector[], selectedSectorNam
       splitLine: { lineStyle: { color: "rgba(92, 112, 140, 0.16)" } },
     },
     series: [{
-      type: "scatter",
+      type: "scatter" as const,
       data,
       symbolSize: (value: number[]) => Math.max(12, Math.min(46, 24 + value[2] * 18)),
       label: { position: "top", color: "#dce8f8", fontSize: 10, formatter: "{b}" },

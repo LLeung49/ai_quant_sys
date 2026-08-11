@@ -9,7 +9,13 @@ describe("buildQuadrantOption", () => {
     const data = exit.series[0].data[0] as unknown as { sector: Parameters<typeof buildQuadrantOption>[0][number] };
     const formatter = (exit.tooltip as unknown as { formatter: (params: { data: typeof data }) => string }).formatter;
 
-    expect(trending.series[0].data[0].itemStyle.color).toBe(exit.series[0].data[0].itemStyle.color);
+    const trendingScatter = trending.series.find((series) => series.type === "scatter");
+    const exitScatter = exit.series.find((series) => series.type === "scatter");
+    expect(trendingScatter).toBeDefined();
+    expect(exitScatter).toBeDefined();
+    if (!trendingScatter || !exitScatter) throw new Error("散点系列缺失");
+
+    expect(trendingScatter.data[0].itemStyle.color).toBe(exitScatter.data[0].itemStyle.color);
     expect(formatter({ data })).toContain("加速转弱");
     expect(formatter({ data })).toContain("6 日");
     expect(formatter({ data })).toContain("今日变化");

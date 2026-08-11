@@ -16,4 +16,17 @@ describe("buildSectorTrail", () => {
       { as_of_date: "2026-08-04", velocity_score: 0.5, acceleration_score: 0.6 },
     ]);
   });
+
+  it("只返回不晚于回放日期的尾迹点", () => {
+    const points = [
+      { as_of_date: "2026-08-08", sector_name: "半导体", velocity_score: 0.1, acceleration_score: 0.2 },
+      { as_of_date: "2026-08-10", sector_name: "半导体", velocity_score: 0.3, acceleration_score: 0.4 },
+      { as_of_date: "2026-08-11", sector_name: "半导体", velocity_score: 0.8, acceleration_score: 0.9 },
+    ];
+
+    expect(buildSectorTrail(points, "半导体", "2026-08-10")).toEqual([
+      { as_of_date: "2026-08-08", velocity_score: 0.1, acceleration_score: 0.2 },
+      { as_of_date: "2026-08-10", velocity_score: 0.3, acceleration_score: 0.4 },
+    ]);
+  });
 });

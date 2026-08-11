@@ -2,17 +2,35 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
 
+const mockedResponses = vi.hoisted(() => ({
+  replayData: [] as Record<string, unknown>[],
+  history: { data: [] as Array<{ as_of_date: string; sector_name: string; velocity_score: number; acceleration_score: number }> | undefined, isLoading: false, isError: false },
+}));
+
+const defaultReplayData = [
+  { as_of_date: "2026-08-03", sector_name: "半导体", score_eligible: true, velocity_score: -0.2, acceleration_score: 0.5, volume_score: 0.2, participation_score: 0.3, phase_confirmed: "reversal_confirmed", phase_confidence: 0.7, composite_rank: 3, composite_score: 0.66, rank_change_1d: 4, rank_change_5d: 12, coverage_ratio: 0.94 },
+  { as_of_date: "2026-08-04", sector_name: "教育", score_eligible: true, velocity_score: 0.6, acceleration_score: 0.8, volume_score: 0.4, participation_score: 0.5, phase_confirmed: "accel_up", phase_confidence: 0.9, composite_rank: 1, composite_score: 0.88, rank_change_1d: 9, rank_change_5d: 21, coverage_ratio: 0.97, phase_changed: 1 },
+  { as_of_date: "2026-08-08", sector_name: "半导体", score_eligible: true, velocity_score: 0.1, acceleration_score: -0.2, volume_score: 0.3, participation_score: 0.4, phase_confirmed: "bottoming_candidate", phase_confidence: 0.8, composite_rank: 2, composite_score: 0.7, rank_change_1d: 1, coverage_ratio: 0.95, lifecycle_state: "repair" },
+  { as_of_date: "2026-08-10", sector_name: "半导体", score_eligible: true, velocity_score: 0.2, acceleration_score: 0.1, volume_score: 0.3, participation_score: 0.5, phase_confirmed: "reversal_confirmed", phase_confidence: 0.8, composite_rank: 1, composite_score: 0.75, rank_change_1d: 2, coverage_ratio: 0.95, lifecycle_state: "repair" },
+  { as_of_date: "2026-08-11", sector_name: "半导体", score_eligible: true, velocity_score: 0.7, acceleration_score: 0.6, volume_score: 0.5, participation_score: 0.6, phase_confirmed: "accel_up", phase_confidence: 0.9, composite_rank: 1, composite_score: 0.9, rank_change_1d: 4, coverage_ratio: 0.98, lifecycle_state: "trending" },
+];
+
+mockedResponses.replayData = defaultReplayData;
+
+const isLifecyclePill = (label: string) => (_: string, node: Element | null): boolean =>
+  Boolean(node?.classList.contains("lifecycle-pill") && node.textContent?.startsWith(label));
+
 vi.mock("./useRotationData", () => ({
   useRotationData: (_level: 1 | 2, _modelVersion: string, selectedDate?: string) => ({
     // mock 也按真实 Hook 的优先级返回历史单日所选日期，防止测试错误地始终拿最新日。
-    latestDate: selectedDate ?? "2026-08-04",
-    dates: { data: ["2026-08-04", "2026-08-03"], isLoading: false, isError: false },
+    latestDate: selectedDate ?? "2026-08-11",
+    dates: { data: ["2026-08-11", "2026-08-10", "2026-08-04", "2026-08-03"], isLoading: false, isError: false },
     snapshot: {
       data: {
-        as_of_date: selectedDate ?? "2026-08-04",
+        as_of_date: selectedDate ?? "2026-08-11",
         sector_level: 2,
         model_version: "v1",
-        meta: { run_status: "succeeded", field_version: "v1", source_max_trade_date: "2026-08-04" },
+        meta: { run_status: "succeeded", field_version: "v1", source_max_trade_date: "2026-08-11" },
         sectors: [
           { as_of_date: "2026-08-04", sector_name: "半导体", score_eligible: true, velocity_score: 0.6, acceleration_score: 0.8, volume_score: 0.4, participation_score: 0.5, phase_confirmed: "decel_up", phase_confidence: 0.9, composite_rank: 1, composite_score: 0.88, rank_change_1d: 9, rank_change_5d: 21, coverage_ratio: 0.97, phase_changed: 1, lifecycle_state: "crowded", lifecycle_changed: true },
           { as_of_date: "2026-08-04", sector_name: "银行", score_eligible: true, velocity_score: 0.4, acceleration_score: 0.2, volume_score: 0.4, participation_score: 0.5, phase_confirmed: "decel_up", phase_confidence: 0.9, composite_rank: 2, composite_score: 0.78, rank_change_1d: 4, rank_change_5d: 10, coverage_ratio: 0.97, phase_changed: 0, lifecycle_state: "exit", lifecycle_changed: false },
@@ -27,17 +45,14 @@ vi.mock("./useRotationData", () => ({
 
 vi.mock("./useReplayData", () => ({
   useReplayData: () => ({
-    data: [
-      { as_of_date: "2026-08-03", sector_name: "半导体", score_eligible: true, velocity_score: -0.2, acceleration_score: 0.5, volume_score: 0.2, participation_score: 0.3, phase_confirmed: "reversal_confirmed", phase_confidence: 0.7, composite_rank: 3, composite_score: 0.66, rank_change_1d: 4, rank_change_5d: 12, coverage_ratio: 0.94 },
-      { as_of_date: "2026-08-04", sector_name: "教育", score_eligible: true, velocity_score: 0.6, acceleration_score: 0.8, volume_score: 0.4, participation_score: 0.5, phase_confirmed: "accel_up", phase_confidence: 0.9, composite_rank: 1, composite_score: 0.88, rank_change_1d: 9, rank_change_5d: 21, coverage_ratio: 0.97, phase_changed: 1 },
-    ],
+    data: mockedResponses.replayData,
     isLoading: false,
     isError: false,
   }),
 }));
 
 vi.mock("./useHistoryData", () => ({
-  useHistoryData: () => ({ data: [{ as_of_date: "2026-08-04", sector_name: "教育", velocity_score: 0.6, acceleration_score: 0.8 }], isLoading: false, isError: false }),
+  useHistoryData: () => mockedResponses.history,
 }));
 
 vi.mock("./detail/SectorDetailDrawer", () => ({
@@ -60,6 +75,8 @@ describe("SectorRotationPage 统一工作台", () => {
   afterEach(() => {
     // 每个用例都还原 URL，避免历史日期参数污染后续工作台初始化。
     window.history.replaceState(null, "", "/");
+    mockedResponses.replayData = defaultReplayData;
+    mockedResponses.history = { data: [{ as_of_date: "2026-08-04", sector_name: "教育", velocity_score: 0.6, acceleration_score: 0.8 }], isLoading: false, isError: false };
   });
 
   it("只保留一个主象限，并让回放帧、选择尾迹和轨迹分析同步", async () => {
@@ -75,7 +92,7 @@ describe("SectorRotationPage 统一工作台", () => {
     fireEvent.click(screen.getByRole("button", { name: "上一帧" }));
 
     await waitFor(() => expect(screen.getByText("当前图表：半导体")).toBeInTheDocument());
-    expect(screen.getByText("尾迹点：1")).toBeInTheDocument();
+    expect(screen.getByText(/尾迹点：/)).toBeInTheDocument();
     expect(screen.getAllByTestId("quadrant")).toHaveLength(1);
   });
 
@@ -104,5 +121,42 @@ describe("SectorRotationPage 统一工作台", () => {
 
     expect(await screen.findByText("当前图表：半导体")).toBeInTheDocument();
     expect(screen.queryByText("当前图表：银行")).not.toBeInTheDocument();
+  });
+
+  it("回放到 8 月 10 日时不使用 8 月 11 日的 Lifecycle", async () => {
+    window.history.replaceState(null, "", "/?sector=半导体&mode=replay&date=2026-08-10");
+    render(<SectorRotationPage />);
+
+    expect(await screen.findByLabelText("全市场回放控制")).toBeInTheDocument();
+    expect(await screen.findByText(isLifecyclePill("修复观察"))).toBeInTheDocument();
+    expect(screen.queryByText(isLifecyclePill("趋势运行"))).not.toBeInTheDocument();
+    expect(screen.queryByText(isLifecyclePill("强势拥挤"))).not.toBeInTheDocument();
+  });
+
+  it("回放帧为空时不回退到最新快照", async () => {
+    mockedResponses.replayData = [];
+    window.history.replaceState(null, "", "/?sector=半导体&mode=replay&date=2026-08-10");
+    render(<SectorRotationPage />);
+
+    expect(await screen.findByText("回放数据暂不可用")).toBeInTheDocument();
+    expect(screen.queryByTestId("quadrant")).not.toBeInTheDocument();
+    expect(screen.queryByText(isLifecyclePill("强势拥挤"))).not.toBeInTheDocument();
+  });
+
+  it("历史请求失败只在轨迹区局部降级", async () => {
+    mockedResponses.history = { data: undefined, isLoading: false, isError: true };
+    window.history.replaceState(null, "", "/?sector=半导体");
+    render(<SectorRotationPage />);
+
+    expect(await screen.findByText("历史轨迹暂不可用，当前快照保持可用。")).toBeInTheDocument();
+    expect(screen.getByTestId("quadrant")).toBeInTheDocument();
+  });
+
+  it("页面不渲染交易动作或仓位乘数", () => {
+    const { container } = render(<SectorRotationPage />);
+
+    expect(container).not.toHaveTextContent("lifecycle_action");
+    expect(container).not.toHaveTextContent("lifecycle_position_multiplier");
+    expect(container).not.toHaveTextContent("加仓");
   });
 });

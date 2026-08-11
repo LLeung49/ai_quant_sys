@@ -90,7 +90,9 @@ export function SectorRotationPage() {
 
   const snapshotSectors = snapshot.data.sectors as unknown as DisplaySector[];
   const replayFrame = replayDate ? replayFrames.byDate[replayDate] ?? [] : [];
-  const sectors = mode === "replay" && replayFrame.length > 0 ? replayFrame : snapshotSectors;
+  const replayUnavailable = mode === "replay" && replayFrame.length === 0;
+  // 回放模式只可信任当前帧；帧缺失时宁可展示空态，也不能泄漏最新快照。
+  const sectors = mode === "replay" ? replayFrame : snapshotSectors;
   const lifecycleAvailable = hasLifecycleCoverage(sectors);
   const lifecycleCounts = summarizeLifecycle(sectors);
   const filteredSectors = sectors.filter((sector) => {
@@ -114,16 +116,16 @@ export function SectorRotationPage() {
     lifecycle_age: point.lifecycle_age,
   }));
   const historyDates = [...(dates.data ?? [])].sort().slice(-historyWindow);
-  const lifecycleHistoryPoints = historyPoints.filter((point) => !displayDate || point.as_of_date <= displayDate);
-  const lifecycleHistoryDates = historyDates.filter((date) => !displayDate || date <= displayDate);
+  const visibleHistoryDates = displayDate ? historyDates.filter((date) => date <= displayDate) : [];
+  const lifecycleHistoryPoints = displayDate ? historyPoints.filter((point) => point.as_of_date <= displayDate) : [];
   const previousLifecycleState = selected && displayDate
     ? findPreviousLifecycle(lifecycleHistoryPoints, selected.sector_name, displayDate)?.lifecycle_state
     : undefined;
   const trajectories = comparisonSectors.map((sectorName) => ({
     sector_name: sectorName,
-    points: historyDates.map((date) => historyPoints.find((point) => point.sector_name === sectorName && point.as_of_date === date) ?? { as_of_date: date, velocity_score: null, acceleration_score: null }),
+    points: visibleHistoryDates.map((date) => historyPoints.find((point) => point.sector_name === sectorName && point.as_of_date === date) ?? { as_of_date: date, velocity_score: null, acceleration_score: null }),
   }));
-  const historyGaps = findHistoryGaps(historyDates, comparisonSectors, historyPoints);
+  const historyGaps = findHistoryGaps(visibleHistoryDates, comparisonSectors, historyPoints);
 
   const handleDateChange = (date: string) => {
     if (mode === "replay") {
@@ -160,7 +162,11 @@ export function SectorRotationPage() {
           <label className="label-density"><span>标注密度</span><select value={labelDensity} onChange={(event) => setLabelDensity(event.target.value as LabelDensity)}><option value="compact">精简</option><option value="focus">关注</option><option value="all">全部</option></select></label>
         </div>
         {mode === "replay" && <ReplayControls dates={replayState.dates} index={replayState.index} playing={replayState.playing} speed={replayState.speed} dispatch={replayDispatch} />}
-        {filteredSectors.length > 0 ? <LazyQuadrantChart sectors={filteredSectors} selectedSectorName={selectedSectorName} onSelect={setSelectedSectorName} labelDensity={labelDensity} trail={trail} /> : <div className="empty-panel">当前筛选条件下没有可展示行业</div>}
+        {replayUnavailable
+          ? <div className="empty-panel" role="status">{replay.isLoading ? "回放数据加载中" : "回放数据暂不可用"}</div>
+          : filteredSectors.length > 0
+            ? <LazyQuadrantChart sectors={filteredSectors} selectedSectorName={selectedSectorName} onSelect={setSelectedSectorName} labelDensity={labelDensity} trail={trail} />
+            : <div className="empty-panel">当前筛选条件下没有可展示行业</div>}
         <footer className="chart-note"><span>气泡大小：量能活跃度</span><span>透明度：阶段置信度</span><span>描边：行业内部参与度</span>{mode === "replay" && selectedSectorName && <span className="trail-note"><Route size={11} />虚线：{selectedSectorName} 近10日尾迹</span>}<span>坐标分数不是收益率</span></footer>
       </article>
       <SectorRanking sectors={filteredSectors} selectedSectorName={selectedSectorName} onSelect={setSelectedSectorName} />
@@ -173,6 +179,6 @@ export function SectorRotationPage() {
       previousLifecycleState={previousLifecycleState}
       onClose={() => setSelectedSectorName(null)}
     />}
-    {comparisonSectors.length > 0 && <section className="sector-history content-panel"><header className="panel-header"><div><p>SECTOR TRAJECTORY</p><h2><History aria-hidden="true" />行业轨迹对比</h2></div><div className="segmented-control">{([5, 20, 60] as const).map((windowValue) => <button className={historyWindow === windowValue ? "is-active" : ""} key={windowValue} type="button" onClick={() => setHistoryWindow(windowValue)}>{windowValue} 日</button>)}</div></header><TrajectoryControls sectorNames={comparisonSectors} onRemove={(sectorName) => { setComparisonSectors((current) => current.filter((item) => item !== sectorName)); if (selectedSectorName === sectorName) setSelectedSectorName(null); }} />{history.isLoading ? <div className="trajectory-loading">正在加载行业历史轨迹…</div> : <><LazySectorTrajectory trajectories={trajectories} /><LifecycleBands sectorNames={comparisonSectors.slice(0, 5)} points={lifecycleHistoryPoints} expectedDates={lifecycleHistoryDates} /></>}{historyGaps.length > 0 && <div className="history-gaps"><strong>数据缺口</strong>{historyGaps.map((gap) => <span key={gap.sector_name}>{gap.sector_name}：{gap.dates.length} 个交易日缺少有效坐标（轨迹已断开）</span>)}</div>}</section>}
+    {comparisonSectors.length > 0 && <section className="sector-history content-panel"><header className="panel-header"><div><p>SECTOR TRAJECTORY</p><h2><History aria-hidden="true" />行业轨迹对比</h2></div><div className="segmented-control">{([5, 20, 60] as const).map((windowValue) => <button className={historyWindow === windowValue ? "is-active" : ""} key={windowValue} type="button" onClick={() => setHistoryWindow(windowValue)}>{windowValue} 日</button>)}</div></header><TrajectoryControls sectorNames={comparisonSectors} onRemove={(sectorName) => { setComparisonSectors((current) => current.filter((item) => item !== sectorName)); if (selectedSectorName === sectorName) setSelectedSectorName(null); }} />{history.isLoading ? <div className="trajectory-loading">正在加载行业历史轨迹…</div> : history.isError ? <div className="history-error" role="status">历史轨迹暂不可用，当前快照保持可用。</div> : <><LazySectorTrajectory trajectories={trajectories} /><LifecycleBands sectorNames={comparisonSectors.slice(0, 5)} points={lifecycleHistoryPoints} expectedDates={visibleHistoryDates} /></>}{!history.isError && historyGaps.length > 0 && <div className="history-gaps"><strong>数据缺口</strong>{historyGaps.map((gap) => <span key={gap.sector_name}>{gap.sector_name}：{gap.dates.length} 个交易日缺少有效坐标（轨迹已断开）</span>)}</div>}</section>}
   </div>;
 }
