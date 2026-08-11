@@ -13,10 +13,14 @@ from .backtest import (
     build_forward_return_labels,
     evaluate_by_regime,
     evaluate_factor,
+    evaluate_lifecycle_score_bucket_oos,
+    evaluate_lifecycle_score_buckets,
+    evaluate_lifecycle_states,
     evaluate_rolling_oos,
     rolling_oos_windows,
     simulate_top_group_strategy,
 )
+from .lifecycle import rebuild_lifecycle_history_v0
 from .snapshot_store import persist_forward_returns
 
 
@@ -37,11 +41,21 @@ def run_research(level: int, start_date: str, end_date: str, model_version: str,
     labels["target_date"] = pd.to_datetime(labels["target_date"])
     persist_forward_returns(labels, level)
     snapshots = pd.DataFrame(execute_query(
-        "SELECT as_of_date, sector_name, composite_score, market_regime FROM sector_rotation_sector_daily_snapshot "
+        "SELECT as_of_date, sector_name, composite_score, market_regime, score_eligible, phase_raw, phase_confirmed, "
+        "participation_score, rank_change_1d, top10_days_20 FROM sector_rotation_sector_daily_snapshot "
         "WHERE sector_level = %s AND model_version = %s AND as_of_date BETWEEN %s AND %s",
         (level, model_version, start_date, end_date),
     ))
     snapshots["as_of_date"] = pd.to_datetime(snapshots["as_of_date"])
+    lifecycle_required_columns = {
+        "score_eligible", "phase_raw", "phase_confirmed", "participation_score", "rank_change_1d", "top10_days_20",
+    }
+    if "lifecycle_state" in snapshots:
+        lifecycle_snapshots = snapshots
+    elif lifecycle_required_columns.issubset(snapshots):
+        lifecycle_snapshots = rebuild_lifecycle_history_v0(snapshots)
+    else:
+        lifecycle_snapshots = pd.DataFrame()
     metrics = []
     for horizon in DEFAULT_ALPHA_DECAY_HORIZONS:
         result = evaluate_factor(snapshots, labels, "composite_score", horizon)
@@ -73,6 +87,28 @@ def run_research(level: int, start_date: str, end_date: str, model_version: str,
     output = pd.DataFrame(metrics)
     Path(output_dir).mkdir(parents=True, exist_ok=True)
     output.to_csv(Path(output_dir) / f"sector_rotation2_research_{end_date}.csv", index=False, encoding="utf-8-sig")
+    if "lifecycle_state" in lifecycle_snapshots:
+        lifecycle = pd.concat(
+            [evaluate_lifecycle_states(lifecycle_snapshots, labels, horizon).assign(horizon=horizon)
+             for horizon in DEFAULT_ALPHA_DECAY_HORIZONS],
+            ignore_index=True,
+        )
+        lifecycle.to_csv(Path(output_dir) / f"sector_rotation2_lifecycle_{end_date}.csv", index=False, encoding="utf-8-sig")
+        lifecycle_score_bucket_frames = [
+            evaluate_lifecycle_score_buckets(lifecycle_snapshots, labels, horizon).assign(horizon=horizon)
+            for horizon in DEFAULT_ALPHA_DECAY_HORIZONS
+        ]
+        if oos_windows:
+            lifecycle_score_bucket_frames.extend(
+                evaluate_lifecycle_score_bucket_oos(lifecycle_snapshots, labels, horizon, oos_windows)
+                for horizon in DEFAULT_ALPHA_DECAY_HORIZONS
+            )
+        lifecycle_score_buckets = pd.concat(lifecycle_score_bucket_frames, ignore_index=True)
+        lifecycle_score_buckets.to_csv(
+            Path(output_dir) / f"sector_rotation2_lifecycle_score_buckets_{end_date}.csv",
+            index=False,
+            encoding="utf-8-sig",
+        )
     pd.DataFrame(oos_windows).to_csv(Path(output_dir) / f"sector_rotation2_oos_windows_{end_date}.csv", index=False, encoding="utf-8-sig")
     _write_alpha_decay_report(output, level, start_date, end_date, model_version, Path(output_dir))
     return output

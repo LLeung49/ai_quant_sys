@@ -11,6 +11,76 @@ from .data_loader import build_market_benchmark, load_sector_panel
 DEFAULT_ALPHA_DECAY_HORIZONS = (1, 2, 3, 5, 10, 20, 40)
 
 
+def evaluate_lifecycle_states(snapshots: pd.DataFrame, labels: pd.DataFrame, horizon: int) -> pd.DataFrame:
+    """按 Lifecycle 状态统计同一 Score 快照日可得的成熟前瞻超额收益。"""
+    selected = labels.loc[labels["horizon"] == horizon, ["as_of_date", "sector_name", "excess_return"]]
+    merged = snapshots[["as_of_date", "sector_name", "lifecycle_state"]].merge(
+        selected, on=["as_of_date", "sector_name"], how="inner"
+    ).dropna(subset=["lifecycle_state", "excess_return"])
+    if merged.empty:
+        return pd.DataFrame(columns=["lifecycle_state", "mean_excess_return", "sample_count"])
+    return merged.groupby("lifecycle_state", as_index=False).agg(
+        mean_excess_return=("excess_return", "mean"), sample_count=("excess_return", "size")
+    )
+
+
+def evaluate_lifecycle_score_buckets(snapshots: pd.DataFrame, labels: pd.DataFrame, horizon: int) -> pd.DataFrame:
+    """在每日 Score 五分位内统计 Lifecycle 的成熟前瞻超额收益。"""
+    required_snapshot_columns = {"as_of_date", "sector_name", "composite_score", "lifecycle_state"}
+    if not required_snapshot_columns.issubset(snapshots):
+        raise ValueError("快照缺少 Lifecycle 条件收益所需列")
+    selected = labels.loc[labels["horizon"] == horizon, ["as_of_date", "sector_name", "excess_return"]].copy()
+    _validate_unique(snapshots, "快照")
+    _validate_unique(selected, "标签")
+    merged = snapshots[["as_of_date", "sector_name", "composite_score", "lifecycle_state"]].merge(
+        selected, on=["as_of_date", "sector_name"], how="inner"
+    ).dropna(subset=["lifecycle_state", "composite_score", "excess_return"])
+    merged["composite_score"] = pd.to_numeric(merged["composite_score"], errors="coerce")
+    merged["excess_return"] = pd.to_numeric(merged["excess_return"], errors="coerce")
+    merged = merged.dropna(subset=["composite_score", "excess_return"])
+    if merged.empty:
+        return pd.DataFrame(columns=["score_bucket", "lifecycle_state", "mean_excess_return", "sample_count"])
+
+    def assign_quintiles(group: pd.DataFrame) -> pd.DataFrame:
+        group = group.copy()
+        if group["composite_score"].nunique() < 5:
+            group["score_bucket"] = np.nan
+        else:
+            group["score_bucket"] = pd.qcut(group["composite_score"], 5, labels=False, duplicates="drop") + 1
+        return group
+
+    bucketed = merged.groupby("as_of_date", group_keys=False).apply(assign_quintiles, include_groups=False)
+    bucketed = bucketed.dropna(subset=["score_bucket"])
+    return bucketed.groupby(["score_bucket", "lifecycle_state"], as_index=False).agg(
+        mean_excess_return=("excess_return", "mean"), sample_count=("excess_return", "size")
+    )
+
+
+def evaluate_lifecycle_score_bucket_oos(
+    snapshots: pd.DataFrame,
+    labels: pd.DataFrame,
+    horizon: int,
+    windows: list[dict[str, pd.Timestamp]],
+) -> pd.DataFrame:
+    """仅在每个滚动窗口的验证日期内统计受控 Lifecycle 条件收益。"""
+    dated_snapshots = snapshots.copy()
+    dated_snapshots["as_of_date"] = pd.to_datetime(dated_snapshots["as_of_date"])
+    rows: list[pd.DataFrame] = []
+    for index, window in enumerate(windows, start=1):
+        validation = dated_snapshots.loc[
+            dated_snapshots["as_of_date"].between(window["validation_start"], window["validation_end"])
+        ]
+        result = evaluate_lifecycle_score_buckets(validation, labels, horizon)
+        if not result.empty:
+            rows.append(result.assign(window_name=f"oos_{index:03d}", horizon=horizon, **window))
+    if not rows:
+        return pd.DataFrame(columns=[
+            "score_bucket", "lifecycle_state", "mean_excess_return", "sample_count",
+            "window_name", "horizon", "train_start", "train_end", "validation_start", "validation_end",
+        ])
+    return pd.concat(rows, ignore_index=True)
+
+
 def make_forward_labels(close: pd.Series, horizon: int, benchmark_close: pd.Series | None = None) -> pd.DataFrame:
     """用索引中的未来第 N 个交易日生成收益标签。
 

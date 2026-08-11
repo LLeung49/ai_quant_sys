@@ -40,6 +40,9 @@ def write_daily_reports(frame: pd.DataFrame, as_of_date: str, output_dir: str | 
     for sector_name, row in top.iterrows():
         lines.append(
             f"{int(row['composite_rank'])}. {sector_name} | score={row['composite_score']:.4f} | "
-            f"phase={row.get('phase_confirmed', 'neutral')}"
+            f"phase={row.get('phase_confirmed', 'neutral')} | "
+            f"lifecycle={row.get('lifecycle_state', 'neutral')} | "
+            f"action={row.get('lifecycle_action', 'observe')} | "
+            f"position_multiplier={float(row.get('lifecycle_position_multiplier', 0.0)):.2f}"
         )
     top_path.write_text("\n".join(lines) + "\n", encoding="utf-8")

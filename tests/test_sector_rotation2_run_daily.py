@@ -51,6 +51,7 @@ def test_run_writes_reports_only_after_snapshot_persistence(monkeypatch, tmp_pat
 
     assert calls == ["create", "persist", "success"]
     assert len(result) == 3
+    assert {"lifecycle_state", "lifecycle_action", "lifecycle_position_multiplier", "lifecycle_reason"} <= set(result)
     assert (tmp_path / "sector_rotation2_daily_2026-03-26.csv").exists()
     assert (tmp_path / "sector_rotation2_topN_2026-03-26.txt").exists()
     assert (tmp_path / "sector_rotation2_data_quality_2026-03-26.csv").exists()

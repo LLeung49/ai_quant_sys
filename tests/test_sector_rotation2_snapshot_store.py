@@ -14,7 +14,11 @@ def test_migration_defines_approved_sector_rotation_tables():
     assert "CREATE TABLE IF NOT EXISTS sector_rotation_sector_forward_return" in sql
     assert "CREATE TABLE IF NOT EXISTS sector_rotation_backtest_metric" in sql
     assert "UNIQUE KEY uq_snapshot (as_of_date, sector_level, sector_name, model_version)" in sql
-    for column in ("phase_age", "phase_changed", "regime_multiplier", "rank_change_1d", "rank_change_5d", "top10_days_20"):
+    for column in (
+        "phase_age", "phase_changed", "regime_multiplier", "rank_change_1d", "rank_change_5d", "top10_days_20",
+        "lifecycle_state", "lifecycle_action", "lifecycle_position_multiplier", "lifecycle_reason",
+        "lifecycle_changed", "lifecycle_age",
+    ):
         assert column in sql
 
 
@@ -73,6 +77,10 @@ def test_persist_daily_snapshot_uses_one_parameterized_upsert_and_commits(monkey
     assert rows[0][0] == "2026-01-05"
     assert "phase_age" in sql
     assert "rank_change_5d" in sql
+    assert "lifecycle_state" in sql
+    assert "lifecycle_position_multiplier" in sql
+    assert "lifecycle_changed" in sql
+    assert "lifecycle_age" in sql
 
 
 def test_persist_daily_snapshot_converts_nan_to_mysql_null(monkeypatch):
@@ -131,7 +139,10 @@ def test_mark_run_failed_records_error_summary(monkeypatch):
 def test_load_previous_snapshots_converts_execute_query_tuple_to_dataframe(monkeypatch):
     """既有 execute_query 返回字典元组，快照读取层必须转换为 DataFrame。"""
     monkeypatch.setattr(snapshot_store, "execute_query", lambda *args, **kwargs: (
-        {"as_of_date": "2026-01-02", "sector_name": "电子", "phase_raw": "neutral"},
+        {
+            "as_of_date": "2026-01-02", "sector_name": "电子", "phase_raw": "neutral",
+            "lifecycle_state": "trending", "lifecycle_age": 3,
+        },
     ))
 
     result = snapshot_store.load_previous_snapshots("2026-01-03", 2, "v1")
@@ -139,3 +150,4 @@ def test_load_previous_snapshots_converts_execute_query_tuple_to_dataframe(monke
     assert isinstance(result, pd.DataFrame)
     assert result.loc[0, "sector_name"] == "电子"
     assert result.loc[0, "as_of_date"] == pd.Timestamp("2026-01-02")
+    assert result.loc[0, "lifecycle_state"] == "trending"
