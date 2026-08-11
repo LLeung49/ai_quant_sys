@@ -20,8 +20,11 @@ import { initialReplayState, replayReducer } from "./replay/replayState";
 import { buildSectorTrail } from "./replay/sectorTrail";
 import { buildReplayFrames } from "./workbench/frameState";
 import { parseWorkbenchUrl, serializeWorkbenchUrl, type LabelDensity, type WorkbenchMode } from "./workbench/urlState";
+import { hasLifecycleCoverage, matchesLifecycleFilter, summarizeLifecycle } from "./lifecycle/derive";
+import type { LifecycleFilter } from "./lifecycle/meta";
+import type { SectorPoint } from "./api";
 
-type DisplaySector = QuadrantSector & RankingSector & DetailSector & {
+type DisplaySector = SectorPoint & QuadrantSector & RankingSector & DetailSector & {
   as_of_date: string;
   market_regime?: string;
   regime_multiplier?: number | null;
@@ -41,6 +44,8 @@ export function SectorRotationPage() {
   const [comparisonSectors, setComparisonSectors] = useState<string[]>(initialUrl.sector ? [initialUrl.sector] : []);
   const [searchQuery, setSearchQuery] = useState(initialUrl.query);
   const [phaseFilter, setPhaseFilter] = useState(initialUrl.phase);
+  const [lifecycleFilter, setLifecycleFilter] = useState<LifecycleFilter>(initialUrl.lifecycle);
+  const [changedOnly, setChangedOnly] = useState(initialUrl.changedOnly);
   const [mode, setMode] = useState<WorkbenchMode>(initialUrl.mode);
   const [labelDensity, setLabelDensity] = useState<LabelDensity>(initialUrl.labelDensity);
   const [historyWindow, setHistoryWindow] = useState<5 | 20 | 60>(initialUrl.historyWindow);
@@ -65,9 +70,9 @@ export function SectorRotationPage() {
   const displayDate = mode === "replay" ? replayDate : latestDate;
 
   useEffect(() => {
-    const nextSearch = serializeWorkbenchUrl({ date: displayDate, level, mode, phase: phaseFilter, query: searchQuery, sector: selectedSectorName, historyWindow, labelDensity });
+    const nextSearch = serializeWorkbenchUrl({ date: displayDate, level, mode, phase: phaseFilter, query: searchQuery, sector: selectedSectorName, historyWindow, labelDensity, lifecycle: lifecycleFilter, changedOnly });
     window.history.replaceState(null, "", `${window.location.pathname}${nextSearch}`);
-  }, [displayDate, historyWindow, labelDensity, level, mode, phaseFilter, searchQuery, selectedSectorName]);
+  }, [changedOnly, displayDate, historyWindow, labelDensity, level, lifecycleFilter, mode, phaseFilter, searchQuery, selectedSectorName]);
 
   useEffect(() => {
     if (selectedDate && !dates.data?.includes(selectedDate)) setSelectedDate(undefined);
@@ -85,17 +90,22 @@ export function SectorRotationPage() {
   const snapshotSectors = snapshot.data.sectors as unknown as DisplaySector[];
   const replayFrame = replayDate ? replayFrames.byDate[replayDate] ?? [] : [];
   const sectors = mode === "replay" && replayFrame.length > 0 ? replayFrame : snapshotSectors;
+  const lifecycleAvailable = hasLifecycleCoverage(sectors);
+  const lifecycleCounts = summarizeLifecycle(sectors);
   const filteredSectors = sectors.filter((sector) => {
     const matchesSearch = !searchQuery.trim() || sector.sector_name.includes(searchQuery.trim());
     const matchesPhase = phaseFilter === "all" || sector.phase_confirmed === phaseFilter;
-    return matchesSearch && matchesPhase;
+    const matchesLifecycle = !lifecycleAvailable || matchesLifecycleFilter(sector, lifecycleFilter, changedOnly);
+    return matchesSearch && matchesPhase && matchesLifecycle;
   });
-  const eligible = sectors.filter((sector) => Boolean(sector.score_eligible)).length;
-  const accelerating = sectors.filter((sector) => sector.phase_confirmed === "accel_up").length;
-  const risk = sectors.filter((sector) => sector.phase_confirmed === "accel_down" || sector.phase_confirmed === "decel_up").length;
   const selected = sectors.find((sector) => sector.sector_name === selectedSectorName) ?? snapshotSectors.find((sector) => sector.sector_name === selectedSectorName);
   const trail = mode === "replay" ? buildSectorTrail(replayPoints, selectedSectorName, replayDate ?? "", 10) : [];
-  const historyPoints = (history.data ?? []) as { as_of_date: string; sector_name: string; velocity_score: number | null; acceleration_score: number | null }[];
+  const historyPoints = (history.data ?? []).map((point: SectorPoint) => ({
+    as_of_date: point.as_of_date ?? "",
+    sector_name: point.sector_name,
+    velocity_score: typeof point.velocity_score === "number" ? point.velocity_score : null,
+    acceleration_score: typeof point.acceleration_score === "number" ? point.acceleration_score : null,
+  }));
   const historyDates = [...(dates.data ?? [])].sort().slice(-historyWindow);
   const trajectories = comparisonSectors.map((sectorName) => ({
     sector_name: sectorName,
@@ -122,8 +132,8 @@ export function SectorRotationPage() {
   };
 
   return <div className="rotation-page">
-    <RotationFilters dates={mode === "replay" ? [...replayState.dates].reverse() : dates.data ?? []} selectedDate={displayDate ?? ""} level={level} modelVersion="v1" onDateChange={handleDateChange} onLevelChange={(nextLevel) => { setLevel(nextLevel); setSelectedDate(undefined); setSelectedSectorName(null); setComparisonSectors([]); setMode("snapshot"); }} searchQuery={searchQuery} phaseFilter={phaseFilter} onSearchChange={setSearchQuery} onPhaseChange={setPhaseFilter} />
-    <MarketSummary marketRegime={sectors[0]?.market_regime ?? "range"} eligibleCount={eligible} acceleratingCount={accelerating} riskCount={risk} />
+    <RotationFilters dates={mode === "replay" ? [...replayState.dates].reverse() : dates.data ?? []} selectedDate={displayDate ?? ""} level={level} modelVersion="v1" onDateChange={handleDateChange} onLevelChange={(nextLevel) => { setLevel(nextLevel); setSelectedDate(undefined); setSelectedSectorName(null); setComparisonSectors([]); setMode("snapshot"); }} searchQuery={searchQuery} phaseFilter={phaseFilter} onSearchChange={setSearchQuery} onPhaseChange={setPhaseFilter} lifecycleFilter={lifecycleFilter} changedOnly={changedOnly} lifecycleDisabled={!lifecycleAvailable} onLifecycleChange={setLifecycleFilter} onChangedOnlyChange={setChangedOnly} />
+    <MarketSummary marketRegime={sectors[0]?.market_regime ?? "range"} counts={lifecycleCounts} activeLifecycle={lifecycleFilter} changedOnly={changedOnly} lifecycleDisabled={!lifecycleAvailable} onLifecycleFilterChange={setLifecycleFilter} onChangedOnlyChange={setChangedOnly} />
     <section className="rotation-workspace">
       <article className="chart-panel">
         <header className="panel-header">

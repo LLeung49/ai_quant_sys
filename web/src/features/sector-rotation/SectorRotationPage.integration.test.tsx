@@ -13,7 +13,11 @@ vi.mock("./useRotationData", () => ({
         sector_level: 2,
         model_version: "v1",
         meta: { run_status: "succeeded", field_version: "v1", source_max_trade_date: "2026-08-04" },
-        sectors: [{ as_of_date: "2026-08-04", sector_name: "教育", score_eligible: true, velocity_score: 0.6, acceleration_score: 0.8, volume_score: 0.4, participation_score: 0.5, phase_confirmed: "accel_up", phase_confidence: 0.9, composite_rank: 1, composite_score: 0.88, rank_change_1d: 9, rank_change_5d: 21, coverage_ratio: 0.97, phase_changed: 1 }],
+        sectors: [
+          { as_of_date: "2026-08-04", sector_name: "半导体", score_eligible: true, velocity_score: 0.6, acceleration_score: 0.8, volume_score: 0.4, participation_score: 0.5, phase_confirmed: "decel_up", phase_confidence: 0.9, composite_rank: 1, composite_score: 0.88, rank_change_1d: 9, rank_change_5d: 21, coverage_ratio: 0.97, phase_changed: 1, lifecycle_state: "crowded", lifecycle_changed: true },
+          { as_of_date: "2026-08-04", sector_name: "银行", score_eligible: true, velocity_score: 0.4, acceleration_score: 0.2, volume_score: 0.4, participation_score: 0.5, phase_confirmed: "decel_up", phase_confidence: 0.9, composite_rank: 2, composite_score: 0.78, rank_change_1d: 4, rank_change_5d: 10, coverage_ratio: 0.97, phase_changed: 0, lifecycle_state: "exit", lifecycle_changed: false },
+          { as_of_date: "2026-08-04", sector_name: "教育", score_eligible: true, velocity_score: 0.2, acceleration_score: 0.6, volume_score: 0.4, participation_score: 0.5, phase_confirmed: "accel_up", phase_confidence: 0.9, composite_rank: 3, composite_score: 0.68, rank_change_1d: 1, rank_change_5d: 5, coverage_ratio: 0.97, phase_changed: 1, lifecycle_state: "trending", lifecycle_changed: true },
+        ],
       },
       isLoading: false,
       isError: false,
@@ -58,9 +62,9 @@ describe("SectorRotationPage 统一工作台", () => {
     render(<SectorRotationPage />);
 
     expect(screen.getAllByTestId("quadrant")).toHaveLength(1);
-    expect(screen.getByText("当前图表：教育")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "图中选择 教育" }));
-    expect(await screen.findByText("轨迹对比：教育")).toBeInTheDocument();
+    expect(screen.getByText("当前图表：半导体、银行、教育")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "图中选择 半导体" }));
+    expect(await screen.findByText("轨迹对比：半导体")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: /动态回放/ }));
     expect(await screen.findByLabelText("全市场回放控制")).toBeInTheDocument();
@@ -81,5 +85,13 @@ describe("SectorRotationPage 统一工作台", () => {
     await waitFor(() => expect(screen.getByTestId("drawer-date")).toHaveTextContent("2026-08-03|2|false"));
     fireEvent.click(await screen.findByRole("button", { name: "下一帧" }));
     await waitFor(() => expect(screen.getByTestId("drawer-date")).toHaveTextContent("2026-08-04|2|true"));
+  });
+
+  it("Phase、Lifecycle、搜索和今日变化共同过滤图表与排名", async () => {
+    window.history.replaceState(null, "", "/?phase=decel_up&lifecycle=risk&changed=1&q=半导体");
+    render(<SectorRotationPage />);
+
+    expect(await screen.findByText("当前图表：半导体")).toBeInTheDocument();
+    expect(screen.queryByText("当前图表：银行")).not.toBeInTheDocument();
   });
 });
