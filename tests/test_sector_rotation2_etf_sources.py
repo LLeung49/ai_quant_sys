@@ -8,6 +8,8 @@ from morning_conference.sector_rotation2.etf_sources import fetch_etf_holdings, 
 
 def test_normalize_etf_code_adds_exchange_suffix_and_rejects_unknown_prefix():
     assert normalize_etf_code("510300") == "510300.SH"
+    assert normalize_etf_code("520850") == "520850.SH"
+    assert normalize_etf_code("530530") == "530530.SH"
     assert normalize_etf_code("159915.SZ") == "159915.SZ"
 
     with pytest.raises(ValueError, match="unsupported ETF code"):
