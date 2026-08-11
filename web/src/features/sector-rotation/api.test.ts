@@ -1,9 +1,22 @@
 /** 板块轮动 API 客户端对服务端契约的测试。 */
 import { describe, expect, it, vi } from "vitest";
-import { fetchAvailableDates, fetchReplay, fetchSectorHistory, fetchSnapshot, SectorRotationApiError } from "./api";
+import { fetchAvailableDates, fetchReplay, fetchSectorHistory, fetchSnapshot, SectorRotationApiError, sectorPointSchema } from "./api";
 
 describe("板块轮动 API 客户端", () => {
   const meta = { run_status: "succeeded", field_version: "v1", source_max_trade_date: "2026-08-04", eligible_sector_count: 113, skipped_sector_count: 0, market_regime: "high_volatility", regime_multiplier: 0.85 };
+
+  it("保留合法 Lifecycle 字段并兼容旧快照", async () => {
+    const current = sectorPointSchema.parse({
+      sector_name: "半导体",
+      score_eligible: true,
+      lifecycle_state: "trending",
+      lifecycle_reason: "rank_and_participation",
+      lifecycle_changed: 1,
+      lifecycle_age: 3,
+    });
+    expect(current).toMatchObject({ lifecycle_state: "trending", lifecycle_changed: true, lifecycle_age: 3 });
+    expect(sectorPointSchema.parse({ sector_name: "银行", score_eligible: true }).lifecycle_state).toBeUndefined();
+  });
 
   it("解析最新日期列表并发送层级和版本参数", async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ sector_level: 2, model_version: "v1", dates: ["2026-08-04"], meta: { ...meta, source_max_trade_date: null, eligible_sector_count: null, skipped_sector_count: null, market_regime: null, regime_multiplier: null } })));

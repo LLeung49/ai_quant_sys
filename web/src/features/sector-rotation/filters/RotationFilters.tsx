@@ -1,6 +1,7 @@
 /** 板块轮动主视图的日期、行业层级和模型版本筛选控件。 */
 
 import { CalendarDays, Layers3, Search } from "lucide-react";
+import { LIFECYCLE_FILTER_VALUES, LIFECYCLE_META, type LifecycleFilter } from "../lifecycle/meta";
 
 export interface RotationFiltersProps {
   /** 可选成功运行日期，按最新到最早排序。 */
@@ -23,6 +24,23 @@ export interface RotationFiltersProps {
   onSearchChange?: (query: string) => void;
   /** 输入：新阶段值；输出：同步过滤象限图和排行榜。 */
   onPhaseChange?: (phase: string) => void;
+  /** 当前 Lifecycle 状态组筛选。 */
+  lifecycleFilter?: LifecycleFilter;
+  /** 是否只显示当日 Lifecycle 发生变化的行业。 */
+  changedOnly?: boolean;
+  /** 旧快照没有 Lifecycle 数据时，禁用相关控件。 */
+  lifecycleDisabled?: boolean;
+  /** 输入：新的 Lifecycle 筛选；输出：通知页面同步状态。 */
+  onLifecycleChange?: (filter: LifecycleFilter) => void;
+  /** 输入：是否只看今日变化；输出：通知页面同步状态。 */
+  onChangedOnlyChange?: (changedOnly: boolean) => void;
+}
+
+function getLifecycleFilterLabel(value: LifecycleFilter): string {
+  if (value === "all") return "全部状态";
+  if (value === "repair_or_emerging") return "修复/初启";
+  if (value === "risk") return "风险提示";
+  return LIFECYCLE_META[value].label;
 }
 
 /**
@@ -31,7 +49,7 @@ export interface RotationFiltersProps {
  * 输入：当前选择和受控更新回调。
  * 输出：带显式标签、可键盘操作的表单控件。
  */
-export function RotationFilters({ dates, selectedDate, level, modelVersion, onDateChange, onLevelChange, searchQuery = "", phaseFilter = "all", onSearchChange, onPhaseChange }: RotationFiltersProps) {
+export function RotationFilters({ dates, selectedDate, level, modelVersion, onDateChange, onLevelChange, searchQuery = "", phaseFilter = "all", onSearchChange, onPhaseChange, lifecycleFilter = "all", changedOnly = false, lifecycleDisabled = false, onLifecycleChange, onChangedOnlyChange }: RotationFiltersProps) {
   return (
     <section className="rotation-filters" aria-label="板块轮动筛选条件">
       <div className="filter-heading"><span>观察截面</span><small>所有指标均来自当日成功快照</small></div>
@@ -60,6 +78,17 @@ export function RotationFilters({ dates, selectedDate, level, modelVersion, onDa
           <option value="neutral">方向未明</option>
         </select>
       </label>
+      <label className="filter-field">
+        <span>生命周期状态</span>
+        <select aria-label="生命周期状态" value={lifecycleFilter} disabled={lifecycleDisabled} onChange={(event) => onLifecycleChange?.(event.target.value as LifecycleFilter)}>
+          {LIFECYCLE_FILTER_VALUES.map((value) => <option key={value} value={value}>{getLifecycleFilterLabel(value)}</option>)}
+        </select>
+      </label>
+      <label className="filter-field">
+        <span>仅看今日变化</span>
+        <input aria-label="仅看今日变化" type="checkbox" checked={changedOnly} disabled={lifecycleDisabled} onChange={(event) => onChangedOnlyChange?.(event.target.checked)} />
+      </label>
+      {lifecycleDisabled && <p>该日期无 Lifecycle 数据</p>}
       <label className="filter-field filter-field--search">
         <span><Search aria-hidden="true" size={14} />搜索行业</span>
         <input aria-label="搜索行业" value={searchQuery} placeholder="输入行业名称" onChange={(event) => onSearchChange?.(event.target.value)} />

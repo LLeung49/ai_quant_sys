@@ -1,10 +1,11 @@
 /** 板块轮动象限气泡图的 ECharts 纯配置生成器。 */
 
 import { getPhaseMeta } from "../labels";
+import { getLifecycleMeta, getLifecycleReasonLabel, type LifecycleSectorFields } from "../lifecycle/meta";
 import type { LabelDensity } from "../workbench/urlState";
 import { rankAttention } from "./attentionPriority";
 
-export interface QuadrantSector {
+export interface QuadrantSector extends LifecycleSectorFields {
   sector_name: string;
   velocity_score: number | null;
   acceleration_score: number | null;
@@ -73,10 +74,12 @@ export function buildQuadrantOption(sectors: QuadrantSector[], selectedSectorNam
         if (!params.data.sector) return params.data.as_of_date ?? "历史轨迹";
         const sector = params.data.sector;
         const phase = getPhaseMeta(sector.phase_confirmed);
+        const lifecycle = getLifecycleMeta(sector.lifecycle_state);
         const number = (value: number | null | undefined) => value == null ? "数据不足" : value.toFixed(2);
         const percent = (value: number | null | undefined) => value == null ? "数据不足" : `${(value * 100).toFixed(0)}%`;
         return [
           `<div class="chart-tooltip-title">${sector.sector_name}<span>${phase.label}</span></div>`,
+          `<div class="chart-tooltip-lifecycle"><span>${lifecycle.label}</span><b>${sector.lifecycle_age == null ? "持续时间不足" : `${sector.lifecycle_age} 日`}</b>${sector.lifecycle_changed === true ? "<em>今日变化</em>" : ""}<strong>${getLifecycleReasonLabel(sector.lifecycle_reason)}</strong></div>`,
           `<div class="chart-tooltip-reasons"><span>关注原因</span><strong>${params.data.attentionReasons?.length ? params.data.attentionReasons.join(" · ") : "当前截面常规观察"}</strong></div>`,
           `<div class="chart-tooltip-grid"><span>综合排名</span><b>${sector.composite_rank ?? "—"}</b><span>综合得分</span><b>${number(sector.composite_score)}</b>`,
           `<span>趋势速度</span><b>${number(sector.velocity_score)}</b><span>趋势加速度</span><b>${number(sector.acceleration_score)}</b>`,
@@ -103,7 +106,7 @@ export function buildQuadrantOption(sectors: QuadrantSector[], selectedSectorNam
       splitLine: { lineStyle: { color: "rgba(92, 112, 140, 0.16)" } },
     },
     series: [{
-      type: "scatter",
+      type: "scatter" as const,
       data,
       symbolSize: (value: number[]) => Math.max(12, Math.min(46, 24 + value[2] * 18)),
       label: { position: "top", color: "#dce8f8", fontSize: 10, formatter: "{b}" },

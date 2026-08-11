@@ -1,13 +1,14 @@
 /** 选中行业的阶段解释、评分证据和数据口径详情抽屉。 */
 import { useEffect, useRef, useState } from "react";
-import { ArrowDown, ArrowUp, BarChart3, CalendarClock, ShieldAlert, X } from "lucide-react";
+import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { getPhaseMeta } from "../labels";
+import { getLifecycleMeta, getLifecycleReasonLabel, type LifecycleSectorFields } from "../lifecycle/meta";
 import { SectorKlineCard } from "../kline/SectorKlineCard";
 import { DEFAULT_KLINE_WINDOW, type KlineWindow } from "../kline/sectorKlineConfig";
 import { SectorKlineModal } from "../kline/SectorKlineModal";
 import type { SectorKlineResponse } from "../kline/sectorKlineApi";
 
-export interface DetailSector {
+export interface DetailSector extends LifecycleSectorFields {
   sector_name: string; phase_confirmed: string | null; phase_age: number | null; phase_confidence: number | null;
   composite_rank: number | null; rank_change_1d: number | null; coverage_ratio: number | null;
   trend_level_score: number | null; velocity_score: number | null; acceleration_score: number | null;
@@ -18,6 +19,8 @@ export interface DetailSector {
 interface SectorDetailDrawerProps {
   /** 当前选中的板块截面数据。 */
   sector: DetailSector;
+  /** 截止日之前最近一个有效的 Lifecycle 状态。 */
+  previousLifecycleState?: string | null;
   /** 当前申万行业层级。 */
   level: 1 | 2;
   /** 工作台当前显示的日期，用作 K 线历史数据的严格截止日。 */
@@ -53,9 +56,11 @@ export function buildKlineModalSelectionIdentity(sectorName: string, level: 1 | 
  * 输入：已选择行业的日快照字段与关闭回调。
  * 输出：带明确关闭控件、阶段解释、分数组成和覆盖率提示的详情区域。
  */
-export function SectorDetailDrawer({ sector, level, asOfDate, isLatestDate, onClose }: SectorDetailDrawerProps) {
+export function SectorDetailDrawer({ sector, previousLifecycleState, level, asOfDate, isLatestDate, onClose }: SectorDetailDrawerProps) {
   const phase = sector.phase_confirmed ?? "neutral";
   const phaseMeta = getPhaseMeta(phase);
+  const lifecycle = getLifecycleMeta(sector.lifecycle_state);
+  const previousLifecycle = previousLifecycleState == null ? null : getLifecycleMeta(previousLifecycleState);
   const closeRef = useRef<HTMLButtonElement>(null);
   const expandButtonRef = useRef<HTMLButtonElement>(null);
   // 窗口状态由抽屉统一持有，使缩略图和后续弹窗可共享同一观察区间且不重新读取行情。
@@ -96,14 +101,14 @@ export function SectorDetailDrawer({ sector, level, asOfDate, isLatestDate, onCl
         <div><p>SECTOR INSIGHT</p><h2>{sector.sector_name}</h2></div>
         <button ref={closeRef} className="icon-button" type="button" aria-label="关闭详情" onClick={onClose}><X aria-hidden="true" /></button>
       </header>
-      <section className="detail-conclusion" style={{ "--phase-color": phaseMeta.color, "--phase-soft": phaseMeta.softColor } as React.CSSProperties}>
-        <span className="phase-pill">{phaseMeta.label}</span><p>{phaseMeta.description}</p>
+      <section className="detail-lifecycle" aria-label="Lifecycle 详情">
+        <div><span>当前 Lifecycle</span><strong>{lifecycle.label}</strong></div>
+        <div><span>原因</span><strong>{getLifecycleReasonLabel(sector.lifecycle_reason)}</strong></div>
+        <div><span>持续天数</span><strong>{sector.lifecycle_age == null ? "数据不足" : `${sector.lifecycle_age} 日`}</strong></div>
+        <div><span>今日变化</span><strong>{sector.lifecycle_changed == null ? "数据不足" : sector.lifecycle_changed ? "是" : "否"}</strong></div>
+        <div><span>前态 → 当前态</span><strong>{previousLifecycle ? `${previousLifecycle.label} → ${lifecycle.label}` : "前一状态暂不可用"}</strong></div>
+        <p>Lifecycle 为市场状态观察标签，不构成交易建议。</p>
       </section>
-      <div className="detail-evidence">
-        <article><CalendarClock aria-hidden="true" /><span>阶段持续</span><strong>{sector.phase_age ?? "—"} 日</strong></article>
-        <article><BarChart3 aria-hidden="true" /><span>综合排名</span><strong>#{sector.composite_rank ?? "—"}</strong></article>
-        <article><ShieldAlert aria-hidden="true" /><span>阶段置信度</span><strong>{sector.phase_confidence == null ? "—" : `${(sector.phase_confidence * 100).toFixed(0)}%`}</strong></article>
-      </div>
       <SectorKlineCard
         sectorName={sector.sector_name}
         level={level}

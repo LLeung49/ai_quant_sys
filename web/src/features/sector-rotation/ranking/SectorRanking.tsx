@@ -1,8 +1,9 @@
 /** 板块轮动主视图的今日关注行业排行榜。 */
 import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 import { getPhaseMeta } from "../labels";
+import { getLifecycleMeta, type LifecycleSectorFields } from "../lifecycle/meta";
 
-export interface RankingSector {
+export interface RankingSector extends LifecycleSectorFields {
   sector_name: string;
   score_eligible: boolean;
   composite_rank: number | null;
@@ -32,14 +33,16 @@ export function SectorRanking({ sectors, onSelect, selectedSectorName }: SectorR
   return (
     <aside className="sector-ranking" aria-label="今日关注行业">
       <header className="panel-header ranking-header"><div><p>RANKING</p><h2>今日关注</h2></div><span>{ranked.length} 个有效行业</span></header>
-      <div className="ranking-columns" aria-hidden="true"><span>排名 / 行业</span><span>阶段</span><span>得分</span><span>变化</span></div>
+      <div className="ranking-columns" aria-hidden="true"><span>排名 / 行业</span><span>Lifecycle</span><span>阶段</span><span>得分</span><span>变化</span></div>
       <ol>{ranked.map((sector) => {
         const phase = getPhaseMeta(sector.phase_confirmed);
+        const lifecycle = getLifecycleMeta(sector.lifecycle_state);
         const change = sector.rank_change_1d;
         return (
         <li key={sector.sector_name}>
           <button className={selectedSectorName === sector.sector_name ? "is-selected" : ""} type="button" onClick={() => onSelect(sector.sector_name)} aria-label={`查看 ${sector.sector_name} 详情`}>
             <span className="rank">{sector.composite_rank}</span><span className="sector-name">{sector.sector_name}</span>
+            <small className="lifecycle-pill" style={{ "--lifecycle-color": lifecycle.color, "--lifecycle-soft": lifecycle.softColor } as React.CSSProperties}>{lifecycle.label}<b>{sector.lifecycle_age == null ? "数据不足" : `${sector.lifecycle_age} 日`}</b>{sector.lifecycle_changed === true ? <em>新变化</em> : null}</small>
             <small className="phase-pill" style={{ "--phase-color": phase.color, "--phase-soft": phase.softColor } as React.CSSProperties}>{phase.label}</small>
             <strong>{sector.composite_score?.toFixed(2) ?? "—"}</strong>
             <em className={change == null || change === 0 ? "rank-flat" : change > 0 ? "rank-up" : "rank-down"}>{change == null || change === 0 ? <Minus size={12} /> : change > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}{change == null ? "—" : Math.abs(change)}</em>
