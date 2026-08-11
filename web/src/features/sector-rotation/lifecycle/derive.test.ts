@@ -59,4 +59,18 @@ describe("lifecycle derived state", () => {
     expect(bands.map((band) => band.gap)).toEqual([false, true, false]);
     expect(bands.map((band) => band.tradingDays)).toEqual([1, 0, 1]);
   });
+
+  it("downgrades unknown and null lifecycle states to unavailable bands", () => {
+    const bands = buildLifecycleBands(
+      [
+        { as_of_date: "2026-08-08", sector_name: "半导体", lifecycle_state: "legacy" },
+        { as_of_date: "2026-08-10", sector_name: "半导体", lifecycle_state: null },
+      ],
+      ["2026-08-08", "2026-08-10"],
+    );
+    expect(bands).toHaveLength(1);
+    expect(bands[0].state).toBeNull();
+    expect(bands[0].gap).toBe(false);
+    expect(bands[0].tradingDays).toBe(2);
+  });
 });

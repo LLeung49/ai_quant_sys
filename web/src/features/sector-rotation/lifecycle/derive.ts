@@ -95,7 +95,7 @@ export function buildLifecycleBands(points: LifecyclePoint[], expectedDates: str
   const bands: LifecycleBand[] = [];
   for (const date of expectedDates) {
     const point = byDate.get(date);
-    const state = point?.lifecycle_state ?? null;
+    const state = isLifecycleState(point?.lifecycle_state) ? point.lifecycle_state : null;
     const gap = !point;
     const previous = bands[bands.length - 1];
     if (!gap && previous && !previous.gap && previous.state === state) {
