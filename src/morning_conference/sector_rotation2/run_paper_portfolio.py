@@ -6,7 +6,7 @@ from pathlib import Path
 import pandas as pd
 
 from .attribution import attribute_paper_portfolio
-from .paper_portfolio import ResearchPolicy, build_etf_targets, simulate_paper_portfolio
+from .paper_portfolio import RESEARCH_MODE_ONLY, ResearchPolicy, build_etf_targets, simulate_paper_portfolio
 
 
 def run_paper_portfolio(intent: pd.DataFrame, mapping: pd.DataFrame, prices: pd.DataFrame, industry_returns: pd.DataFrame, etf_returns: pd.DataFrame, policy: ResearchPolicy, output_dir: str | Path) -> dict[str, pd.DataFrame]:
@@ -24,4 +24,12 @@ def run_paper_portfolio(intent: pd.DataFrame, mapping: pd.DataFrame, prices: pd.
     simulation["holdings"].to_csv(destination / "paper_portfolio_holdings.csv", index=False, encoding="utf-8-sig")
     issues.to_csv(destination / "paper_portfolio_issues.csv", index=False, encoding="utf-8-sig")
     attribution.to_csv(destination / "paper_portfolio_attribution.csv", index=False, encoding="utf-8-sig")
+    (destination / "paper_portfolio_report.md").write_text(
+        "# Paper Portfolio Research Report\n\n"
+        f"- RESEARCH_MODE_ONLY: `{RESEARCH_MODE_ONLY}`\n"
+        f"- target_rows: `{len(targets)}`\n"
+        f"- issue_rows: `{len(issues)}`\n"
+        f"- attribution_rows: `{len(attribution)}`\n",
+        encoding="utf-8",
+    )
     return {"targets": targets, "issues": issues, **simulation, "attribution": attribution}

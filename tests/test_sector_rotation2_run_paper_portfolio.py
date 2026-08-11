@@ -18,3 +18,4 @@ def test_runner_writes_paper_portfolio_outputs(tmp_path):
 
     assert (tmp_path / "paper_portfolio_daily.csv").exists()
     assert (tmp_path / "paper_portfolio_attribution.csv").exists()
+    assert "RESEARCH_MODE_ONLY" in (tmp_path / "paper_portfolio_report.md").read_text(encoding="utf-8")
