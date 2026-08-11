@@ -1,5 +1,7 @@
 /** 板块轮动统一工作台的可分享 URL 状态。 */
 
+import { LIFECYCLE_FILTER_VALUES, type LifecycleFilter } from "../lifecycle/meta";
+
 export type WorkbenchMode = "snapshot" | "replay";
 export type LabelDensity = "compact" | "focus" | "all";
 
@@ -12,6 +14,8 @@ export interface WorkbenchUrlState {
   sector: string | null;
   historyWindow: 5 | 20 | 60;
   labelDensity: LabelDensity;
+  lifecycle: LifecycleFilter;
+  changedOnly: boolean;
 }
 
 /**
@@ -28,6 +32,11 @@ export function parseWorkbenchUrl(search: string): WorkbenchUrlState {
   const historyWindow = ([5, 20, 60] as const).includes(windowValue as 5 | 20 | 60) ? windowValue as 5 | 20 | 60 : 20;
   const densityValue = params.get("labels");
   const labelDensity: LabelDensity = densityValue === "compact" || densityValue === "all" ? densityValue : "focus";
+  const rawLifecycle = params.get("lifecycle");
+  const lifecycle: LifecycleFilter = LIFECYCLE_FILTER_VALUES.includes(rawLifecycle as LifecycleFilter)
+    ? rawLifecycle as LifecycleFilter
+    : "all";
+  const changedOnly = params.get("changed") === "1";
   return {
     date: params.get("date") || undefined,
     level,
@@ -37,6 +46,8 @@ export function parseWorkbenchUrl(search: string): WorkbenchUrlState {
     sector: params.get("sector") || null,
     historyWindow,
     labelDensity,
+    lifecycle,
+    changedOnly,
   };
 }
 
@@ -54,6 +65,8 @@ export function serializeWorkbenchUrl(state: WorkbenchUrlState): string {
   params.set("phase", state.phase);
   params.set("window", String(state.historyWindow));
   params.set("labels", state.labelDensity);
+  params.set("lifecycle", state.lifecycle);
+  if (state.changedOnly) params.set("changed", "1");
   if (state.query) params.set("q", state.query);
   if (state.sector) params.set("sector", state.sector);
   return `?${params.toString()}`;

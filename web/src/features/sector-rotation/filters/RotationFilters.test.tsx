@@ -11,4 +11,24 @@ describe("RotationFilters", () => {
     fireEvent.change(screen.getByLabelText("行业层级"), { target: { value: "1" } });
     expect(onLevelChange).toHaveBeenCalledWith(1);
   });
+
+  it("旧快照禁用 Lifecycle 控件并解释原因", () => {
+    render(<RotationFilters dates={["2026-08-04"]} selectedDate="2026-08-04" level={2} modelVersion="v1" onDateChange={vi.fn()} onLevelChange={vi.fn()} lifecycleDisabled lifecycleFilter="all" changedOnly={false} onLifecycleChange={vi.fn()} onChangedOnlyChange={vi.fn()} />);
+
+    expect(screen.getByLabelText("生命周期状态")).toBeDisabled();
+    expect(screen.getByLabelText("仅看今日变化")).toBeDisabled();
+    expect(screen.getByText("该日期无 Lifecycle 数据")).toBeInTheDocument();
+  });
+
+  it("将 Lifecycle 筛选交互回传给页面状态", () => {
+    const onLifecycleChange = vi.fn();
+    const onChangedOnlyChange = vi.fn();
+    render(<RotationFilters dates={["2026-08-04"]} selectedDate="2026-08-04" level={2} modelVersion="v1" onDateChange={vi.fn()} onLevelChange={vi.fn()} lifecycleFilter="all" changedOnly={false} onLifecycleChange={onLifecycleChange} onChangedOnlyChange={onChangedOnlyChange} />);
+
+    fireEvent.change(screen.getByLabelText("生命周期状态"), { target: { value: "risk" } });
+    fireEvent.click(screen.getByLabelText("仅看今日变化"));
+
+    expect(onLifecycleChange).toHaveBeenCalledWith("risk");
+    expect(onChangedOnlyChange).toHaveBeenCalledWith(true);
+  });
 });
