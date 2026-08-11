@@ -270,7 +270,7 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
   .phase-legend { gap: 8px; }
   .quadrant-caption { display: none; }
   .ranking-columns { display: none; }
-  .sector-ranking button { grid-template-columns: 28px minmax(0, 1fr) auto; grid-template-areas: "rank name score" "rank lifecycle phase" "rank change change"; align-items: center; min-height: 78px; padding: 9px 8px; }
+  .sector-ranking button { grid-template-columns: 28px minmax(0, 1fr) auto auto; grid-template-areas: "rank name score change" "rank lifecycle phase change"; align-items: center; min-height: 60px; padding: 9px 8px; }
   .rank { grid-area: rank; }
   .sector-name { grid-area: name; }
   .lifecycle-pill { grid-area: lifecycle; }

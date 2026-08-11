@@ -84,11 +84,12 @@ export function SectorRotationPage() {
     setComparisonSectors((current) => addTrajectorySector(current, selectedSectorName));
   }, [selectedSectorName]);
 
-  if (dates.isLoading || snapshot.isLoading) return <section className="loading-panel" aria-live="polite">正在加载最新板块快照…</section>;
-  if (dates.isError || snapshot.isError) return <section className="loading-panel" role="alert">读取板块轮动数据失败，请稍后重试或检查 API 服务。</section>;
-  if (!snapshot.data) return <section className="loading-panel">当前层级尚无已成功运行的板块快照。</section>;
+  if (dates.isLoading || (mode === "snapshot" && snapshot.isLoading)) return <section className="loading-panel" aria-live="polite">正在加载最新板块快照…</section>;
+  if (dates.isError || (mode === "snapshot" && snapshot.isError)) return <section className="loading-panel" role="alert">读取板块轮动数据失败，请稍后重试或检查 API 服务。</section>;
+  if (mode === "snapshot" && !snapshot.data) return <section className="loading-panel">当前层级尚无已成功运行的板块快照。</section>;
 
-  const snapshotSectors = snapshot.data.sectors as unknown as DisplaySector[];
+  // 回放视图不读取任何 snapshot 响应字段；快照查询即使仍在后台执行，也不得影响回放展示。
+  const snapshotSectors = mode === "snapshot" ? (snapshot.data?.sectors ?? []) as unknown as DisplaySector[] : [];
   const replayFrame = replayDate ? replayFrames.byDate[replayDate] ?? [] : [];
   const replayUnavailable = mode === "replay" && replayFrame.length === 0;
   // 回放模式只可信任当前帧；帧缺失时宁可展示空态，也不能泄漏最新快照。
@@ -126,6 +127,7 @@ export function SectorRotationPage() {
     points: visibleHistoryDates.map((date) => historyPoints.find((point) => point.sector_name === sectorName && point.as_of_date === date) ?? { as_of_date: date, velocity_score: null, acceleration_score: null }),
   }));
   const historyGaps = findHistoryGaps(visibleHistoryDates, comparisonSectors, historyPoints);
+  const sourceCutoff = mode === "replay" ? displayDate ?? "暂无可用回放日期" : snapshot.data?.meta.source_max_trade_date ?? "待确认";
 
   const handleDateChange = (date: string) => {
     if (mode === "replay") {
@@ -151,7 +153,7 @@ export function SectorRotationPage() {
     <section className="rotation-workspace">
       <article className="chart-panel">
         <header className="panel-header">
-          <div><p>ROTATION WORKBENCH · {displayDate} · 数据源截止 {snapshot.data.meta.source_max_trade_date ?? "待确认"}</p><h2>行业轮动象限</h2></div>
+          <div><p>ROTATION WORKBENCH · {displayDate} · 数据源截止 {sourceCutoff}</p><h2>行业轮动象限</h2></div>
           <div className="chart-actions">
             <div className="segmented-control workbench-mode" aria-label="象限图模式"><button className={mode === "snapshot" ? "is-active" : ""} type="button" onClick={() => handleModeChange("snapshot")}>单日观察</button><button className={mode === "replay" ? "is-active" : ""} type="button" onClick={() => handleModeChange("replay")}>{mode === "replay" && replayState.playing ? <Pause size={12} /> : <Play size={12} />}动态回放</button></div>
             <button className="method-link" type="button" title="横轴为趋势速度，纵轴为趋势加速度；分数均为当日行业截面相对值"><CircleHelp aria-hidden="true" size={15} />如何阅读</button>
