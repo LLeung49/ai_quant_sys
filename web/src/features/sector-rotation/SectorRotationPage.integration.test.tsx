@@ -50,6 +50,10 @@ vi.mock("./chart/LazyQuadrantChart", () => ({
 
 vi.mock("./history/LazySectorTrajectory", () => ({ LazySectorTrajectory: ({ trajectories }: { trajectories: { sector_name: string }[] }) => <div data-testid="trajectory">轨迹对比：{trajectories.map((item) => item.sector_name).join("、")}</div> }));
 
+vi.mock("./history/LifecycleBands", () => ({
+  LifecycleBands: ({ points, expectedDates }: { points: { as_of_date: string }[]; expectedDates: string[] }) => <div data-testid="lifecycle-bands-props">{expectedDates.join(",")}|{points.map((point) => point.as_of_date).join(",")}</div>,
+}));
+
 import { SectorRotationPage } from "./SectorRotationPage";
 
 describe("SectorRotationPage 统一工作台", () => {
@@ -85,6 +89,15 @@ describe("SectorRotationPage 统一工作台", () => {
     await waitFor(() => expect(screen.getByTestId("drawer-date")).toHaveTextContent("2026-08-03|2|false"));
     fireEvent.click(await screen.findByRole("button", { name: "下一帧" }));
     await waitFor(() => expect(screen.getByTestId("drawer-date")).toHaveTextContent("2026-08-04|2|true"));
+  });
+
+  it("在历史日期与回放时不向状态带传入未来点", async () => {
+    window.history.replaceState(null, "", "/?sector=教育&date=2026-08-03");
+    render(<SectorRotationPage />);
+
+    expect(await screen.findByTestId("lifecycle-bands-props")).toHaveTextContent("2026-08-03|");
+    fireEvent.click(screen.getByRole("button", { name: /动态回放/ }));
+    expect(await screen.findByTestId("lifecycle-bands-props")).toHaveTextContent("2026-08-03|");
   });
 
   it("Phase、Lifecycle、搜索和今日变化共同过滤图表与排名", async () => {

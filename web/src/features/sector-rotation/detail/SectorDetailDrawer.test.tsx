@@ -11,12 +11,11 @@ vi.mock("../kline/SectorKlineModal", () => ({
 }));
 
 describe("SectorDetailDrawer", () => {
-  it("展示加速走强的研究解释，并允许关闭详情", () => {
+  it("展示 Lifecycle 研究解释，并允许关闭详情", () => {
     const onClose = vi.fn();
     render(<SectorDetailDrawer sector={{ sector_name: "半导体", phase_confirmed: "accel_up", phase_age: 4, phase_confidence: 0.72, composite_rank: 1, rank_change_1d: 2, coverage_ratio: 0.96, trend_level_score: 0.4, velocity_score: 0.5, acceleration_score: 0.3, participation_score: 0.4, volume_score: 0.2 }} level={2} asOfDate="2026-08-04" isLatestDate={false} onClose={onClose} />);
 
-    expect(screen.getByText("加速走强")).toBeInTheDocument();
-    expect(screen.getByText(/相对强势与趋势加速同时出现/)).toBeInTheDocument();
+    expect(screen.getByText("未知状态")).toBeInTheDocument();
     expect(screen.getByTestId("sector-kline-card")).toHaveTextContent("半导体|2|2026-08-04");
     fireEvent.click(screen.getByRole("button", { name: "关闭详情" }));
     expect(onClose).toHaveBeenCalledOnce();
@@ -44,5 +43,19 @@ describe("SectorDetailDrawer", () => {
     expect(screen.getByRole("dialog")).toBeInTheDocument();
     rerender(<SectorDetailDrawer sector={sector} level={2} asOfDate="2026-08-05" isLatestDate={false} onClose={onClose} />);
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("展示当前 Lifecycle、转移与固定声明", () => {
+    render(<SectorDetailDrawer sector={{ sector_name: "半导体", phase_confirmed: "accel_up", phase_age: 4, phase_confidence: 0.72, composite_rank: 1, rank_change_1d: 2, coverage_ratio: 0.96, trend_level_score: 0.4, velocity_score: 0.5, acceleration_score: 0.3, participation_score: 0.4, volume_score: 0.2, lifecycle_state: "trending", lifecycle_reason: "phase_accel_up", lifecycle_age: 3, lifecycle_changed: true }} previousLifecycleState="repair" level={2} asOfDate="2026-08-10" isLatestDate={false} onClose={vi.fn()} />);
+
+    expect(screen.getByText("趋势运行")).toBeInTheDocument();
+    expect(screen.getByText(/修复观察.*趋势运行/)).toBeInTheDocument();
+    expect(screen.getByText("Lifecycle 为市场状态观察标签，不构成交易建议。")).toBeInTheDocument();
+  });
+
+  it("在前一状态缺失时明示不可用", () => {
+    render(<SectorDetailDrawer sector={{ sector_name: "半导体", phase_confirmed: "accel_up", phase_age: 4, phase_confidence: 0.72, composite_rank: 1, rank_change_1d: 2, coverage_ratio: 0.96, trend_level_score: 0.4, velocity_score: 0.5, acceleration_score: 0.3, participation_score: 0.4, volume_score: 0.2, lifecycle_state: "trending" }} level={2} asOfDate="2026-08-10" isLatestDate={false} onClose={vi.fn()} />);
+
+    expect(screen.getByText("前一状态暂不可用")).toBeInTheDocument();
   });
 });
