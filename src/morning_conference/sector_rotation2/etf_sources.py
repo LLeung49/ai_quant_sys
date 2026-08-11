@@ -11,7 +11,7 @@ def normalize_etf_code(code: str) -> str:
     value = str(code).strip().upper()
     if value.endswith((".SH", ".SZ")):
         return value
-    if value.startswith(("50", "51", "56", "58")):
+    if value.startswith(("50", "51", "52", "53", "56", "58")):
         return f"{value}.SH"
     if value.startswith(("15", "16", "18")):
         return f"{value}.SZ"
