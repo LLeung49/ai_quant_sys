@@ -6,6 +6,9 @@ from dataclasses import dataclass
 import pandas as pd
 
 
+RESEARCH_MODE_ONLY = True
+
+
 @dataclass(frozen=True)
 class ResearchPolicy:
     max_single_etf_weight: float

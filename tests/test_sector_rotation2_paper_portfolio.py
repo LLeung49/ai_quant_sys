@@ -70,3 +70,11 @@ def test_simulator_applies_next_day_etf_return_to_prior_holding():
     result = simulate_paper_portfolio(targets, prices, _policy())
 
     assert result["daily"].iloc[1]["gross_return"] == pytest.approx(0.06)
+
+
+def test_paper_portfolio_is_explicitly_research_mode_only():
+    from morning_conference.sector_rotation2 import paper_portfolio
+
+    assert paper_portfolio.RESEARCH_MODE_ONLY is True
+    assert not hasattr(paper_portfolio, "place_order")
+    assert not hasattr(paper_portfolio, "connect_broker")
