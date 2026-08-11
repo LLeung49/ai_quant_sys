@@ -29,6 +29,23 @@ def load_qfq_etf_panel(
     return frame
 
 
+def load_current_stock_industries(stock_codes: list[str], level: int) -> pd.DataFrame:
+    """Load the explicitly current Shenwan membership snapshot for holdings."""
+    if level not in (1, 2):
+        raise ValueError("level must be 1 or 2")
+    field = f"sector_{level}"
+    if not stock_codes:
+        return pd.DataFrame(columns=["stock_code", field, "membership_asof_mode"])
+    placeholders = ", ".join(["%s"] * len(stock_codes))
+    rows = execute_query(
+        f"SELECT stock_code, {field} FROM trade_stock_status WHERE stock_code IN ({placeholders})",
+        stock_codes,
+    )
+    result = pd.DataFrame(rows, columns=["stock_code", field])
+    result["membership_asof_mode"] = "current_mapping"
+    return result
+
+
 def calculate_holdings_industry_exposure(
     holdings: pd.DataFrame, industries: pd.DataFrame, level: int
 ) -> pd.DataFrame:

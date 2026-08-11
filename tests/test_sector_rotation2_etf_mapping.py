@@ -8,6 +8,8 @@ from morning_conference.sector_rotation2.etf_mapping import (
     calculate_etf_overlap,
     evaluate_etf_expression,
     select_etf_mapping,
+    shortlist_market_candidates,
+    verify_etf_mapping,
 )
 
 
@@ -83,3 +85,31 @@ def test_overlap_reports_pairwise_60d_return_correlation():
 
     assert overlap.loc[0, "return_correlation_60d"] == pytest.approx(1.0)
     assert {overlap.loc[0, "left_etf_code"], overlap.loc[0, "right_etf_code"]} == {"510000.SH", "510001.SH"}
+
+
+def test_shortlist_keeps_three_best_expressible_candidates_per_sector():
+    evaluated = pd.DataFrame([
+        {"sector_name": "A", "etf_code": f"51000{i}.SH", "expression_status": "expressible", "expression_rank": i}
+        for i in range(1, 5)
+    ])
+
+    result = shortlist_market_candidates(evaluated)
+
+    assert result["etf_code"].tolist() == ["510001.SH", "510002.SH", "510003.SH"]
+    assert set(result["mapping_status"]) == {"market_only"}
+
+
+def test_verify_etf_mapping_requires_target_sector_exposure():
+    shortlist = pd.DataFrame([
+        {"sector_name": "A", "etf_code": "510001.SH"},
+        {"sector_name": "A", "etf_code": "510002.SH"},
+    ])
+    exposure = pd.DataFrame([
+        {"sector_name": "A", "etf_code": "510001.SH", "industry_exposure": 0.60},
+        {"sector_name": "A", "etf_code": "510002.SH", "industry_exposure": 0.40},
+    ])
+
+    result = verify_etf_mapping(shortlist, exposure)
+
+    assert result.set_index("etf_code").loc["510001.SH", "mapping_status"] == "verified"
+    assert result.set_index("etf_code").loc["510002.SH", "mapping_status"] == "rejected"

@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from morning_conference.sector_rotation2 import etf_research_data
-from morning_conference.sector_rotation2.etf_research_data import calculate_holdings_industry_exposure, load_qfq_etf_panel
+from morning_conference.sector_rotation2.etf_research_data import calculate_holdings_industry_exposure, load_current_stock_industries, load_qfq_etf_panel
 
 
 def test_calculate_holdings_industry_exposure_reports_target_and_unmapped_weight():
@@ -32,3 +32,12 @@ def test_load_qfq_etf_panel_uses_qfq_table_and_cutoff(monkeypatch):
     assert result.empty
     assert "trade_stock_daily_qfq" in str(captured["sql"])
     assert captured["params"][-1] == "2026-06-30"
+
+
+def test_load_current_stock_industries_marks_current_mapping(monkeypatch):
+    monkeypatch.setattr(etf_research_data, "execute_query", lambda *_: [{"stock_code": "600519", "sector_2": "白酒"}])
+
+    result = load_current_stock_industries(["600519"], level=2)
+
+    assert result.loc[0, "sector_2"] == "白酒"
+    assert result.loc[0, "membership_asof_mode"] == "current_mapping"
