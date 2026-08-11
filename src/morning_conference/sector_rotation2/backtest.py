@@ -175,6 +175,70 @@ def select_inner_candidate(
     return {key: value for key, value in winner.items() if key != "candidate_index"}
 
 
+def evaluate_nested_candidates(
+    snapshots: pd.DataFrame,
+    labels: pd.DataFrame,
+    candidates: tuple[str, ...],
+    horizons: tuple[int, ...],
+    outer_windows: list[dict[str, pd.Timestamp]],
+    inner_window_factory=rolling_oos_windows,
+    cost_bps: float = 10,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """在每个外层训练区选择候选，再仅在对应验证区评估。"""
+    dated_snapshots = snapshots.copy()
+    dated_snapshots["as_of_date"] = pd.to_datetime(dated_snapshots["as_of_date"])
+    dated_labels = labels.copy()
+    dated_labels["as_of_date"] = pd.to_datetime(dated_labels["as_of_date"])
+    selection_rows: list[dict[str, object]] = []
+    outer_rows: list[dict[str, object]] = []
+    for index, window in enumerate(outer_windows, start=1):
+        train = dated_snapshots.loc[
+            dated_snapshots["as_of_date"].between(window["train_start"], window["train_end"])
+        ]
+        train_labels = dated_labels.loc[dated_labels["as_of_date"] <= window["train_end"]]
+        inner_windows = inner_window_factory(pd.DatetimeIndex(train["as_of_date"].unique()))
+        selected = select_inner_candidate(train, train_labels, candidates, horizons, inner_windows, cost_bps=cost_bps)
+        selection_rows.append({
+            "outer_window_name": f"outer_{index:03d}",
+            **window,
+            **selected,
+        })
+        if not selected["selected"]:
+            continue
+        validation = dated_snapshots.loc[
+            dated_snapshots["as_of_date"].between(window["validation_start"], window["validation_end"])
+        ]
+        candidate = str(selected["candidate"])
+        horizon = int(selected["horizon"])
+        metrics = evaluate_factor(validation, dated_labels, candidate, horizon)
+        strategy_snapshots = dated_snapshots.loc[dated_snapshots["as_of_date"] <= window["validation_end"]]
+        strategy_labels = dated_labels.loc[
+            dated_labels["as_of_date"].between(window["validation_start"], window["validation_end"])
+        ]
+        strategy = simulate_top_group_strategy(
+            strategy_snapshots,
+            strategy_labels,
+            candidate,
+            rebalance_every=1,
+            cost_bps=cost_bps,
+        )
+        outer_rows.append({
+            "outer_window_name": f"outer_{index:03d}",
+            **window,
+            "candidate": candidate,
+            "horizon": horizon,
+            **metrics,
+            "cost_bps": cost_bps,
+            "outer_net_return": strategy["net_return"],
+            "inner_mean_rank_ic": selected["mean_rank_ic"],
+            "inner_median_rank_ic": selected["median_rank_ic"],
+            "inner_positive_rank_ic_share": selected["positive_rank_ic_share"],
+            "inner_mean_top_group_return": selected["mean_top_group_return"],
+            "inner_net_return": selected["net_return"],
+        })
+    return pd.DataFrame(selection_rows), pd.DataFrame(outer_rows)
+
+
 def evaluate_rolling_oos(
     snapshots: pd.DataFrame,
     labels: pd.DataFrame,

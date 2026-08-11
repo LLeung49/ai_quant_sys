@@ -8,6 +8,7 @@ import pytest
 
 from morning_conference.sector_rotation2.backtest import (
     build_forward_return_labels,
+    evaluate_nested_candidates,
     evaluate_factor,
     expanding_outer_windows,
     make_forward_labels,
@@ -207,6 +208,38 @@ def test_select_inner_candidate_returns_no_selection_when_any_gate_fails():
 
     assert selected["selected"] is False
     assert selected["candidate"] is None
+
+
+def test_evaluate_nested_candidates_selects_on_train_and_scores_only_outer_validation():
+    dates = pd.bdate_range("2026-01-01", periods=4)
+    snapshots = pd.DataFrame(
+        [(date, f"S{rank}", rank, -rank) for date in dates for rank in range(10)],
+        columns=["as_of_date", "sector_name", "good", "bad"],
+    )
+    labels = pd.DataFrame(
+        [
+            (date, f"S{rank}", date + pd.offsets.BDay(1), 1, rank / 100)
+            for date in dates for rank in range(10)
+        ],
+        columns=["as_of_date", "sector_name", "target_date", "horizon", "excess_return"],
+    )
+    outer_windows = [{
+        "train_start": dates[0], "train_end": dates[1],
+        "validation_start": dates[2], "validation_end": dates[3],
+    }]
+    inner_window_factory = lambda _: [{
+        "train_start": dates[0], "train_end": dates[0],
+        "validation_start": dates[1], "validation_end": dates[1],
+    }]
+
+    selection, outer = evaluate_nested_candidates(
+        snapshots, labels, ("good", "bad"), (1,), outer_windows, inner_window_factory,
+    )
+
+    assert selection.loc[0, "candidate"] == "good"
+    assert outer.loc[0, "outer_window_name"] == "outer_001"
+    assert outer.loc[0, "candidate"] == "good"
+    assert outer.loc[0, "sample_count"] == 20
 
 
 def test_evaluate_rolling_oos_scores_only_validation_dates():
