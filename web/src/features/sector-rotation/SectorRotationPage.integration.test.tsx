@@ -79,16 +79,14 @@ describe("SectorRotationPage 统一工作台", () => {
     expect(screen.getAllByTestId("quadrant")).toHaveLength(1);
   });
 
-  it("向已打开抽屉传递历史单日日期，并在回放帧切换时同步更新", async () => {
+  it("回放帧没有已选行业时不使用最新快照打开抽屉", async () => {
     // 单日观察明确选择不同于最新日期的历史快照，验证不会被 2026-08-04 覆盖。
     window.history.replaceState(null, "", "/?sector=教育&date=2026-08-03");
     render(<SectorRotationPage />);
 
     expect(screen.getByTestId("drawer-date")).toHaveTextContent("2026-08-03|2|false");
     fireEvent.click(screen.getByRole("button", { name: /动态回放/ }));
-    await waitFor(() => expect(screen.getByTestId("drawer-date")).toHaveTextContent("2026-08-03|2|false"));
-    fireEvent.click(await screen.findByRole("button", { name: "下一帧" }));
-    await waitFor(() => expect(screen.getByTestId("drawer-date")).toHaveTextContent("2026-08-04|2|true"));
+    await waitFor(() => expect(screen.queryByTestId("drawer-date")).not.toBeInTheDocument());
   });
 
   it("在历史日期与回放时不向状态带传入未来点", async () => {

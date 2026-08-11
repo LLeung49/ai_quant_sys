@@ -99,7 +99,9 @@ export function SectorRotationPage() {
     const matchesLifecycle = !lifecycleAvailable || matchesLifecycleFilter(sector, lifecycleFilter, changedOnly);
     return matchesSearch && matchesPhase && matchesLifecycle;
   });
-  const selected = sectors.find((sector) => sector.sector_name === selectedSectorName) ?? snapshotSectors.find((sector) => sector.sector_name === selectedSectorName);
+  const selected = mode === "replay"
+    ? replayFrame.find((sector) => sector.sector_name === selectedSectorName)
+    : snapshotSectors.find((sector) => sector.sector_name === selectedSectorName);
   const trail = mode === "replay" ? buildSectorTrail(replayPoints, selectedSectorName, replayDate ?? "", 10) : [];
   const historyPoints = (history.data ?? []).map((point: SectorPoint) => ({
     as_of_date: point.as_of_date ?? "",
