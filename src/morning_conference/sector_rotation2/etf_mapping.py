@@ -89,6 +89,33 @@ def select_etf_mapping(metrics: pd.DataFrame, mapping_as_of_date: str | pd.Times
     return pd.DataFrame(result)
 
 
+def shortlist_market_candidates(
+    evaluated: pd.DataFrame, max_candidates_per_sector: int = 3
+) -> pd.DataFrame:
+    """Keep the best market-expressible candidates for holdings verification."""
+    qualified = evaluated.loc[evaluated["expression_status"] == "expressible"].copy()
+    qualified = qualified.sort_values(["sector_name", "expression_rank", "etf_code"])
+    result = qualified.groupby("sector_name", group_keys=False).head(max_candidates_per_sector).copy()
+    result["mapping_status"] = "market_only"
+    return result
+
+
+def verify_etf_mapping(
+    shortlist: pd.DataFrame,
+    exposure: pd.DataFrame,
+    minimum_exposure: float = 0.50,
+) -> pd.DataFrame:
+    """Promote shortlisted ETFs only when disclosed target exposure is sufficient."""
+    result = shortlist.merge(
+        exposure, on=["sector_name", "etf_code"], how="left", suffixes=("", "_evidence")
+    )
+    result["mapping_status"] = "market_only"
+    available = result["industry_exposure"].notna()
+    result.loc[available & (result["industry_exposure"] >= minimum_exposure), "mapping_status"] = "verified"
+    result.loc[available & (result["industry_exposure"] < minimum_exposure), "mapping_status"] = "rejected"
+    return result
+
+
 def calculate_etf_overlap(etf_returns: pd.DataFrame) -> pd.DataFrame:
     """Return pairwise 60-day correlations for ETF return clusters."""
     frame = etf_returns.copy()
