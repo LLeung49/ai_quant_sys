@@ -3,7 +3,12 @@ from __future__ import annotations
 import pandas as pd
 import pytest
 
-from morning_conference.sector_rotation2.etf_mapping import calculate_etf_expression_metrics, evaluate_etf_expression
+from morning_conference.sector_rotation2.etf_mapping import (
+    calculate_etf_expression_metrics,
+    calculate_etf_overlap,
+    evaluate_etf_expression,
+    select_etf_mapping,
+)
 
 
 def test_metrics_calculates_60d_correlation_and_beta_without_future_rows():
@@ -52,3 +57,29 @@ def test_etf_mapping_ranks_expressible_candidate_before_unusable_one():
     result = evaluate_etf_expression(candidates)
 
     assert result.sort_values("expression_rank").iloc[0]["etf_code"] == "510000.SH"
+
+
+def test_select_mapping_adds_no_qualified_etf_for_unexpressible_sector():
+    metrics = pd.DataFrame([
+        {"sector_name": "A", "etf_code": "510000.SH", "expression_status": "expressible", "expression_rank": 1},
+        {"sector_name": "B", "etf_code": "510001.SH", "expression_status": "not_recommended", "expression_rank": 1},
+    ])
+
+    mapping = select_etf_mapping(metrics, "2026-06-30")
+
+    assert set(mapping.loc[mapping["sector_name"] == "B", "mapping_status"]) == {"no_qualified_etf"}
+    assert mapping.loc[mapping["sector_name"] == "A", "mapping_status"].iloc[0] == "expressible"
+
+
+def test_overlap_reports_pairwise_60d_return_correlation():
+    dates = pd.bdate_range("2026-01-01", periods=60)
+    returns = pd.DataFrame({
+        "as_of_date": list(dates) * 2,
+        "etf_code": ["510000.SH"] * 60 + ["510001.SH"] * 60,
+        "return": list(range(60)) * 2,
+    })
+
+    overlap = calculate_etf_overlap(returns)
+
+    assert overlap.loc[0, "return_correlation_60d"] == pytest.approx(1.0)
+    assert {overlap.loc[0, "left_etf_code"], overlap.loc[0, "right_etf_code"]} == {"510000.SH", "510001.SH"}

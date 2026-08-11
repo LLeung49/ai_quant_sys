@@ -1,6 +1,8 @@
 """行业到 ETF 的研究型表达质量评估。"""
 from __future__ import annotations
 
+from itertools import combinations
+
 import pandas as pd
 
 
@@ -66,3 +68,39 @@ def evaluate_etf_expression(candidates: pd.DataFrame) -> pd.DataFrame:
     )
     result["expression_rank"] = result.groupby("sector_name")["expression_quality_score"].rank(ascending=False, method="min")
     return result
+
+
+def select_etf_mapping(metrics: pd.DataFrame, mapping_as_of_date: str | pd.Timestamp) -> pd.DataFrame:
+    """Create a dated mapping snapshot and disclose sectors without an expression."""
+    result = []
+    for sector_name, group in metrics.groupby("sector_name", sort=True):
+        qualified = group.loc[group["expression_status"] == "expressible"].copy()
+        if qualified.empty:
+            result.append({
+                "sector_name": sector_name,
+                "etf_code": None,
+                "mapping_status": "no_qualified_etf",
+                "mapping_as_of_date": pd.Timestamp(mapping_as_of_date),
+            })
+            continue
+        qualified["mapping_status"] = "expressible"
+        qualified["mapping_as_of_date"] = pd.Timestamp(mapping_as_of_date)
+        result.extend(qualified.to_dict("records"))
+    return pd.DataFrame(result)
+
+
+def calculate_etf_overlap(etf_returns: pd.DataFrame) -> pd.DataFrame:
+    """Return pairwise 60-day correlations for ETF return clusters."""
+    frame = etf_returns.copy()
+    frame["as_of_date"] = pd.to_datetime(frame["as_of_date"])
+    pivot = frame.sort_values("as_of_date").pivot(index="as_of_date", columns="etf_code", values="return")
+    rows = []
+    for left, right in combinations(pivot.columns, 2):
+        matched = pivot[[left, right]].dropna().tail(60)
+        rows.append({
+            "left_etf_code": left,
+            "right_etf_code": right,
+            "return_correlation_60d": matched[left].corr(matched[right]) if len(matched) == 60 else float("nan"),
+            "sample_count": len(matched),
+        })
+    return pd.DataFrame(rows)
