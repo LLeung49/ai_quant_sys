@@ -174,6 +174,7 @@ describe("SectorRotationPage 统一工作台", () => {
     expect(await screen.findByText("历史轨迹暂不可用，当前快照保持可用。")).toBeInTheDocument();
     expect(screen.getByTestId("quadrant")).toBeInTheDocument();
     expect(screen.getByLabelText("今日关注行业")).toHaveTextContent("3 个有效行业");
+    expect(screen.getByRole("button", { name: "查看 半导体 详情" })).toBeInTheDocument();
     expect(screen.getByTestId("drawer-date")).toBeInTheDocument();
   });
 
