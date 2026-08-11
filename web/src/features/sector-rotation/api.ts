@@ -22,14 +22,33 @@ const availableDatesSchema = z.object({
   meta: responseMetaSchema,
 });
 
+export const sectorPointSchema = z.object({
+  as_of_date: z.string().optional(),
+  sector_name: z.string(),
+  score_eligible: z.boolean(),
+  lifecycle_state: z.string().nullable().optional(),
+  lifecycle_reason: z.string().nullable().optional(),
+  lifecycle_changed: z.union([z.boolean(), z.literal(0), z.literal(1)]).transform(Boolean).nullable().optional(),
+  lifecycle_age: z.number().int().nonnegative().nullable().optional(),
+  phase_raw: z.string().nullable().optional(),
+  phase_confirmed: z.string().nullable().optional(),
+  phase_age: z.number().int().nonnegative().nullable().optional(),
+  phase_confidence: z.number().nullable().optional(),
+  composite_rank: z.number().int().nullable().optional(),
+  composite_score: z.number().nullable().optional(),
+  rank_change_1d: z.number().nullable().optional(),
+  top10_days_20: z.number().int().nullable().optional(),
+}).passthrough();
+export type SectorPoint = z.infer<typeof sectorPointSchema>;
+
 const snapshotSchema = z.object({
   as_of_date: z.string(),
   sector_level: z.number().int(),
   model_version: z.string(),
   meta: responseMetaSchema,
-  sectors: z.array(z.record(z.string(), z.unknown())),
+  sectors: z.array(sectorPointSchema),
 });
-const historySchema = z.object({ sector_level: z.number().int(), model_version: z.string(), meta: responseMetaSchema, points: z.array(z.record(z.string(), z.unknown())) });
+const historySchema = z.object({ sector_level: z.number().int(), model_version: z.string(), meta: responseMetaSchema, points: z.array(sectorPointSchema) });
 
 const errorSchema = z.object({
   error: z.object({
