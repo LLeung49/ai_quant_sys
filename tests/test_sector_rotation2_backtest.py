@@ -6,7 +6,18 @@ from decimal import Decimal
 import pandas as pd
 import pytest
 
-from morning_conference.sector_rotation2.backtest import build_forward_return_labels, evaluate_factor, evaluate_lifecycle_score_bucket_oos, evaluate_lifecycle_score_buckets, evaluate_lifecycle_states, make_forward_labels, rolling_oos_windows
+from morning_conference.sector_rotation2.backtest import (
+    build_forward_return_labels,
+    evaluate_factor,
+    evaluate_lifecycle_score_bucket_oos,
+    evaluate_lifecycle_score_buckets,
+    evaluate_lifecycle_states,
+    evaluate_nested_candidates,
+    expanding_outer_windows,
+    make_forward_labels,
+    rolling_oos_windows,
+    select_inner_candidate,
+)
 
 
 def test_evaluate_lifecycle_states_reports_conditional_returns():
@@ -245,6 +256,108 @@ def test_rolling_oos_windows_uses_252_63_21_contract():
     assert windows[0]["train_start"] == dates[0]
     assert windows[0]["validation_start"] == dates[252]
     assert windows[1]["train_start"] == dates[21]
+
+
+def test_expanding_outer_windows_uses_non_overlapping_validation_periods():
+    dates = pd.bdate_range("2022-01-03", periods=756)
+
+    windows = expanding_outer_windows(dates, train_days=504, validation_days=126, step_days=126)
+
+    assert len(windows) == 2
+    assert windows[0]["train_start"] == dates[0]
+    assert windows[0]["train_end"] == dates[503]
+    assert windows[0]["validation_start"] == dates[504]
+    assert windows[0]["validation_end"] == dates[629]
+    assert windows[1]["train_start"] == dates[0]
+    assert windows[1]["train_end"] == dates[629]
+    assert windows[1]["validation_start"] == dates[630]
+
+
+def test_select_inner_candidate_requires_all_frozen_gates_and_uses_fixed_tie_order():
+    dates = pd.bdate_range("2026-01-01", periods=3)
+    snapshots = pd.DataFrame(
+        [
+            (date, f"S{rank}", rank, -rank)
+            for date in dates for rank in range(10)
+        ],
+        columns=["as_of_date", "sector_name", "good", "bad"],
+    )
+    labels = pd.DataFrame(
+        [
+            (date, f"S{rank}", date + pd.offsets.BDay(1), 1, rank / 100)
+            for date in dates for rank in range(10)
+        ],
+        columns=["as_of_date", "sector_name", "target_date", "horizon", "excess_return"],
+    )
+    inner_windows = [{
+        "train_start": dates[0], "train_end": dates[0],
+        "validation_start": dates[1], "validation_end": dates[2],
+    }]
+
+    selected = select_inner_candidate(
+        snapshots, labels, ("good", "bad"), (1,), inner_windows, cost_bps=10,
+    )
+
+    assert selected["selected"] is True
+    assert selected["candidate"] == "good"
+    assert selected["horizon"] == 1
+    assert selected["positive_rank_ic_share"] == 1.0
+
+
+def test_select_inner_candidate_returns_no_selection_when_any_gate_fails():
+    dates = pd.bdate_range("2026-01-01", periods=3)
+    snapshots = pd.DataFrame(
+        [(date, f"S{rank}", -rank) for date in dates for rank in range(10)],
+        columns=["as_of_date", "sector_name", "bad"],
+    )
+    labels = pd.DataFrame(
+        [
+            (date, f"S{rank}", date + pd.offsets.BDay(1), 1, rank / 100)
+            for date in dates for rank in range(10)
+        ],
+        columns=["as_of_date", "sector_name", "target_date", "horizon", "excess_return"],
+    )
+    inner_windows = [{
+        "train_start": dates[0], "train_end": dates[0],
+        "validation_start": dates[1], "validation_end": dates[2],
+    }]
+
+    selected = select_inner_candidate(snapshots, labels, ("bad",), (1,), inner_windows, cost_bps=10)
+
+    assert selected["selected"] is False
+    assert selected["candidate"] is None
+
+
+def test_evaluate_nested_candidates_selects_on_train_and_scores_only_outer_validation():
+    dates = pd.bdate_range("2026-01-01", periods=4)
+    snapshots = pd.DataFrame(
+        [(date, f"S{rank}", rank, -rank) for date in dates for rank in range(10)],
+        columns=["as_of_date", "sector_name", "good", "bad"],
+    )
+    labels = pd.DataFrame(
+        [
+            (date, f"S{rank}", date + pd.offsets.BDay(1), 1, rank / 100)
+            for date in dates for rank in range(10)
+        ],
+        columns=["as_of_date", "sector_name", "target_date", "horizon", "excess_return"],
+    )
+    outer_windows = [{
+        "train_start": dates[0], "train_end": dates[1],
+        "validation_start": dates[2], "validation_end": dates[3],
+    }]
+    inner_window_factory = lambda _: [{
+        "train_start": dates[0], "train_end": dates[0],
+        "validation_start": dates[1], "validation_end": dates[1],
+    }]
+
+    selection, outer = evaluate_nested_candidates(
+        snapshots, labels, ("good", "bad"), (1,), outer_windows, inner_window_factory,
+    )
+
+    assert selection.loc[0, "candidate"] == "good"
+    assert outer.loc[0, "outer_window_name"] == "outer_001"
+    assert outer.loc[0, "candidate"] == "good"
+    assert outer.loc[0, "sample_count"] == 20
 
 
 def test_evaluate_rolling_oos_scores_only_validation_dates():
