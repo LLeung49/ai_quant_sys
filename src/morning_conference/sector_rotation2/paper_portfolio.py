@@ -49,3 +49,33 @@ def build_etf_targets(
             "etf_code": selected["etf_code"], "target_weight": weight,
         })
     return pd.DataFrame(target_rows), pd.DataFrame(issue_rows)
+
+
+def simulate_paper_portfolio(
+    targets: pd.DataFrame,
+    etf_prices: pd.DataFrame,
+    policy: ResearchPolicy,
+    initial_nav: float = 1.0,
+) -> dict[str, pd.DataFrame]:
+    """Simulate research holdings, unallocated cash and turnover costs only."""
+    prices = etf_prices.copy()
+    prices["as_of_date"] = pd.to_datetime(prices["as_of_date"])
+    prices["asset_return"] = prices.sort_values("as_of_date").groupby("etf_code")["close"].pct_change()
+    daily_rows: list[dict[str, object]] = []
+    holding_rows: list[dict[str, object]] = []
+    prior_weights: dict[str, float] = {}
+    nav = initial_nav
+    for as_of_date, group in targets.assign(as_of_date=pd.to_datetime(targets["as_of_date"])).groupby("as_of_date", sort=True):
+        today_returns = prices.loc[prices["as_of_date"] == as_of_date].set_index("etf_code")["asset_return"]
+        gross_return = sum(weight * float(today_returns.get(code, 0.0) if pd.notna(today_returns.get(code, 0.0)) else 0.0) for code, weight in prior_weights.items())
+        weights = dict(zip(group["etf_code"], group["target_weight"], strict=True))
+        turnover = sum(abs(weights.get(code, 0.0) - prior_weights.get(code, 0.0)) for code in set(weights) | set(prior_weights))
+        cost = turnover * policy.cost_bps / 10_000
+        net_return = gross_return - cost
+        nav *= 1.0 + net_return
+        cash_weight = 1.0 - sum(weights.values())
+        daily_rows.append({"as_of_date": as_of_date, "gross_return": gross_return, "turnover": turnover, "transaction_cost": cost, "net_return": net_return, "nav": nav})
+        for etf_code, weight in weights.items():
+            holding_rows.append({"as_of_date": as_of_date, "etf_code": etf_code, "weight": weight, "cash_weight": cash_weight})
+        prior_weights = weights
+    return {"daily": pd.DataFrame(daily_rows), "holdings": pd.DataFrame(holding_rows)}
