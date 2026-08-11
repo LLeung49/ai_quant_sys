@@ -1,0 +1,20 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
+
+const css = readFileSync(resolve(process.cwd(), "src/styles/globals.css"), "utf8");
+
+describe("mobile layout CSS contract", () => {
+  it("keeps the 320px ranking in two rows without page-level horizontal overflow", () => {
+    const mobileStart = css.indexOf("@media (max-width: 640px)");
+    const mobileEnd = css.indexOf("@media (prefers-reduced-motion", mobileStart);
+    const mobileRules = css.slice(mobileStart, mobileEnd);
+
+    expect(mobileStart).toBeGreaterThanOrEqual(0);
+    expect(mobileRules).toMatch(
+      /\.sector-ranking button\s*\{[^}]*grid-template-areas:\s*"rank name score change"\s*"rank lifecycle phase change"/,
+    );
+    expect(css).toMatch(/\.rotation-page\s*\{[^}]*overflow-x:\s*hidden/);
+    expect(css).toMatch(/\.lifecycle-bands\s*\{[^}]*overflow-x:\s*auto/);
+  });
+});

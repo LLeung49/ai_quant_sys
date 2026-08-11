@@ -38,6 +38,16 @@ describe("lifecycle derived state", () => {
     expect(summarizeLifecycle([{ lifecycle_state: "trending", lifecycle_changed: true }, { lifecycle_state: "neutral", lifecycle_changed: true }]).changed).toBe(2);
   });
 
+  it("does not count the known neutral state as insufficient", () => {
+    expect(summarizeLifecycle([{ lifecycle_state: "neutral" }])).toEqual({
+      trending: 0,
+      repairOrEmerging: 0,
+      risk: 0,
+      changed: 0,
+      insufficient: 0,
+    });
+  });
+
   it("finds only the latest valid prior point for the sector", () => {
     const points = [
       { as_of_date: "2026-08-08", sector_name: "半导体", lifecycle_state: "repair" },

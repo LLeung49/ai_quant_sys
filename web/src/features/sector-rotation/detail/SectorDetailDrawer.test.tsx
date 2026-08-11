@@ -58,4 +58,23 @@ describe("SectorDetailDrawer", () => {
 
     expect(screen.getByText("前一状态暂不可用")).toBeInTheDocument();
   });
+
+  it("将 Lifecycle 持续天数与今日变化的缺失值显示为数据不足", () => {
+    const baseSector = { sector_name: "半导体", phase_confirmed: "accel_up", phase_age: 4, phase_confidence: 0.72, composite_rank: 1, rank_change_1d: 2, coverage_ratio: 0.96, trend_level_score: 0.4, velocity_score: 0.5, acceleration_score: 0.3, participation_score: 0.4, volume_score: 0.2, lifecycle_state: "trending" };
+    const { rerender } = render(<SectorDetailDrawer sector={{ ...baseSector, lifecycle_age: 3, lifecycle_changed: true }} level={2} asOfDate="2026-08-10" isLatestDate={false} onClose={vi.fn()} />);
+
+    expect(screen.getByText("持续天数").parentElement).toHaveTextContent("3 日");
+    expect(screen.getByText("今日变化").parentElement).toHaveTextContent("是");
+
+    rerender(<SectorDetailDrawer sector={{ ...baseSector, lifecycle_age: null, lifecycle_changed: false }} level={2} asOfDate="2026-08-10" isLatestDate={false} onClose={vi.fn()} />);
+    expect(screen.getByText("持续天数").parentElement).toHaveTextContent("数据不足");
+    expect(screen.getByText("今日变化").parentElement).toHaveTextContent("否");
+
+    rerender(<SectorDetailDrawer sector={{ ...baseSector, lifecycle_changed: undefined }} level={2} asOfDate="2026-08-10" isLatestDate={false} onClose={vi.fn()} />);
+    expect(screen.getByText("持续天数").parentElement).toHaveTextContent("数据不足");
+    expect(screen.getByText("今日变化").parentElement).toHaveTextContent("数据不足");
+
+    rerender(<SectorDetailDrawer sector={{ ...baseSector, lifecycle_changed: null }} level={2} asOfDate="2026-08-10" isLatestDate={false} onClose={vi.fn()} />);
+    expect(screen.getByText("今日变化").parentElement).toHaveTextContent("数据不足");
+  });
 });

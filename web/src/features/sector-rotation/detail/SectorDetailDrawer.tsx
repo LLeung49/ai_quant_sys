@@ -104,8 +104,8 @@ export function SectorDetailDrawer({ sector, previousLifecycleState, level, asOf
       <section className="detail-lifecycle" aria-label="Lifecycle 详情">
         <div><span>当前 Lifecycle</span><strong>{lifecycle.label}</strong></div>
         <div><span>原因</span><strong>{getLifecycleReasonLabel(sector.lifecycle_reason)}</strong></div>
-        <div><span>持续天数</span><strong>{sector.lifecycle_age ?? "—"} 日</strong></div>
-        <div><span>今日变化</span><strong>{sector.lifecycle_changed === true ? "是" : "否"}</strong></div>
+        <div><span>持续天数</span><strong>{sector.lifecycle_age == null ? "数据不足" : `${sector.lifecycle_age} 日`}</strong></div>
+        <div><span>今日变化</span><strong>{sector.lifecycle_changed == null ? "数据不足" : sector.lifecycle_changed ? "是" : "否"}</strong></div>
         <div><span>前态 → 当前态</span><strong>{previousLifecycle ? `${previousLifecycle.label} → ${lifecycle.label}` : "前一状态暂不可用"}</strong></div>
         <p>Lifecycle 为市场状态观察标签，不构成交易建议。</p>
       </section>

@@ -73,6 +73,8 @@ export function summarizeLifecycle(sectors: LifecycleSectorFields[]): LifecycleS
       case "exit":
         summary.risk += 1;
         break;
+      case "neutral":
+        break;
       default:
         summary.insufficient += 1;
     }

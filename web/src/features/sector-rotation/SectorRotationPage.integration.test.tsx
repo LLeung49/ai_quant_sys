@@ -123,6 +123,9 @@ describe("SectorRotationPage 统一工作台", () => {
 
     expect(await screen.findByText("当前图表：半导体")).toBeInTheDocument();
     expect(screen.queryByText("当前图表：银行")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "查看 半导体 详情" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "查看 银行 详情" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "查看 教育 详情" })).not.toBeInTheDocument();
   });
 
   it("回放到 8 月 10 日时不使用 8 月 11 日的 Lifecycle", async () => {
@@ -183,6 +186,9 @@ describe("SectorRotationPage 统一工作台", () => {
 
     expect(container).not.toHaveTextContent("lifecycle_action");
     expect(container).not.toHaveTextContent("lifecycle_position_multiplier");
+    expect(container).not.toHaveTextContent("买入");
     expect(container).not.toHaveTextContent("加仓");
+    expect(container).not.toHaveTextContent("减仓");
+    expect(container).not.toHaveTextContent("退出建议");
   });
 });

@@ -15,12 +15,28 @@ describe("MarketSummary", () => {
     expect(screen.getByText("高波动环境下，强势信号存在更高不确定性。")).toBeInTheDocument();
   });
 
-  it("基于完整截面计数并点击风险卡设置状态组", () => {
+  it("四张交互卡回传受控筛选值且市场环境卡不可点击", () => {
     const onLifecycleFilterChange = vi.fn();
-    render(<MarketSummary marketRegime="range" counts={{ trending: 2, repairOrEmerging: 3, risk: 4, changed: 1, insufficient: 0 }} activeLifecycle="all" changedOnly={false} onLifecycleFilterChange={onLifecycleFilterChange} onChangedOnlyChange={vi.fn()} />);
+    const onChangedOnlyChange = vi.fn();
+    render(<MarketSummary marketRegime="range" counts={{ trending: 2, repairOrEmerging: 3, risk: 4, changed: 1, insufficient: 0 }} activeLifecycle="repair_or_emerging" changedOnly onLifecycleFilterChange={onLifecycleFilterChange} onChangedOnlyChange={onChangedOnlyChange} />);
 
-    fireEvent.click(screen.getByRole("button", { name: /拥挤\/背离\/退出 4/ }));
-    expect(onLifecycleFilterChange).toHaveBeenCalledWith("risk");
+    const trending = screen.getByRole("button", { name: /趋势运行 2/ });
+    const repairOrEmerging = screen.getByRole("button", { name: /修复\/初启 3/ });
+    const risk = screen.getByRole("button", { name: /拥挤\/背离\/退出 4/ });
+    const changed = screen.getByRole("button", { name: /今日变化 1/ });
+
+    expect(trending).toHaveAttribute("aria-pressed", "false");
+    expect(repairOrEmerging).toHaveAttribute("aria-pressed", "true");
+    expect(risk).toHaveAttribute("aria-pressed", "false");
+    expect(changed).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("button", { name: /市场环境/ })).not.toBeInTheDocument();
+
+    fireEvent.click(trending);
+    fireEvent.click(repairOrEmerging);
+    fireEvent.click(risk);
+    fireEvent.click(changed);
+    expect(onLifecycleFilterChange.mock.calls).toEqual([["trending"], ["repair_or_emerging"], ["risk"]]);
+    expect(onChangedOnlyChange).toHaveBeenCalledWith(false);
   });
 
   it("旧快照禁用四张 Lifecycle 交互卡", () => {
