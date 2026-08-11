@@ -1,8 +1,35 @@
 from __future__ import annotations
 
 import pandas as pd
+import pytest
 
-from morning_conference.sector_rotation2.etf_mapping import evaluate_etf_expression
+from morning_conference.sector_rotation2.etf_mapping import calculate_etf_expression_metrics, evaluate_etf_expression
+
+
+def test_metrics_calculates_60d_correlation_and_beta_without_future_rows():
+    dates = pd.bdate_range("2026-01-01", periods=62)
+    sector_returns = pd.DataFrame({
+        "as_of_date": dates,
+        "sector_name": "A",
+        "return": [index / 10_000 for index in range(62)],
+    })
+    etf_returns = pd.DataFrame({
+        "as_of_date": dates,
+        "etf_code": "510000.SH",
+        "return": [index / 10_000 for index in range(61)] + [-0.9],
+    })
+    candidates = pd.DataFrame([{"sector_name": "A", "etf_code": "510000.SH"}])
+
+    result = calculate_etf_expression_metrics(sector_returns, etf_returns, candidates, dates[60])
+
+    assert result.loc[0, "return_correlation_60d"] == pytest.approx(1.0)
+    assert result.loc[0, "beta_60d"] == pytest.approx(1.0)
+
+
+def test_missing_required_metric_is_insufficient_data():
+    result = evaluate_etf_expression(pd.DataFrame([{"sector_name": "A", "etf_code": "510000.SH"}]))
+
+    assert result.loc[0, "expression_status"] == "insufficient_data"
 
 
 def test_etf_mapping_marks_high_correlation_liquid_candidate_expressible():
