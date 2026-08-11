@@ -57,7 +57,7 @@ export function parseWorkbenchUrl(search: string): WorkbenchUrlState {
  * 输入：已校验的完整工作台状态。
  * 输出：以 ``?`` 开头的查询字符串；空搜索和空行业不写入 URL。
  */
-export function serializeWorkbenchUrl(state: WorkbenchUrlState): string {
+export function serializeWorkbenchUrl(state: Omit<WorkbenchUrlState, "lifecycle" | "changedOnly"> & Partial<Pick<WorkbenchUrlState, "lifecycle" | "changedOnly">>): string {
   const params = new URLSearchParams();
   if (state.date) params.set("date", state.date);
   params.set("level", String(state.level));
@@ -65,7 +65,7 @@ export function serializeWorkbenchUrl(state: WorkbenchUrlState): string {
   params.set("phase", state.phase);
   params.set("window", String(state.historyWindow));
   params.set("labels", state.labelDensity);
-  params.set("lifecycle", state.lifecycle);
+  params.set("lifecycle", state.lifecycle ?? "all");
   if (state.changedOnly) params.set("changed", "1");
   if (state.query) params.set("q", state.query);
   if (state.sector) params.set("sector", state.sector);

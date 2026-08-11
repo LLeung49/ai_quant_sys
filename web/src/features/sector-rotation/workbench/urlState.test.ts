@@ -27,4 +27,10 @@ describe("workbench URL state", () => {
     expect(query).toContain("lifecycle=all");
     expect(query).not.toContain("changed=");
   });
+
+  it("兼容旧调用并为缺失的 Lifecycle 筛选写入默认值", () => {
+    const query = serializeWorkbenchUrl({ date: undefined, level: 2, mode: "snapshot", phase: "all", query: "", sector: null, historyWindow: 20, labelDensity: "focus" });
+    expect(query).toContain("lifecycle=all");
+    expect(query).not.toContain("changed=");
+  });
 });
