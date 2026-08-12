@@ -109,6 +109,11 @@ export function SectorDetailDrawer({ sector, previousLifecycleState, level, asOf
         <div><span>前态 → 当前态</span><strong>{previousLifecycle ? `${previousLifecycle.label} → ${lifecycle.label}` : "前一状态暂不可用"}</strong></div>
         <p>Lifecycle 为市场状态观察标签，不构成交易建议。</p>
       </section>
+      <section className="detail-market-context" aria-label="板块行情信息">
+        <p>板块行情</p>
+        <strong>价格口径：申万{level === 1 ? "一级" : "二级"}行业等权合成指数日线收盘价</strong>
+        <span>截至日期：{asOfDate}</span>
+      </section>
       <SectorKlineCard
         sectorName={sector.sector_name}
         level={level}

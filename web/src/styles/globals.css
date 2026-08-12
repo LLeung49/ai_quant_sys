@@ -177,6 +177,10 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
 .detail-evidence svg { width: 15px; color: var(--blue); }
 .detail-evidence span { color: var(--subtle); font-size: 9px; }
 .detail-evidence strong { font-size: 13px; }
+.detail-market-context { display: grid; gap: 6px; margin-top: 18px; padding: 15px; border: 1px solid var(--line); border-radius: 12px; background: rgba(7, 18, 32, .76); }
+.detail-market-context > p { margin: 0; color: var(--teal); font-size: 9px; font-weight: 800; letter-spacing: .12em; }
+.detail-market-context strong { color: #dce8f7; font-size: 14px; }
+.detail-market-context span { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .score-breakdown, .detail-metrics { margin-top: 22px; }
 .detail-section-title { display: flex; align-items: center; justify-content: space-between; padding-bottom: 9px; border-bottom: 1px solid var(--line); }
 .detail-section-title span { font-size: 12px; font-weight: 700; }
