@@ -21,7 +21,7 @@ import { initialReplayState, replayReducer } from "./replay/replayState";
 import { buildSectorTrail } from "./replay/sectorTrail";
 import { buildReplayFrames } from "./workbench/frameState";
 import { parseWorkbenchUrl, serializeWorkbenchUrl, type LabelDensity, type WorkbenchMode } from "./workbench/urlState";
-import { findPreviousLifecycle, hasLifecycleCoverage, matchesLifecycleFilter, summarizeLifecycle } from "./lifecycle/derive";
+import { findPreviousLifecycle, hasLifecycleCoverage, matchesLifecycleFilter } from "./lifecycle/derive";
 import type { LifecycleFilter } from "./lifecycle/meta";
 import type { SectorPoint } from "./api";
 
@@ -30,6 +30,14 @@ type DisplaySector = SectorPoint & QuadrantSector & RankingSector & DetailSector
   market_regime?: string;
   regime_multiplier?: number | null;
 };
+
+const OBSERVATION_FOCUSES: Array<{ label: string; lifecycle: LifecycleFilter; changedOnly: boolean }> = [
+  { label: "全部", lifecycle: "all", changedOnly: false },
+  { label: "趋势", lifecycle: "trending", changedOnly: false },
+  { label: "修复/初启", lifecycle: "repair_or_emerging", changedOnly: false },
+  { label: "风险提示", lifecycle: "risk", changedOnly: false },
+  { label: "今日 Lifecycle 变化", lifecycle: "all", changedOnly: true },
+];
 
 /**
  * 渲染单日观察与动态回放共用的板块轮动工作台。
@@ -92,7 +100,6 @@ export function SectorRotationPage() {
   // 回放模式只可信任当前帧；帧缺失时宁可展示空态，也不能泄漏最新快照。
   const sectors = mode === "replay" ? replayFrame : snapshotSectors;
   const lifecycleAvailable = hasLifecycleCoverage(sectors);
-  const lifecycleCounts = summarizeLifecycle(sectors);
   const filteredSectors = sectors.filter((sector) => {
     const matchesSearch = !searchQuery.trim() || sector.sector_name.includes(searchQuery.trim());
     const matchesPhase = phaseFilter === "all" || sector.phase_confirmed === phaseFilter;
@@ -147,13 +154,25 @@ export function SectorRotationPage() {
   return <div className="rotation-page">
     <RotationFilters dates={mode === "replay" ? [...replayState.dates].reverse() : dates.data ?? []} selectedDate={mode === "replay" ? displayDate ?? "" : selectedDate ?? loadedSnapshotDate ?? ""} level={level} modelVersion="v1" onDateChange={handleDateChange} onLevelChange={(nextLevel) => { setLevel(nextLevel); setSelectedDate(undefined); setSelectedSectorName(null); setComparisonSectors([]); setMode("snapshot"); }} searchQuery={searchQuery} phaseFilter={phaseFilter} onSearchChange={setSearchQuery} onPhaseChange={setPhaseFilter} lifecycleFilter={lifecycleFilter} changedOnly={changedOnly} lifecycleDisabled={!lifecycleAvailable} onLifecycleChange={setLifecycleFilter} onChangedOnlyChange={setChangedOnly} />
     {mode === "snapshot" && selectedDate && loadedSnapshotDate && selectedDate !== loadedSnapshotDate && <p role="status">{selectedDate} 的板块轮动快照尚未生成，当前展示 {loadedSnapshotDate} 的最近成功快照。</p>}
-    <MarketSummary marketRegime={sectors[0]?.market_regime ?? "range"} counts={lifecycleCounts} activeLifecycle={lifecycleFilter} changedOnly={changedOnly} lifecycleDisabled={!lifecycleAvailable} onLifecycleFilterChange={setLifecycleFilter} onChangedOnlyChange={setChangedOnly} />
+    <MarketSummary marketRegime={sectors[0]?.market_regime ?? "range"} />
     <section className="rotation-workspace">
       <article className="chart-panel">
         <header className="panel-header">
           <div><p>ROTATION WORKBENCH · {displayDate} · 数据源截止 {sourceCutoff}</p><h2>行业轮动象限</h2></div>
           <div className="chart-actions">
             <div className="segmented-control workbench-mode" aria-label="象限图模式"><button className={mode === "snapshot" ? "is-active" : ""} type="button" onClick={() => handleModeChange("snapshot")}>单日观察</button><button className={mode === "replay" ? "is-active" : ""} type="button" onClick={() => handleModeChange("replay")}>{mode === "replay" && replayState.playing ? <Pause size={12} /> : <Play size={12} />}动态回放</button></div>
+            <div className="observation-focus-wrap">
+              <div className="segmented-control observation-focus" role="group" aria-label="观察重点">
+                {OBSERVATION_FOCUSES.map((focus) => {
+                  const isAll = focus.lifecycle === "all" && !focus.changedOnly;
+                  const isActive = lifecycleAvailable
+                    ? lifecycleFilter === focus.lifecycle && changedOnly === focus.changedOnly
+                    : isAll;
+                  return <button key={focus.label} className={isActive ? "is-active" : ""} type="button" aria-pressed={isActive} disabled={!lifecycleAvailable && !isAll} onClick={() => { setLifecycleFilter(focus.lifecycle); setChangedOnly(focus.changedOnly); }}>{focus.label}</button>;
+                })}
+              </div>
+              {!lifecycleAvailable && <p className="observation-focus-note">该快照缺少 Lifecycle 数据，暂不能筛选观察重点。</p>}
+            </div>
             <button className="method-link" type="button" title="横轴为趋势速度，纵轴为趋势加速度；分数均为当日行业截面相对值"><CircleHelp aria-hidden="true" size={15} />如何阅读</button>
           </div>
         </header>

@@ -195,7 +195,7 @@ describe("SectorRotationPage 统一工作台", () => {
     expect(screen.queryByText(isLifecyclePill("强势拥挤"))).not.toBeInTheDocument();
     expect(screen.getByLabelText("今日关注行业")).toHaveTextContent("0 个有效行业");
     expect(screen.queryByTestId("drawer-date")).not.toBeInTheDocument();
-    expect([...container.querySelectorAll(".summary-card strong")].slice(1).map((element) => element.textContent)).toEqual(["0", "0", "0", "0"]);
+    expect(container.querySelectorAll(".summary-card strong")).toHaveLength(1);
   });
 
   it("历史请求失败只在轨迹区局部降级", async () => {
@@ -219,5 +219,35 @@ describe("SectorRotationPage 统一工作台", () => {
     expect(container).not.toHaveTextContent("加仓");
     expect(container).not.toHaveTextContent("减仓");
     expect(container).not.toHaveTextContent("退出建议");
+  });
+
+  it("filters the workbench to lifecycle changes through the observation-focus control", async () => {
+    render(<SectorRotationPage />);
+
+    const focusGroup = await screen.findByRole("group", { name: "观察重点" });
+    expect(focusGroup).toHaveTextContent("全部趋势修复/初启风险提示今日 Lifecycle 变化");
+    const changed = await screen.findByRole("button", { name: "今日 Lifecycle 变化" });
+    expect(changed).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(changed);
+
+    expect(changed).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("当前图表：半导体、教育")).toBeInTheDocument();
+    expect(screen.queryByText("当前图表：银行")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "查看 半导体 详情" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "查看 银行 详情" })).not.toBeInTheDocument();
+  });
+
+  it("keeps only the all-focus control available when a replay snapshot lacks lifecycle data", async () => {
+    mockedResponses.replayData = [defaultReplayData[0]];
+    window.history.replaceState(null, "", "/?mode=replay&date=2026-08-03");
+    render(<SectorRotationPage />);
+
+    expect(await screen.findByRole("button", { name: "全部" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "趋势" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "修复/初启" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "风险提示" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "今日 Lifecycle 变化" })).toBeDisabled();
+    expect(screen.getByText("该快照缺少 Lifecycle 数据，暂不能筛选观察重点。")).toBeInTheDocument();
   });
 });
