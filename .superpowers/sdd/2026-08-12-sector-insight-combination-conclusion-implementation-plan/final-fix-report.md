@@ -22,3 +22,29 @@ Resolved final-review findings I1 and M1.
 ## Concerns
 
 None. Scope remains frontend display logic and tests only; no dependencies, requests, or backend changes.
+
+## Round 2: inherited-property fallback
+
+### Status
+
+Resolved the follow-up review finding: prototype-chain property names are no longer accepted as known phases.
+
+### Changes
+
+- Replaced the phase membership check with `Object.prototype.hasOwnProperty.call`.
+- Unknown phase metadata now explicitly uses the neutral phase record before constructing the title.
+- Added a `toString` + `emerging` regression test asserting the neutral fallback title, guidance, and tone.
+
+### Verification
+
+- `npm run test -- --run src/features/sector-rotation/detail/combinationConclusion.test.ts` — 16 passed.
+- `npm run lint` — passed.
+- `git diff --check` — passed.
+
+### Commit
+
+`fix: guard sector insight phase lookup`
+
+### Concerns
+
+None. The change is limited to frontend display normalization and tests.

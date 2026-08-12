@@ -1,4 +1,4 @@
-import { getPhaseMeta, PHASE_META } from "../labels";
+import { PHASE_META } from "../labels";
 import { getLifecycleMeta } from "../lifecycle/meta";
 
 export type CombinationConclusionTone = "positive" | "watch" | "risk" | "neutral";
@@ -19,11 +19,12 @@ export function getCombinationConclusion(
   phase: string | null | undefined,
   lifecycle: string | null | undefined,
 ): CombinationConclusion {
-  const phaseMeta = getPhaseMeta(phase);
-  const lifecycleMeta = getLifecycleMeta(lifecycle);
   const normalizedPhase = phase ?? "neutral";
+  const hasKnownPhase = Object.prototype.hasOwnProperty.call(PHASE_META, normalizedPhase);
+  const phaseMeta = hasKnownPhase ? PHASE_META[normalizedPhase] : PHASE_META.neutral;
+  const lifecycleMeta = getLifecycleMeta(lifecycle);
 
-  if (!(normalizedPhase in PHASE_META) || lifecycleMeta.state === "unknown") {
+  if (!hasKnownPhase || lifecycleMeta.state === "unknown") {
     return {
       title: `${phaseMeta.label} · ${lifecycleMeta.label}`,
       guidance: FALLBACK_GUIDANCE,

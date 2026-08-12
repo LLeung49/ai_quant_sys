@@ -49,6 +49,14 @@ describe("getCombinationConclusion", () => {
     });
   });
 
+  it("falls back to neutral observation when phase matches an inherited property", () => {
+    expect(getCombinationConclusion("toString", "emerging")).toEqual({
+      title: "方向未明 · 初步启动",
+      guidance: "当前证据不足，建议继续观察后续连续变化。",
+      tone: "neutral",
+    });
+  });
+
   it("falls back to neutral observation when lifecycle is unknown", () => {
     expect(getCombinationConclusion("accel_up", "future_lifecycle")).toEqual({
       title: "加速走强 · 未知状态",
