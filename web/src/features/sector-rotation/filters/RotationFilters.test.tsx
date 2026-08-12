@@ -31,4 +31,12 @@ describe("RotationFilters", () => {
     expect(onLifecycleChange).toHaveBeenCalledWith("risk");
     expect(onChangedOnlyChange).toHaveBeenCalledWith(true);
   });
+
+  it("将仅看今日变化渲染为独立的紧凑勾选控件", () => {
+    render(<RotationFilters dates={["2026-08-10"]} selectedDate="2026-08-10" level={2} modelVersion="v1" onDateChange={vi.fn()} onLevelChange={vi.fn()} lifecycleFilter="all" changedOnly={false} onLifecycleChange={vi.fn()} onChangedOnlyChange={vi.fn()} />);
+
+    const checkbox = screen.getByLabelText("仅看今日变化");
+    expect(checkbox).toHaveAttribute("type", "checkbox");
+    expect(checkbox.closest(".filter-field")).toHaveClass("filter-field--checkbox");
+  });
 });

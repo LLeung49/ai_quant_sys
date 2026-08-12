@@ -84,7 +84,7 @@ export function RotationFilters({ dates, selectedDate, level, modelVersion, onDa
           {LIFECYCLE_FILTER_VALUES.map((value) => <option key={value} value={value}>{getLifecycleFilterLabel(value)}</option>)}
         </select>
       </label>
-      <label className="filter-field">
+      <label className="filter-field filter-field--checkbox">
         <span>仅看今日变化</span>
         <input aria-label="仅看今日变化" type="checkbox" checked={changedOnly} disabled={lifecycleDisabled} onChange={(event) => onChangedOnlyChange?.(event.target.checked)} />
       </label>

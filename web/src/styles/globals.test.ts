@@ -17,4 +17,9 @@ describe("mobile layout CSS contract", () => {
     expect(css).toMatch(/\.rotation-page\s*\{[^}]*overflow-x:\s*hidden/);
     expect(css).toMatch(/\.lifecycle-bands\s*\{[^}]*overflow-x:\s*auto/);
   });
+
+  it("keeps native date options legible and the Lifecycle toggle compact", () => {
+    expect(css).toMatch(/\.filter-field select option\s*\{[^}]*background:\s*#0c192b[^}]*color:\s*var\(--text\)/);
+    expect(css).toMatch(/\.filter-field--checkbox input\[type="checkbox"\]\s*\{[^}]*width:\s*16px[^}]*height:\s*16px/);
+  });
 });
