@@ -14,7 +14,9 @@ export function useRotationData(level: 1 | 2, modelVersion: string, selectedDate
     queryFn: () => fetchAvailableDates(level, modelVersion),
     staleTime: 60_000,
   });
-  const latestDate = selectedDate ?? dates.data?.[0];
+  const latestDate = selectedDate && dates.data?.includes(selectedDate)
+    ? selectedDate
+    : dates.data?.[0];
   const snapshot = useQuery({
     queryKey: ["sector-rotation", "snapshot", latestDate, level, modelVersion],
     queryFn: () => fetchSnapshot(latestDate!, level, modelVersion),
