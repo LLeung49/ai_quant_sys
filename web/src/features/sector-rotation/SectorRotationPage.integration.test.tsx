@@ -99,7 +99,8 @@ describe("SectorRotationPage 统一工作台", () => {
   it("keeps a pending trading date in the URL and explains the loaded fallback snapshot", async () => {
     const { unmount } = render(<SectorRotationPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /2026-08-11.*尚未生成快照/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /交易日.*2026-08-11.*尚未生成快照/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^2026-08-11.*尚未生成快照/ }));
 
     expect(await screen.findByRole("status")).toHaveTextContent("2026-08-11 的板块轮动快照尚未生成，当前展示 2026-08-10 的最近成功快照。");
     await waitFor(() => expect(window.location.search).toContain("date=2026-08-11"));

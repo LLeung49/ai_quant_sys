@@ -57,10 +57,16 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
 .model-badge span { color: var(--subtle); font-size: 8px; letter-spacing: .1em; }
 .model-badge strong { color: #a8caff; font-size: 11px; }
 
-.trading-calendar-filter { display: grid; gap: 6px; min-width: 238px; }
+.trading-calendar-filter { position: relative; display: grid; gap: 6px; min-width: 238px; }
 .trading-calendar-filter__label { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 10px; font-weight: 650; }
 .trading-calendar-filter__error { margin: 0; color: var(--amber); font-size: 11px; }
-.trading-calendar { padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: #0c192b; }
+.trading-calendar { position: relative; }
+.trading-calendar-trigger { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: #0c192b; color: var(--text); text-align: left; }
+.trading-calendar-trigger:hover, .trading-calendar-trigger[aria-expanded="true"] { border-color: var(--line-strong); background: rgba(103,169,255,.12); }
+.trading-calendar-trigger span { color: var(--muted); font-size: 10px; font-weight: 650; }
+.trading-calendar-trigger strong { font-size: 12px; font-variant-numeric: tabular-nums; }
+.trading-calendar-trigger small { grid-column: 1 / -1; color: var(--subtle); font-size: 10px; }
+.trading-calendar-popover { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; width: max(238px, 100%); padding: 8px; border: 1px solid var(--line-strong); border-radius: 8px; background: #0c192b; box-shadow: 0 14px 32px rgba(0,0,0,.32); }
 .trading-calendar__header { display: grid; grid-template-columns: 28px 1fr 28px; align-items: center; margin-bottom: 7px; text-align: center; }
 .trading-calendar__header button { width: 24px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: rgba(103,169,255,.08); color: var(--text); line-height: 1; }
 .trading-calendar__header button:hover { border-color: var(--line-strong); background: rgba(103,169,255,.16); }

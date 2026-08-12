@@ -27,4 +27,9 @@ describe("mobile layout CSS contract", () => {
     expect(css).toMatch(/\.trading-calendar__day\[data-date-status="pending"\]/);
     expect(css).toMatch(/\.trading-calendar__day\[data-date-status="closed"\]/);
   });
+  it("positions the trading calendar popover outside the filter layout", () => {
+    expect(css).toMatch(/\.trading-calendar-filter\s*\{[^}]*position:\s*relative/);
+    expect(css).toMatch(/\.trading-calendar-popover\s*\{[^}]*position:\s*absolute[^}]*z-index:\s*\d+/);
+    expect(css).toMatch(/\.trading-calendar-trigger\s*\{/);
+  });
 });
