@@ -1,4 +1,4 @@
-import { getPhaseMeta } from "../labels";
+import { getPhaseMeta, PHASE_META } from "../labels";
 import { getLifecycleMeta } from "../lifecycle/meta";
 
 export type CombinationConclusionTone = "positive" | "watch" | "risk" | "neutral";
@@ -22,6 +22,15 @@ export function getCombinationConclusion(
   const phaseMeta = getPhaseMeta(phase);
   const lifecycleMeta = getLifecycleMeta(lifecycle);
   const normalizedPhase = phase ?? "neutral";
+
+  if (!(normalizedPhase in PHASE_META) || lifecycleMeta.state === "unknown") {
+    return {
+      title: `${phaseMeta.label} · ${lifecycleMeta.label}`,
+      guidance: FALLBACK_GUIDANCE,
+      tone: "neutral",
+    };
+  }
+
   const key = `${normalizedPhase}:${lifecycleMeta.state}`;
 
   if (key === "reversal_confirmed:emerging") {

@@ -40,4 +40,37 @@ describe("getCombinationConclusion", () => {
       tone: "neutral",
     });
   });
+
+  it("falls back to neutral observation when phase is unknown despite an emerging lifecycle", () => {
+    expect(getCombinationConclusion("future_phase", "emerging")).toEqual({
+      title: "方向未明 · 初步启动",
+      guidance: "当前证据不足，建议继续观察后续连续变化。",
+      tone: "neutral",
+    });
+  });
+
+  it("falls back to neutral observation when lifecycle is unknown", () => {
+    expect(getCombinationConclusion("accel_up", "future_lifecycle")).toEqual({
+      title: "加速走强 · 未知状态",
+      guidance: "当前证据不足，建议继续观察后续连续变化。",
+      tone: "neutral",
+    });
+  });
+
+  it.each([
+    ["bottoming_candidate", "repair", "positive", "连续性验证"],
+    ["accel_up", "repair", "watch", "修复信号"],
+    ["reversal_confirmed", "emerging", "positive", "共同确认"],
+    ["accel_down", "trending", "watch", "分歧"],
+    ["accel_up", "trending", "positive", "相对顺畅"],
+    ["accel_up", "crowded", "watch", "拥挤"],
+    ["accel_up", "divergence", "risk", "背离"],
+    ["accel_up", "exit", "risk", "转弱"],
+    ["neutral", "neutral", "neutral", "证据不足"],
+  ])("keeps %s/%s lifecycle mapping at %s with %s guidance", (phase, lifecycle, tone, guidanceKeyword) => {
+    const conclusion = getCombinationConclusion(phase, lifecycle);
+
+    expect(conclusion.tone).toBe(tone);
+    expect(conclusion.guidance).toContain(guidanceKeyword);
+  });
 });
