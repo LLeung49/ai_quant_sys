@@ -50,7 +50,7 @@ export function SectorRotationPage() {
   const [mode, setMode] = useState<WorkbenchMode>(initialUrl.mode);
   const [labelDensity, setLabelDensity] = useState<LabelDensity>(initialUrl.labelDensity);
   const [historyWindow, setHistoryWindow] = useState<5 | 20 | 60>(initialUrl.historyWindow);
-  const { dates, snapshot, latestDate } = useRotationData(level, "v1", selectedDate);
+  const { dates, snapshot, loadedSnapshotDate } = useRotationData(level, "v1", selectedDate);
   const replay = useReplayData(dates.data ?? [], level, "v1");
   const replayPoints = (replay.data ?? []) as unknown as DisplaySector[];
   const replayFrames = useMemo(() => buildReplayFrames<DisplaySector>(replayPoints), [replay.data]);
@@ -68,16 +68,13 @@ export function SectorRotationPage() {
   }, [replayState.playing, replayState.speed]);
 
   const replayDate = replayState.dates[replayState.index];
-  const displayDate = mode === "replay" ? replayDate : latestDate;
+  const displayDate = mode === "replay" ? replayDate : loadedSnapshotDate;
+  const urlDate = mode === "replay" ? displayDate : selectedDate;
 
   useEffect(() => {
-    const nextSearch = serializeWorkbenchUrl({ date: displayDate, level, mode, phase: phaseFilter, query: searchQuery, sector: selectedSectorName, historyWindow, labelDensity, lifecycle: lifecycleFilter, changedOnly });
+    const nextSearch = serializeWorkbenchUrl({ date: urlDate, level, mode, phase: phaseFilter, query: searchQuery, sector: selectedSectorName, historyWindow, labelDensity, lifecycle: lifecycleFilter, changedOnly });
     window.history.replaceState(null, "", `${window.location.pathname}${nextSearch}`);
-  }, [changedOnly, displayDate, historyWindow, labelDensity, level, lifecycleFilter, mode, phaseFilter, searchQuery, selectedSectorName]);
-
-  useEffect(() => {
-    if (selectedDate && !dates.data?.includes(selectedDate)) setSelectedDate(undefined);
-  }, [dates.data, selectedDate]);
+  }, [changedOnly, historyWindow, labelDensity, level, lifecycleFilter, mode, phaseFilter, searchQuery, selectedSectorName, urlDate]);
 
   useEffect(() => {
     if (!selectedSectorName) return;
@@ -142,13 +139,14 @@ export function SectorRotationPage() {
     setMode(nextMode);
     replayDispatch({ type: "PAUSE" });
     if (nextMode === "replay") {
-      const preferred = replayState.dates.indexOf(latestDate ?? "");
+      const preferred = replayState.dates.indexOf(loadedSnapshotDate ?? "");
       replayDispatch({ type: "SEEK", index: preferred >= 0 ? preferred : Math.max(0, replayState.dates.length - 1) });
     }
   };
 
   return <div className="rotation-page">
-    <RotationFilters dates={mode === "replay" ? [...replayState.dates].reverse() : dates.data ?? []} selectedDate={displayDate ?? ""} level={level} modelVersion="v1" onDateChange={handleDateChange} onLevelChange={(nextLevel) => { setLevel(nextLevel); setSelectedDate(undefined); setSelectedSectorName(null); setComparisonSectors([]); setMode("snapshot"); }} searchQuery={searchQuery} phaseFilter={phaseFilter} onSearchChange={setSearchQuery} onPhaseChange={setPhaseFilter} lifecycleFilter={lifecycleFilter} changedOnly={changedOnly} lifecycleDisabled={!lifecycleAvailable} onLifecycleChange={setLifecycleFilter} onChangedOnlyChange={setChangedOnly} />
+    <RotationFilters dates={mode === "replay" ? [...replayState.dates].reverse() : dates.data ?? []} selectedDate={mode === "replay" ? displayDate ?? "" : selectedDate ?? loadedSnapshotDate ?? ""} level={level} modelVersion="v1" onDateChange={handleDateChange} onLevelChange={(nextLevel) => { setLevel(nextLevel); setSelectedDate(undefined); setSelectedSectorName(null); setComparisonSectors([]); setMode("snapshot"); }} searchQuery={searchQuery} phaseFilter={phaseFilter} onSearchChange={setSearchQuery} onPhaseChange={setPhaseFilter} lifecycleFilter={lifecycleFilter} changedOnly={changedOnly} lifecycleDisabled={!lifecycleAvailable} onLifecycleChange={setLifecycleFilter} onChangedOnlyChange={setChangedOnly} />
+    {mode === "snapshot" && selectedDate && loadedSnapshotDate && selectedDate !== loadedSnapshotDate && <p role="status">{selectedDate} 的板块轮动快照尚未生成，当前展示 {loadedSnapshotDate} 的最近成功快照。</p>}
     <MarketSummary marketRegime={sectors[0]?.market_regime ?? "range"} counts={lifecycleCounts} activeLifecycle={lifecycleFilter} changedOnly={changedOnly} lifecycleDisabled={!lifecycleAvailable} onLifecycleFilterChange={setLifecycleFilter} onChangedOnlyChange={setChangedOnly} />
     <section className="rotation-workspace">
       <article className="chart-panel">

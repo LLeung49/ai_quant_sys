@@ -6,6 +6,7 @@ const mockedResponses = vi.hoisted(() => ({
   replayData: [] as Record<string, unknown>[],
   history: { data: [] as Array<{ as_of_date: string; sector_name: string; velocity_score: number; acceleration_score: number }> | undefined, isLoading: false, isError: false },
   snapshotStatus: "ready" as "ready" | "loading" | "error",
+  loadedSnapshotDate: "2026-08-11",
 }));
 
 const defaultReplayData = [
@@ -23,12 +24,12 @@ const isLifecyclePill = (label: string) => (_: string, node: Element | null): bo
 
 vi.mock("./useRotationData", () => ({
   useRotationData: (_level: 1 | 2, _modelVersion: string, selectedDate?: string) => ({
-    // mock 也按真实 Hook 的优先级返回历史单日所选日期，防止测试错误地始终拿最新日。
+    loadedSnapshotDate: selectedDate === "2026-08-11" ? "2026-08-10" : selectedDate ?? mockedResponses.loadedSnapshotDate,
     latestDate: selectedDate ?? "2026-08-11",
     dates: { data: ["2026-08-11", "2026-08-10", "2026-08-04", "2026-08-03"], isLoading: false, isError: false },
     snapshot: {
       data: mockedResponses.snapshotStatus === "ready" ? {
-        as_of_date: selectedDate ?? "2026-08-11",
+        as_of_date: selectedDate === "2026-08-11" ? "2026-08-10" : selectedDate ?? mockedResponses.loadedSnapshotDate,
         sector_level: 2,
         model_version: "v1",
         meta: { run_status: "succeeded", field_version: "v1", source_max_trade_date: "2026-08-11" },
@@ -41,6 +42,19 @@ vi.mock("./useRotationData", () => ({
       isLoading: mockedResponses.snapshotStatus === "loading",
       isError: mockedResponses.snapshotStatus === "error",
     },
+  }),
+}));
+
+vi.mock("./useCalendarAvailability", () => ({
+  useCalendarAvailability: () => ({
+    data: {
+      sector_level: 2,
+      model_version: "v1",
+      trade_dates: ["2026-08-10", "2026-08-11"],
+      snapshot_dates: ["2026-08-10"],
+      latest_snapshot_date: "2026-08-10",
+    },
+    isError: false,
   }),
 }));
 
@@ -79,6 +93,20 @@ describe("SectorRotationPage 统一工作台", () => {
     mockedResponses.replayData = defaultReplayData;
     mockedResponses.history = { data: [{ as_of_date: "2026-08-04", sector_name: "教育", velocity_score: 0.6, acceleration_score: 0.8 }], isLoading: false, isError: false };
     mockedResponses.snapshotStatus = "ready";
+    mockedResponses.loadedSnapshotDate = "2026-08-11";
+  });
+
+  it("keeps a pending trading date in the URL and explains the loaded fallback snapshot", async () => {
+    const { unmount } = render(<SectorRotationPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: /2026-08-11.*尚未生成快照/ }));
+
+    expect(await screen.findByRole("status")).toHaveTextContent("2026-08-11 的板块轮动快照尚未生成，当前展示 2026-08-10 的最近成功快照。");
+    await waitFor(() => expect(window.location.search).toContain("date=2026-08-11"));
+
+    unmount();
+    render(<SectorRotationPage />);
+    expect(await screen.findByRole("status")).toHaveTextContent("2026-08-11 的板块轮动快照尚未生成，当前展示 2026-08-10 的最近成功快照。");
   });
 
   it("只保留一个主象限，并让回放帧、选择尾迹和轨迹分析同步", async () => {
