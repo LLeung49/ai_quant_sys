@@ -33,6 +33,10 @@ describe("mobile layout CSS contract", () => {
     expect(css).toMatch(/\.trading-calendar-trigger\s*\{/);
   });
 
+  it("reserves the calendar trigger width in the desktop filter grid", () => {
+    expect(css).toMatch(/\.rotation-filters\s*\{[^}]*grid-template-columns:\s*minmax\(238px, \.8fr\)/);
+  });
+
   it("gives Lifecycle its own wrapping desktop row while keeping ranking change visible", () => {
     expect(css).toMatch(/\.rotation-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 390px/);
     expect(css).toMatch(/\.sector-ranking button\s*\{[^}]*grid-template-areas:\s*"rank name phase score change"\s*"rank lifecycle lifecycle lifecycle lifecycle"/);
