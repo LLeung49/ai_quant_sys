@@ -60,8 +60,10 @@ describe("RotationFilters", () => {
     const onDateChange = vi.fn();
     const view = renderFilters(<RotationFilters dates={["2026-08-10"]} selectedDate="2026-08-10" level={2} modelVersion="v1" onDateChange={onDateChange} onLevelChange={vi.fn()} />);
 
+    fireEvent.click(await within(view.container).findByRole("button", { name: /交易日.*2026-08-10/ }));
     const pendingDay = await within(view.container).findByRole("button", { name: /2026-08-11.*尚未生成快照/ });
     fireEvent.click(pendingDay);
     expect(onDateChange).toHaveBeenCalledWith("2026-08-11");
+    expect(within(view.container).queryByRole("grid", { name: /2026-08 交易日历/ })).not.toBeInTheDocument();
   });
 });

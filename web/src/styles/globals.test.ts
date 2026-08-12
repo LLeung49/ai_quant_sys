@@ -27,4 +27,24 @@ describe("mobile layout CSS contract", () => {
     expect(css).toMatch(/\.trading-calendar__day\[data-date-status="pending"\]/);
     expect(css).toMatch(/\.trading-calendar__day\[data-date-status="closed"\]/);
   });
+  it("positions the trading calendar popover outside the filter layout", () => {
+    expect(css).toMatch(/\.trading-calendar-filter\s*\{[^}]*position:\s*relative/);
+    expect(css).toMatch(/\.trading-calendar-popover\s*\{[^}]*position:\s*absolute[^}]*z-index:\s*\d+/);
+    expect(css).toMatch(/\.trading-calendar-trigger\s*\{/);
+  });
+
+  it("gives Lifecycle its own wrapping desktop row while keeping ranking change visible", () => {
+    expect(css).toMatch(/\.rotation-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 390px/);
+    expect(css).toMatch(/\.sector-ranking button\s*\{[^}]*grid-template-areas:\s*"rank name phase score change"\s*"rank lifecycle lifecycle lifecycle lifecycle"/);
+    expect(css).toMatch(/\.lifecycle-pill\s*\{[^}]*flex-wrap:\s*wrap[^}]*white-space:\s*normal/);
+    expect(css).toMatch(/\.lifecycle-pill__segment\s*\{[^}]*overflow-wrap:\s*anywhere/);
+    expect(css).toMatch(/\.sector-ranking em\s*\{[^}]*white-space:\s*nowrap/);
+  });
+
+  it("renders the drawer market context as a three-tier dark surface", () => {
+    expect(css).toMatch(/\.detail-market-context\s*\{[^}]*display:\s*grid[^}]*gap:\s*\d+px[^}]*margin-top:\s*18px[^}]*padding:\s*15px[^}]*border:\s*1px solid var\(--line\)[^}]*border-radius:\s*12px[^}]*background:\s*rgba\(7, 18, 32, \.76\)/);
+    expect(css).toMatch(/\.detail-market-context > p\s*\{[^}]*font-size:\s*9px/);
+    expect(css).toMatch(/\.detail-market-context strong\s*\{[^}]*font-size:\s*14px/);
+    expect(css).toMatch(/\.detail-market-context span\s*\{[^}]*font-size:\s*10px/);
+  });
 });

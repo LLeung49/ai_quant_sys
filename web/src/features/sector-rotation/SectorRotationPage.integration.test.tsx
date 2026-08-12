@@ -12,15 +12,15 @@ const mockedResponses = vi.hoisted(() => ({
 const defaultReplayData = [
   { as_of_date: "2026-08-03", sector_name: "半导体", score_eligible: true, velocity_score: -0.2, acceleration_score: 0.5, volume_score: 0.2, participation_score: 0.3, phase_confirmed: "reversal_confirmed", phase_confidence: 0.7, composite_rank: 3, composite_score: 0.66, rank_change_1d: 4, rank_change_5d: 12, coverage_ratio: 0.94 },
   { as_of_date: "2026-08-04", sector_name: "教育", score_eligible: true, velocity_score: 0.6, acceleration_score: 0.8, volume_score: 0.4, participation_score: 0.5, phase_confirmed: "accel_up", phase_confidence: 0.9, composite_rank: 1, composite_score: 0.88, rank_change_1d: 9, rank_change_5d: 21, coverage_ratio: 0.97, phase_changed: 1 },
-  { as_of_date: "2026-08-08", sector_name: "半导体", score_eligible: true, velocity_score: 0.1, acceleration_score: -0.2, volume_score: 0.3, participation_score: 0.4, phase_confirmed: "bottoming_candidate", phase_confidence: 0.8, composite_rank: 2, composite_score: 0.7, rank_change_1d: 1, coverage_ratio: 0.95, lifecycle_state: "repair" },
-  { as_of_date: "2026-08-10", sector_name: "半导体", score_eligible: true, velocity_score: 0.2, acceleration_score: 0.1, volume_score: 0.3, participation_score: 0.5, phase_confirmed: "reversal_confirmed", phase_confidence: 0.8, composite_rank: 1, composite_score: 0.75, rank_change_1d: 2, coverage_ratio: 0.95, lifecycle_state: "repair" },
-  { as_of_date: "2026-08-11", sector_name: "半导体", score_eligible: true, velocity_score: 0.7, acceleration_score: 0.6, volume_score: 0.5, participation_score: 0.6, phase_confirmed: "accel_up", phase_confidence: 0.9, composite_rank: 1, composite_score: 0.9, rank_change_1d: 4, coverage_ratio: 0.98, lifecycle_state: "trending" },
+  { as_of_date: "2026-08-08", sector_name: "半导体", score_eligible: true, velocity_score: 0.1, acceleration_score: -0.2, volume_score: 0.3, participation_score: 0.4, phase_confirmed: "bottoming_candidate", phase_confidence: 0.8, composite_rank: 2, composite_score: 0.7, rank_change_1d: 1, coverage_ratio: 0.95, lifecycle_state: "repair", lifecycle_age: 1 },
+  { as_of_date: "2026-08-10", sector_name: "半导体", score_eligible: true, velocity_score: 0.2, acceleration_score: 0.1, volume_score: 0.3, participation_score: 0.5, phase_confirmed: "reversal_confirmed", phase_confidence: 0.8, composite_rank: 1, composite_score: 0.75, rank_change_1d: 2, coverage_ratio: 0.95, lifecycle_state: "repair", lifecycle_age: 3 },
+  { as_of_date: "2026-08-11", sector_name: "半导体", score_eligible: true, velocity_score: 0.7, acceleration_score: 0.6, volume_score: 0.5, participation_score: 0.6, phase_confirmed: "accel_up", phase_confidence: 0.9, composite_rank: 1, composite_score: 0.9, rank_change_1d: 4, coverage_ratio: 0.98, lifecycle_state: "trending", lifecycle_age: 1 },
 ];
 
 mockedResponses.replayData = defaultReplayData;
 
-const isLifecyclePill = (label: string) => (_: string, node: Element | null): boolean =>
-  Boolean(node?.classList.contains("lifecycle-pill") && node.textContent?.startsWith(label));
+const hasLifecyclePill = (label: string): boolean =>
+  Array.from(document.querySelectorAll(".lifecycle-pill")).some((node) => node.textContent?.startsWith(label));
 
 vi.mock("./useRotationData", () => ({
   useRotationData: (_level: 1 | 2, _modelVersion: string, selectedDate?: string) => ({
@@ -99,7 +99,8 @@ describe("SectorRotationPage 统一工作台", () => {
   it("keeps a pending trading date in the URL and explains the loaded fallback snapshot", async () => {
     const { unmount } = render(<SectorRotationPage />);
 
-    fireEvent.click(await screen.findByRole("button", { name: /2026-08-11.*尚未生成快照/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /交易日.*2026-08-11.*尚未生成快照/ }));
+    fireEvent.click(await screen.findByRole("button", { name: /^2026-08-11.*尚未生成快照/ }));
 
     expect(await screen.findByRole("status")).toHaveTextContent("2026-08-11 的板块轮动快照尚未生成，当前展示 2026-08-10 的最近成功快照。");
     await waitFor(() => expect(window.location.search).toContain("date=2026-08-11"));
@@ -161,9 +162,9 @@ describe("SectorRotationPage 统一工作台", () => {
     render(<SectorRotationPage />);
 
     expect(await screen.findByLabelText("全市场回放控制")).toBeInTheDocument();
-    expect(await screen.findByText(isLifecyclePill("修复观察"))).toBeInTheDocument();
-    expect(screen.queryByText(isLifecyclePill("趋势运行"))).not.toBeInTheDocument();
-    expect(screen.queryByText(isLifecyclePill("强势拥挤"))).not.toBeInTheDocument();
+    await waitFor(() => expect(hasLifecyclePill("修复")).toBe(true));
+    expect(hasLifecyclePill("趋势")).toBe(false);
+    expect(hasLifecyclePill("拥挤")).toBe(false);
   });
 
   it("回放标题只显示当前帧截止日期，不显示最新快照截止日期", async () => {
@@ -191,10 +192,10 @@ describe("SectorRotationPage 统一工作台", () => {
 
     expect(await screen.findByText("回放数据暂不可用")).toBeInTheDocument();
     expect(screen.queryByTestId("quadrant")).not.toBeInTheDocument();
-    expect(screen.queryByText(isLifecyclePill("强势拥挤"))).not.toBeInTheDocument();
+    expect(hasLifecyclePill("拥挤")).toBe(false);
     expect(screen.getByLabelText("今日关注行业")).toHaveTextContent("0 个有效行业");
     expect(screen.queryByTestId("drawer-date")).not.toBeInTheDocument();
-    expect([...container.querySelectorAll(".summary-card strong")].slice(1).map((element) => element.textContent)).toEqual(["0", "0", "0", "0"]);
+    expect(container.querySelectorAll(".summary-card strong")).toHaveLength(1);
   });
 
   it("历史请求失败只在轨迹区局部降级", async () => {
@@ -218,5 +219,69 @@ describe("SectorRotationPage 统一工作台", () => {
     expect(container).not.toHaveTextContent("加仓");
     expect(container).not.toHaveTextContent("减仓");
     expect(container).not.toHaveTextContent("退出建议");
+  });
+
+  it("filters the workbench to lifecycle changes through the observation-focus control", async () => {
+    render(<SectorRotationPage />);
+
+    const focusGroup = await screen.findByRole("group", { name: "观察重点" });
+    expect(focusGroup).toHaveTextContent("全部趋势修复/初启风险提示今日 Lifecycle 变化");
+    const changed = await screen.findByRole("button", { name: "今日 Lifecycle 变化" });
+    expect(changed).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(changed);
+
+    expect(changed).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("当前图表：半导体、教育")).toBeInTheDocument();
+    expect(screen.queryByText("当前图表：银行")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "查看 半导体 详情" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "查看 银行 详情" })).not.toBeInTheDocument();
+  });
+
+  it("keeps only the all-focus control available when a replay snapshot lacks lifecycle data", async () => {
+    mockedResponses.replayData = [defaultReplayData[0]];
+    window.history.replaceState(null, "", "/?mode=replay&date=2026-08-03");
+    render(<SectorRotationPage />);
+
+    expect(await screen.findByRole("button", { name: "全部" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "趋势" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "修复/初启" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "风险提示" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "今日 Lifecycle 变化" })).toBeDisabled();
+    expect(screen.getByText("该快照缺少 Lifecycle 数据，暂不能筛选观察重点。")).toBeInTheDocument();
+  });
+
+  it("resets URL lifecycle filters while a replay frame has no lifecycle data", async () => {
+    window.history.replaceState(null, "", "/?mode=replay&date=2026-08-03&lifecycle=risk&changed=1");
+    render(<SectorRotationPage />);
+
+    expect(await screen.findByRole("button", { name: "全部" })).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => expect(window.location.search).toContain("lifecycle=all"));
+    expect(window.location.search).not.toContain("changed=1");
+
+    fireEvent.click(screen.getByRole("button", { name: "下一帧" }));
+    fireEvent.click(screen.getByRole("button", { name: "下一帧" }));
+    fireEvent.click(screen.getByRole("button", { name: "下一帧" }));
+
+    expect(await screen.findByText("当前图表：半导体")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "全部" })).toHaveAttribute("aria-pressed", "true");
+    expect(window.location.search).toContain("lifecycle=all");
+    expect(window.location.search).not.toContain("changed=1");
+  });
+
+  it("maps trend, repair-or-emerging, and risk observation focuses to the workbench filters", async () => {
+    render(<SectorRotationPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "趋势" }));
+    expect(await screen.findByText("当前图表：教育")).toBeInTheDocument();
+    await waitFor(() => expect(window.location.search).toContain("lifecycle=trending"));
+
+    fireEvent.click(screen.getByRole("button", { name: "修复/初启" }));
+    expect(await screen.findByText("当前筛选条件下没有可展示行业")).toBeInTheDocument();
+    await waitFor(() => expect(window.location.search).toContain("lifecycle=repair_or_emerging"));
+
+    fireEvent.click(screen.getByRole("button", { name: "风险提示" }));
+    expect(await screen.findByText("当前图表：半导体、银行")).toBeInTheDocument();
+    await waitFor(() => expect(window.location.search).toContain("lifecycle=risk"));
   });
 });

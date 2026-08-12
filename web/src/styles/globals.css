@@ -57,10 +57,16 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
 .model-badge span { color: var(--subtle); font-size: 8px; letter-spacing: .1em; }
 .model-badge strong { color: #a8caff; font-size: 11px; }
 
-.trading-calendar-filter { display: grid; gap: 6px; min-width: 238px; }
+.trading-calendar-filter { position: relative; display: grid; gap: 6px; min-width: 238px; }
 .trading-calendar-filter__label { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 10px; font-weight: 650; }
 .trading-calendar-filter__error { margin: 0; color: var(--amber); font-size: 11px; }
-.trading-calendar { padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: #0c192b; }
+.trading-calendar { position: relative; }
+.trading-calendar-trigger { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; width: 100%; padding: 7px 9px; border: 1px solid var(--line); border-radius: 8px; background: #0c192b; color: var(--text); text-align: left; }
+.trading-calendar-trigger:hover, .trading-calendar-trigger[aria-expanded="true"] { border-color: var(--line-strong); background: rgba(103,169,255,.12); }
+.trading-calendar-trigger span { color: var(--muted); font-size: 10px; font-weight: 650; }
+.trading-calendar-trigger strong { font-size: 12px; font-variant-numeric: tabular-nums; }
+.trading-calendar-trigger small { grid-column: 1 / -1; color: var(--subtle); font-size: 10px; }
+.trading-calendar-popover { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; width: max(238px, 100%); padding: 8px; border: 1px solid var(--line-strong); border-radius: 8px; background: #0c192b; box-shadow: 0 14px 32px rgba(0,0,0,.32); }
 .trading-calendar__header { display: grid; grid-template-columns: 28px 1fr 28px; align-items: center; margin-bottom: 7px; text-align: center; }
 .trading-calendar__header button { width: 24px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: rgba(103,169,255,.08); color: var(--text); line-height: 1; }
 .trading-calendar__header button:hover { border-color: var(--line-strong); background: rgba(103,169,255,.16); }
@@ -78,7 +84,7 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
   .trading-calendar-filter { grid-column: 1 / -1; }
 }
 
-.market-summary { display: grid; grid-template-columns: 1.5fr repeat(4, 1fr); gap: 12px; }
+.market-summary { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
 .summary-card { position: relative; display: grid; grid-template-columns: 38px 1fr; gap: 12px; min-height: 112px; padding: 18px; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(145deg, rgba(17, 32, 53, .93), rgba(11, 23, 40, .86)); box-shadow: 0 16px 36px rgba(0,0,0,.13); }
 .summary-card::after { position: absolute; right: -28px; bottom: -38px; width: 110px; height: 110px; border-radius: 50%; content: ""; background: rgba(103,169,255,.05); filter: blur(2px); }
 .summary-icon { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid rgba(103, 169, 255, .18); border-radius: 10px; background: rgba(103, 169, 255, .09); color: var(--blue); }
@@ -88,10 +94,6 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
 .summary-card strong { display: block; margin-top: 4px; color: var(--text); font-size: 23px; line-height: 1.1; letter-spacing: -.03em; }
 .summary-card p { margin: 9px 0 0; color: var(--subtle); font-size: 9px; line-height: 1.55; }
 .summary-card--regime strong { font-size: 19px; }
-.summary-card--positive .summary-icon { border-color: rgba(55,214,176,.2); background: rgba(55,214,176,.09); color: var(--teal); }
-.summary-card--positive::after { background: rgba(55,214,176,.06); }
-.summary-card--risk .summary-icon { border-color: rgba(255,114,133,.2); background: rgba(255,114,133,.09); color: var(--red); }
-.summary-card--risk::after { background: rgba(255,114,133,.05); }
 
 .rotation-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 14px; min-height: 650px; }
 .chart-panel, .sector-ranking, .content-panel { min-width: 0; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(160deg, rgba(15, 29, 49, .94), rgba(8, 18, 32, .92)); box-shadow: 0 20px 50px rgba(0, 0, 0, .18); }
@@ -102,9 +104,14 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
 .method-link { display: inline-flex; align-items: center; gap: 5px; padding: 6px 9px; border: 1px solid var(--line); border-radius: 8px; background: rgba(14, 29, 49, .8); color: var(--muted); font-size: 10px; }
 .method-link:hover { border-color: rgba(55,214,176,.3); color: var(--text); }
 .chart-actions, .chart-subtoolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.chart-actions { flex-wrap: wrap; justify-content: flex-end; }
 .chart-subtoolbar { padding-top: 7px; }
 .workbench-mode { flex-shrink: 0; }
 .workbench-mode button { display: inline-flex; align-items: center; gap: 4px; }
+.observation-focus-wrap { min-width: 0; }
+.observation-focus { flex-wrap: wrap; }
+.observation-focus button { white-space: nowrap; }
+.observation-focus-note { max-width: 310px; margin: 4px 0 0; color: var(--amber); font-size: 9px; line-height: 1.4; }
 .phase-legend { display: flex; flex-wrap: wrap; gap: 14px; padding: 8px 0 4px; color: var(--muted); font-size: 9px; }
 .phase-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .phase-legend i { width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 7px currentColor; }
@@ -131,24 +138,29 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
 .sector-ranking { display: grid; grid-template-rows: auto auto minmax(0, 1fr); min-height: 650px; overflow: hidden; }
 .ranking-header { padding: 18px 18px 12px; }
 .ranking-header > span, .panel-meta { padding: 5px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 9px; }
-.ranking-columns, .sector-ranking button { grid-template-columns: 28px minmax(92px, 1fr) 88px 56px 44px 42px; }
+.ranking-columns, .sector-ranking button { grid-template-columns: 28px minmax(0, 1fr) 56px 46px 72px; }
 .ranking-columns { display: grid; gap: 7px; padding: 8px 14px; border-top: 1px solid rgba(115,142,177,.1); border-bottom: 1px solid rgba(115,142,177,.1); color: var(--subtle); font-size: 8px; text-transform: uppercase; }
 .ranking-columns span:first-child { grid-column: span 2; }
 .ranking-columns span:nth-child(n+2) { text-align: right; }
 .sector-ranking ol { min-height: 0; max-height: 578px; margin: 0; padding: 4px 7px 12px; overflow: auto; list-style: none; scrollbar-color: #2a3d58 transparent; scrollbar-width: thin; }
 .sector-ranking li { margin: 0; }
-.sector-ranking button { display: grid; align-items: center; gap: 7px; width: 100%; min-height: 42px; padding: 5px 7px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text); text-align: left; transition: background .16s, border-color .16s, transform .16s; }
+.sector-ranking button { display: grid; grid-template-areas: "rank name phase score change" "rank lifecycle lifecycle lifecycle lifecycle"; grid-template-rows: auto auto; align-items: center; gap: 5px 7px; width: 100%; min-height: 58px; padding: 6px 7px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text); text-align: left; transition: background .16s, border-color .16s, transform .16s; }
 .sector-ranking button:hover { border-color: rgba(103,169,255,.14); background: rgba(103,169,255,.07); transform: translateX(2px); }
 .sector-ranking button.is-selected { border-color: rgba(55,214,176,.32); background: rgba(55,214,176,.09); }
 .rank { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 7px; background: rgba(99,119,149,.12); color: #7e91aa; font-size: 10px; font-variant-numeric: tabular-nums; }
 .sector-ranking li:nth-child(-n+3) .rank { background: rgba(55,214,176,.12); color: var(--teal); font-weight: 750; }
 .sector-name { overflow: hidden; font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .phase-pill { display: inline-flex; align-items: center; justify-content: center; width: fit-content; padding: 3px 6px; border: 1px solid color-mix(in srgb, var(--phase-color) 32%, transparent); border-radius: 999px; background: var(--phase-soft); color: var(--phase-color); font-size: 8px; font-style: normal; white-space: nowrap; }
-.lifecycle-pill { display: inline-flex; align-items: center; justify-content: flex-start; gap: 4px; min-width: 0; padding: 3px 6px; border: 1px solid color-mix(in srgb, var(--lifecycle-color) 32%, transparent); border-radius: 999px; background: var(--lifecycle-soft); color: var(--lifecycle-color); font-size: 8px; font-style: normal; white-space: nowrap; }
-.lifecycle-pill b { color: inherit; font-size: 8px; font-weight: 700; }
-.lifecycle-pill em { color: inherit; font-size: 8px; }
+.rank { grid-area: rank; }
+.sector-name { grid-area: name; }
+.phase-pill { grid-area: phase; }
+.sector-ranking strong { grid-area: score; }
+.sector-ranking em.rank-up, .sector-ranking em.rank-down, .sector-ranking em.rank-flat { grid-area: change; }
+.lifecycle-pill { grid-area: lifecycle; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 2px 4px; min-width: 0; max-width: 100%; padding: 3px 6px; border: 1px solid color-mix(in srgb, var(--lifecycle-color) 32%, transparent); border-radius: 7px; background: var(--lifecycle-soft); color: var(--lifecycle-color); font-size: 8px; font-style: normal; line-height: 1.35; white-space: normal; }
+.lifecycle-pill__segment { display: inline; min-width: 0; overflow-wrap: anywhere; }
+.lifecycle-pill__segment i { margin: 0 2px; color: inherit; font-style: normal; }
 .sector-ranking strong { color: #cfdbeb; font-size: 10px; font-variant-numeric: tabular-nums; text-align: right; }
-.sector-ranking em { display: inline-flex; align-items: center; justify-content: flex-end; gap: 1px; font-size: 9px; font-style: normal; font-variant-numeric: tabular-nums; }
+.sector-ranking em { display: inline-flex; align-items: center; justify-content: flex-end; gap: 1px; font-size: 9px; font-style: normal; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .rank-up { color: var(--teal); } .rank-down { color: var(--red); } .rank-flat { color: var(--subtle); }
 
 .detail-layer { position: fixed; inset: 0; z-index: 50; display: grid; justify-items: end; background: rgba(2, 8, 15, .62); backdrop-filter: blur(5px); animation: fade-in .18s ease-out; }
@@ -165,6 +177,10 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
 .detail-evidence svg { width: 15px; color: var(--blue); }
 .detail-evidence span { color: var(--subtle); font-size: 9px; }
 .detail-evidence strong { font-size: 13px; }
+.detail-market-context { display: grid; gap: 6px; margin-top: 18px; padding: 15px; border: 1px solid var(--line); border-radius: 12px; background: rgba(7, 18, 32, .76); }
+.detail-market-context > p { margin: 0; color: var(--teal); font-size: 9px; font-weight: 800; letter-spacing: .12em; }
+.detail-market-context strong { color: #dce8f7; font-size: 14px; }
+.detail-market-context span { color: var(--muted); font-size: 10px; font-variant-numeric: tabular-nums; }
 .score-breakdown, .detail-metrics { margin-top: 22px; }
 .detail-section-title { display: flex; align-items: center; justify-content: space-between; padding-bottom: 9px; border-bottom: 1px solid var(--line); }
 .detail-section-title span { font-size: 12px; font-weight: 700; }
@@ -267,8 +283,7 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
 @media (max-width: 1180px) {
   .rotation-filters { grid-template-columns: repeat(3, 1fr); }
   .filter-heading { grid-column: 1 / -1; }
-  .market-summary { grid-template-columns: repeat(2, 1fr); }
-  .rotation-workspace { grid-template-columns: minmax(0, 1fr) 340px; }
+  .rotation-workspace { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 900px) {
@@ -278,6 +293,8 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
   .rotation-workspace { grid-template-columns: 1fr; }
   .sector-ranking { min-height: 520px; }
   .sector-ranking ol { max-height: 460px; }
+  .panel-header { align-items: flex-start; }
+  .chart-actions { justify-content: flex-start; }
 }
 
 @media (max-width: 640px) {
@@ -287,11 +304,12 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
   .brand-mark { margin-bottom: 22px; }
   .rotation-filters { grid-template-columns: 1fr 1fr; }
   .filter-heading, .filter-field--search { grid-column: 1 / -1; }
-  .market-summary { grid-template-columns: 1fr; }
   .summary-card { min-height: 96px; }
   .chart-panel { min-height: 570px; padding: 14px 10px 10px; }
   .quadrant-chart-shell, .quadrant-chart { min-height: 470px; }
   .phase-legend { gap: 8px; }
+  .observation-focus { width: 100%; }
+  .observation-focus button { flex: 1 1 auto; }
   .quadrant-caption { display: none; }
   .ranking-columns { display: none; }
   .sector-ranking button { grid-template-columns: 28px minmax(0, 1fr) auto auto; grid-template-areas: "rank name score change" "rank lifecycle phase change"; align-items: center; min-height: 60px; padding: 9px 8px; }
