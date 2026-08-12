@@ -22,6 +22,17 @@ def test_migration_defines_approved_sector_rotation_tables():
         assert column in sql
 
 
+def test_lifecycle_upgrade_migration_adds_all_missing_snapshot_columns():
+    sql = Path("sql/20260812_add_sector_rotation_lifecycle_columns.sql").read_text(encoding="utf-8")
+
+    assert "ALTER TABLE sector_rotation_sector_daily_snapshot" in sql
+    for column in (
+        "lifecycle_state", "lifecycle_action", "lifecycle_position_multiplier", "lifecycle_reason",
+        "lifecycle_changed", "lifecycle_age",
+    ):
+        assert f"ADD COLUMN {column}" in sql
+
+
 class FakeCursor:
     def __init__(self):
         self.calls = []

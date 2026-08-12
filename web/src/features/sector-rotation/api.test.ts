@@ -8,13 +8,13 @@ describe("板块轮动 API 客户端", () => {
   it("保留合法 Lifecycle 字段并兼容旧快照", async () => {
     const current = sectorPointSchema.parse({
       sector_name: "半导体",
-      score_eligible: true,
+      score_eligible: 1,
       lifecycle_state: "trending",
       lifecycle_reason: "rank_and_participation",
       lifecycle_changed: 1,
       lifecycle_age: 3,
     });
-    expect(current).toMatchObject({ lifecycle_state: "trending", lifecycle_changed: true, lifecycle_age: 3 });
+    expect(current).toMatchObject({ score_eligible: true, lifecycle_state: "trending", lifecycle_changed: true, lifecycle_age: 3 });
     expect(sectorPointSchema.parse({ sector_name: "银行", score_eligible: true }).lifecycle_state).toBeUndefined();
   });
 

@@ -25,7 +25,7 @@ const availableDatesSchema = z.object({
 export const sectorPointSchema = z.object({
   as_of_date: z.string().optional(),
   sector_name: z.string(),
-  score_eligible: z.boolean(),
+  score_eligible: z.union([z.boolean(), z.literal(0), z.literal(1)]).transform(Boolean),
   lifecycle_state: z.string().nullable().optional(),
   lifecycle_reason: z.string().nullable().optional(),
   lifecycle_changed: z.union([z.boolean(), z.literal(0), z.literal(1)]).transform(Boolean).nullable().optional(),
