@@ -33,6 +33,10 @@ describe("mobile layout CSS contract", () => {
     expect(css).toMatch(/\.trading-calendar-trigger\s*\{/);
   });
 
+  it("keeps the filter stacking context above the following market summary", () => {
+    expect(css).toMatch(/\.rotation-filters\s*\{[^}]*position:\s*relative[^}]*z-index:\s*2/);
+  });
+
   it("reserves the calendar trigger width in the second desktop filter track", () => {
     expect(css).toMatch(/\.rotation-filters\s*\{[^}]*grid-template-columns:\s*minmax\(150px, \.8fr\) minmax\(238px, \.7fr\)/);
   });

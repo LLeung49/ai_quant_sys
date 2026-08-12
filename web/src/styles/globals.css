@@ -41,7 +41,7 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
 .header-status strong { padding-left: 8px; border-left: 1px solid var(--line); color: var(--teal); font-size: 10px; }
 
 .rotation-page { display: grid; gap: 18px; overflow-x: hidden; }
-.rotation-filters { display: grid; grid-template-columns: minmax(150px, .8fr) minmax(238px, .7fr) repeat(4, minmax(120px, .7fr)) minmax(190px, 1fr) auto; align-items: end; gap: 12px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: rgba(11, 22, 38, .82); box-shadow: 0 14px 40px rgba(0, 0, 0, .16); backdrop-filter: blur(18px); }
+.rotation-filters { position: relative; z-index: 2; display: grid; grid-template-columns: minmax(150px, .8fr) minmax(238px, .7fr) repeat(4, minmax(120px, .7fr)) minmax(190px, 1fr) auto; align-items: end; gap: 12px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: rgba(11, 22, 38, .82); box-shadow: 0 14px 40px rgba(0, 0, 0, .16); backdrop-filter: blur(18px); }
 .filter-heading { align-self: center; }
 .filter-heading > span { display: block; font-size: 13px; font-weight: 700; }
 .filter-heading small { display: block; margin-top: 5px; color: var(--subtle); font-size: 9px; line-height: 1.4; }
