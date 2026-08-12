@@ -33,8 +33,10 @@ describe("mobile layout CSS contract", () => {
     expect(css).toMatch(/\.trading-calendar-trigger\s*\{/);
   });
 
-  it("reserves a fixed, non-wrapping desktop change column for ranking direction and value", () => {
-    expect(css).toMatch(/\.ranking-columns, \.sector-ranking button\s*\{[^}]*grid-template-columns:[^;]*72px/);
+  it("reserves fixed desktop tracks for the complete Lifecycle label and ranking change", () => {
+    expect(css).toMatch(/\.rotation-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 470px/);
+    expect(css).toMatch(/\.ranking-columns, \.sector-ranking button\s*\{[^}]*grid-template-columns:[^;]*128px[^;]*72px/);
+    expect(css).toMatch(/\.lifecycle-pill\s*\{[^}]*white-space:\s*nowrap/);
     expect(css).toMatch(/\.sector-ranking em\s*\{[^}]*white-space:\s*nowrap/);
   });
 });

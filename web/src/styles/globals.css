@@ -95,7 +95,7 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
 .summary-card p { margin: 9px 0 0; color: var(--subtle); font-size: 9px; line-height: 1.55; }
 .summary-card--regime strong { font-size: 19px; }
 
-.rotation-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 14px; min-height: 650px; }
+.rotation-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 470px; gap: 14px; min-height: 650px; }
 .chart-panel, .sector-ranking, .content-panel { min-width: 0; border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(160deg, rgba(15, 29, 49, .94), rgba(8, 18, 32, .92)); box-shadow: 0 20px 50px rgba(0, 0, 0, .18); }
 .chart-panel { display: flex; flex-direction: column; min-height: 650px; padding: 18px 18px 12px; }
 .panel-header { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
@@ -138,7 +138,7 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
 .sector-ranking { display: grid; grid-template-rows: auto auto minmax(0, 1fr); min-height: 650px; overflow: hidden; }
 .ranking-header { padding: 18px 18px 12px; }
 .ranking-header > span, .panel-meta { padding: 5px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 9px; }
-.ranking-columns, .sector-ranking button { grid-template-columns: 28px minmax(0, 1fr) 88px 56px 46px 72px; }
+.ranking-columns, .sector-ranking button { grid-template-columns: 28px minmax(0, 1fr) 128px 56px 46px 72px; }
 .ranking-columns { display: grid; gap: 7px; padding: 8px 14px; border-top: 1px solid rgba(115,142,177,.1); border-bottom: 1px solid rgba(115,142,177,.1); color: var(--subtle); font-size: 8px; text-transform: uppercase; }
 .ranking-columns span:first-child { grid-column: span 2; }
 .ranking-columns span:nth-child(n+2) { text-align: right; }
@@ -274,7 +274,7 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
 @media (max-width: 1180px) {
   .rotation-filters { grid-template-columns: repeat(3, 1fr); }
   .filter-heading { grid-column: 1 / -1; }
-  .rotation-workspace { grid-template-columns: minmax(0, 1fr) 340px; }
+  .rotation-workspace { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 900px) {
