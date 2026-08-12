@@ -1,7 +1,10 @@
 /** 板块轮动主视图的日期、行业层级和模型版本筛选控件。 */
 
+import { useEffect, useState } from "react";
 import { CalendarDays, Layers3, Search } from "lucide-react";
 import { LIFECYCLE_FILTER_VALUES, LIFECYCLE_META, type LifecycleFilter } from "../lifecycle/meta";
+import { useCalendarAvailability } from "../useCalendarAvailability";
+import { TradingCalendar } from "./TradingCalendar";
 
 export interface RotationFiltersProps {
   /** 可选成功运行日期，按最新到最早排序。 */
@@ -43,6 +46,12 @@ function getLifecycleFilterLabel(value: LifecycleFilter): string {
   return LIFECYCLE_META[value].label;
 }
 
+function getMonthBounds(month: string): { startDate: string; endDate: string } {
+  const [yearValue, monthValue] = month.split("-").map(Number);
+  const daysInMonth = new Date(Date.UTC(yearValue, monthValue, 0)).getUTCDate();
+  return { startDate: `${month}-01`, endDate: `${month}-${String(daysInMonth).padStart(2, "0")}` };
+}
+
 /**
  * 渲染不含业务查询逻辑的板块轮动筛选器。
  *
@@ -50,15 +59,29 @@ function getLifecycleFilterLabel(value: LifecycleFilter): string {
  * 输出：带显式标签、可键盘操作的表单控件。
  */
 export function RotationFilters({ dates, selectedDate, level, modelVersion, onDateChange, onLevelChange, searchQuery = "", phaseFilter = "all", onSearchChange, onPhaseChange, lifecycleFilter = "all", changedOnly = false, lifecycleDisabled = false, onLifecycleChange, onChangedOnlyChange }: RotationFiltersProps) {
+  const [displayedMonth, setDisplayedMonth] = useState(() => selectedDate.slice(0, 7) || dates[0]?.slice(0, 7) || new Date().toISOString().slice(0, 7));
+  useEffect(() => {
+    if (selectedDate) setDisplayedMonth(selectedDate.slice(0, 7));
+  }, [selectedDate]);
+  const { startDate, endDate } = getMonthBounds(displayedMonth);
+  const calendarAvailability = useCalendarAvailability(level, modelVersion, startDate, endDate);
+
   return (
     <section className="rotation-filters" aria-label="板块轮动筛选条件">
       <div className="filter-heading"><span>观察截面</span><small>所有指标均来自当日成功快照</small></div>
-      <label className="filter-field">
-        <span><CalendarDays aria-hidden="true" size={14} />交易日</span>
-        <select aria-label="交易日" value={selectedDate} onChange={(event) => onDateChange(event.target.value)}>
-          {dates.map((date) => <option key={date} value={date}>{date}</option>)}
-        </select>
-      </label>
+      <div className="trading-calendar-filter">
+        <span className="trading-calendar-filter__label"><CalendarDays aria-hidden="true" size={14} />交易日</span>
+        {calendarAvailability.isError
+          ? <p className="trading-calendar-filter__error" role="status">交易日历暂不可用</p>
+          : <TradingCalendar
+              displayedMonth={displayedMonth}
+              onDisplayedMonthChange={setDisplayedMonth}
+              tradeDates={calendarAvailability.data?.trade_dates ?? []}
+              snapshotDates={calendarAvailability.data?.snapshot_dates ?? []}
+              selectedDate={selectedDate}
+              onDateChange={onDateChange}
+            />}
+      </div>
       <label className="filter-field">
         <span><Layers3 aria-hidden="true" size={14} />行业层级</span>
         <select aria-label="行业层级" value={level} onChange={(event) => onLevelChange(Number(event.target.value) as 1 | 2)}>

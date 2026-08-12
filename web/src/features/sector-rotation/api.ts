@@ -22,6 +22,15 @@ const availableDatesSchema = z.object({
   meta: responseMetaSchema,
 });
 
+export const calendarAvailabilitySchema = z.object({
+  sector_level: z.number().int(),
+  model_version: z.string(),
+  trade_dates: z.array(z.string()),
+  snapshot_dates: z.array(z.string()),
+  latest_snapshot_date: z.string().nullable(),
+});
+export type CalendarAvailability = z.infer<typeof calendarAvailabilitySchema>;
+
 export const sectorPointSchema = z.object({
   as_of_date: z.string().optional(),
   sector_name: z.string(),
@@ -112,6 +121,21 @@ export async function requestJson(
  */
 export async function fetchAvailableDates(level: number, modelVersion: string): Promise<string[]> {
   return availableDatesSchema.parse(await requestJson("/api/v1/sector-rotation/available-dates", { level, model_version: modelVersion })).dates;
+}
+
+/** 读取指定月份范围内的交易日与成功快照日，由服务端提供交易日权威性。 */
+export async function fetchCalendarAvailability(
+  level: number,
+  modelVersion: string,
+  startDate: string,
+  endDate: string,
+): Promise<CalendarAvailability> {
+  return calendarAvailabilitySchema.parse(await requestJson("/api/v1/sector-rotation/calendar-availability", {
+    level,
+    model_version: modelVersion,
+    start_date: startDate,
+    end_date: endDate,
+  }));
 }
 
 /**

@@ -1,6 +1,6 @@
 /** 板块轮动 API 客户端对服务端契约的测试。 */
 import { describe, expect, it, vi } from "vitest";
-import { fetchAvailableDates, fetchReplay, fetchSectorHistory, fetchSnapshot, SectorRotationApiError, sectorPointSchema } from "./api";
+import { fetchAvailableDates, fetchCalendarAvailability, fetchReplay, fetchSectorHistory, fetchSnapshot, SectorRotationApiError, sectorPointSchema } from "./api";
 
 describe("板块轮动 API 客户端", () => {
   const meta = { run_status: "succeeded", field_version: "v1", source_max_trade_date: "2026-08-04", eligible_sector_count: 113, skipped_sector_count: 0, market_regime: "high_volatility", regime_multiplier: 0.85 };
@@ -25,6 +25,27 @@ describe("板块轮动 API 客户端", () => {
     await expect(fetchAvailableDates(2, "v1")).resolves.toEqual(["2026-08-04"]);
     expect(fetchMock.mock.calls[0][0]).toContain("level=2");
     expect(fetchMock.mock.calls[0][0]).toContain("model_version=v1");
+  });
+
+  it("解析月度交易日与快照可用性，并发送显示月的边界", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({
+      sector_level: 2,
+      model_version: "v1",
+      trade_dates: ["2026-08-10", "2026-08-11"],
+      snapshot_dates: ["2026-08-10"],
+      latest_snapshot_date: "2026-08-10",
+    })));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchCalendarAvailability(2, "v1", "2026-08-01", "2026-08-31")).resolves.toEqual({
+      sector_level: 2,
+      model_version: "v1",
+      trade_dates: ["2026-08-10", "2026-08-11"],
+      snapshot_dates: ["2026-08-10"],
+      latest_snapshot_date: "2026-08-10",
+    });
+    expect(fetchMock.mock.calls[0][0]).toContain("start_date=2026-08-01");
+    expect(fetchMock.mock.calls[0][0]).toContain("end_date=2026-08-31");
   });
 
   it("保留快照运行元信息供页面展示数据新鲜度", async () => {

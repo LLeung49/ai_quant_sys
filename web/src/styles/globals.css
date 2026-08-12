@@ -57,6 +57,27 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
 .model-badge span { color: var(--subtle); font-size: 8px; letter-spacing: .1em; }
 .model-badge strong { color: #a8caff; font-size: 11px; }
 
+.trading-calendar-filter { display: grid; gap: 6px; min-width: 238px; }
+.trading-calendar-filter__label { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 10px; font-weight: 650; }
+.trading-calendar-filter__error { margin: 0; color: var(--amber); font-size: 11px; }
+.trading-calendar { padding: 8px; border: 1px solid var(--line); border-radius: 8px; background: #0c192b; }
+.trading-calendar__header { display: grid; grid-template-columns: 28px 1fr 28px; align-items: center; margin-bottom: 7px; text-align: center; }
+.trading-calendar__header button { width: 24px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: rgba(103,169,255,.08); color: var(--text); line-height: 1; }
+.trading-calendar__header button:hover { border-color: var(--line-strong); background: rgba(103,169,255,.16); }
+.trading-calendar__header strong { color: var(--text); font-size: 11px; font-variant-numeric: tabular-nums; }
+.trading-calendar__weekdays, .trading-calendar__grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 3px; }
+.trading-calendar__weekdays { margin-bottom: 3px; color: var(--subtle); font-size: 9px; text-align: center; }
+.trading-calendar__day, .trading-calendar__blank { min-width: 0; aspect-ratio: 1; }
+.trading-calendar__day { padding: 0; border: 1px solid transparent; border-radius: 5px; background: transparent; color: var(--text); font-size: 10px; font-variant-numeric: tabular-nums; }
+.trading-calendar__day[aria-pressed="true"] { outline: 1px solid var(--teal); outline-offset: 1px; }
+.trading-calendar__day[data-date-status="snapshot"] { background: rgba(55,214,176,.16); color: #9af0dc; }
+.trading-calendar__day[data-date-status="pending"] { border-color: rgba(139,154,176,.24); background: rgba(139,154,176,.10); color: #aab5c5; }
+.trading-calendar__day[data-date-status="closed"] { color: #4d5c72; cursor: not-allowed; opacity: .7; }
+
+@media (max-width: 640px) {
+  .trading-calendar-filter { grid-column: 1 / -1; }
+}
+
 .market-summary { display: grid; grid-template-columns: 1.5fr repeat(4, 1fr); gap: 12px; }
 .summary-card { position: relative; display: grid; grid-template-columns: 38px 1fr; gap: 12px; min-height: 112px; padding: 18px; overflow: hidden; border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(145deg, rgba(17, 32, 53, .93), rgba(11, 23, 40, .86)); box-shadow: 0 16px 36px rgba(0,0,0,.13); }
 .summary-card::after { position: absolute; right: -28px; bottom: -38px; width: 110px; height: 110px; border-radius: 50%; content: ""; background: rgba(103,169,255,.05); filter: blur(2px); }

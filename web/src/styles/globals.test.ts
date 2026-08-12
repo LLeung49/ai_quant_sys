@@ -22,4 +22,9 @@ describe("mobile layout CSS contract", () => {
     expect(css).toMatch(/\.filter-field select option\s*\{[^}]*background:\s*#0c192b[^}]*color:\s*var\(--text\)/);
     expect(css).toMatch(/\.filter-field--checkbox input\[type="checkbox"\]\s*\{[^}]*width:\s*16px[^}]*height:\s*16px/);
   });
+  it("styles each trading calendar status independently", () => {
+    expect(css).toMatch(/\.trading-calendar__day\[data-date-status="snapshot"\]/);
+    expect(css).toMatch(/\.trading-calendar__day\[data-date-status="pending"\]/);
+    expect(css).toMatch(/\.trading-calendar__day\[data-date-status="closed"\]/);
+  });
 });
