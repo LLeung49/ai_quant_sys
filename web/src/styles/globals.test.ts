@@ -32,4 +32,9 @@ describe("mobile layout CSS contract", () => {
     expect(css).toMatch(/\.trading-calendar-popover\s*\{[^}]*position:\s*absolute[^}]*z-index:\s*\d+/);
     expect(css).toMatch(/\.trading-calendar-trigger\s*\{/);
   });
+
+  it("reserves a fixed, non-wrapping desktop change column for ranking direction and value", () => {
+    expect(css).toMatch(/\.ranking-columns, \.sector-ranking button\s*\{[^}]*grid-template-columns:[^;]*72px/);
+    expect(css).toMatch(/\.sector-ranking em\s*\{[^}]*white-space:\s*nowrap/);
+  });
 });

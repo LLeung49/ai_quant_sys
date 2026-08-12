@@ -22,6 +22,28 @@ interface SectorRankingProps {
   selectedSectorName?: string | null;
 }
 
+const LIFECYCLE_SHORT_LABELS: Record<string, string> = {
+  repair: "修复",
+  emerging: "启动",
+  trending: "趋势",
+  crowded: "拥挤",
+  divergence: "背离",
+  exit: "转弱",
+  neutral: "方向未明",
+};
+
+/** 将 Lifecycle 观察状态转为排行榜使用的固定顺序短标签。 */
+export function formatLifecycleShortLabel({ lifecycle_state, lifecycle_age, lifecycle_changed }: LifecycleSectorFields): string[] {
+  if (!lifecycle_state || lifecycle_age == null) return ["数据不足"];
+
+  const lifecycle = getLifecycleMeta(lifecycle_state);
+  return [
+    LIFECYCLE_SHORT_LABELS[lifecycle.state] ?? lifecycle.label,
+    `第 ${lifecycle_age} 日`,
+    ...(lifecycle_changed === true ? ["今日切换"] : []),
+  ];
+}
+
 /**
  * 渲染按综合排名排序的可评分行业列表。
  *
@@ -37,12 +59,15 @@ export function SectorRanking({ sectors, onSelect, selectedSectorName }: SectorR
       <ol>{ranked.map((sector) => {
         const phase = getPhaseMeta(sector.phase_confirmed);
         const lifecycle = getLifecycleMeta(sector.lifecycle_state);
+        const lifecycleSegments = formatLifecycleShortLabel(sector);
         const change = sector.rank_change_1d;
         return (
         <li key={sector.sector_name}>
           <button className={selectedSectorName === sector.sector_name ? "is-selected" : ""} type="button" onClick={() => onSelect(sector.sector_name)} aria-label={`查看 ${sector.sector_name} 详情`}>
             <span className="rank">{sector.composite_rank}</span><span className="sector-name">{sector.sector_name}</span>
-            <small className="lifecycle-pill" style={{ "--lifecycle-color": lifecycle.color, "--lifecycle-soft": lifecycle.softColor } as React.CSSProperties}>{lifecycle.label}<b>{sector.lifecycle_age == null ? "数据不足" : `${sector.lifecycle_age} 日`}</b>{sector.lifecycle_changed === true ? <em>新变化</em> : null}</small>
+            <small className="lifecycle-pill" style={{ "--lifecycle-color": lifecycle.color, "--lifecycle-soft": lifecycle.softColor } as React.CSSProperties}>
+              {lifecycleSegments.map((segment, index) => <span className="lifecycle-pill__segment" key={segment}>{index > 0 ? <i aria-hidden="true">｜</i> : null}{segment}</span>)}
+            </small>
             <small className="phase-pill" style={{ "--phase-color": phase.color, "--phase-soft": phase.softColor } as React.CSSProperties}>{phase.label}</small>
             <strong>{sector.composite_score?.toFixed(2) ?? "—"}</strong>
             <em className={change == null || change === 0 ? "rank-flat" : change > 0 ? "rank-up" : "rank-down"}>{change == null || change === 0 ? <Minus size={12} /> : change > 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}{change == null ? "—" : Math.abs(change)}</em>

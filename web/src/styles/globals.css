@@ -138,7 +138,7 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
 .sector-ranking { display: grid; grid-template-rows: auto auto minmax(0, 1fr); min-height: 650px; overflow: hidden; }
 .ranking-header { padding: 18px 18px 12px; }
 .ranking-header > span, .panel-meta { padding: 5px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 9px; }
-.ranking-columns, .sector-ranking button { grid-template-columns: 28px minmax(92px, 1fr) 88px 56px 44px 42px; }
+.ranking-columns, .sector-ranking button { grid-template-columns: 28px minmax(0, 1fr) 88px 56px 46px 72px; }
 .ranking-columns { display: grid; gap: 7px; padding: 8px 14px; border-top: 1px solid rgba(115,142,177,.1); border-bottom: 1px solid rgba(115,142,177,.1); color: var(--subtle); font-size: 8px; text-transform: uppercase; }
 .ranking-columns span:first-child { grid-column: span 2; }
 .ranking-columns span:nth-child(n+2) { text-align: right; }
@@ -152,10 +152,10 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
 .sector-name { overflow: hidden; font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .phase-pill { display: inline-flex; align-items: center; justify-content: center; width: fit-content; padding: 3px 6px; border: 1px solid color-mix(in srgb, var(--phase-color) 32%, transparent); border-radius: 999px; background: var(--phase-soft); color: var(--phase-color); font-size: 8px; font-style: normal; white-space: nowrap; }
 .lifecycle-pill { display: inline-flex; align-items: center; justify-content: flex-start; gap: 4px; min-width: 0; padding: 3px 6px; border: 1px solid color-mix(in srgb, var(--lifecycle-color) 32%, transparent); border-radius: 999px; background: var(--lifecycle-soft); color: var(--lifecycle-color); font-size: 8px; font-style: normal; white-space: nowrap; }
-.lifecycle-pill b { color: inherit; font-size: 8px; font-weight: 700; }
-.lifecycle-pill em { color: inherit; font-size: 8px; }
+.lifecycle-pill__segment { display: inline-flex; align-items: center; }
+.lifecycle-pill__segment i { margin: 0 2px; color: inherit; font-style: normal; }
 .sector-ranking strong { color: #cfdbeb; font-size: 10px; font-variant-numeric: tabular-nums; text-align: right; }
-.sector-ranking em { display: inline-flex; align-items: center; justify-content: flex-end; gap: 1px; font-size: 9px; font-style: normal; font-variant-numeric: tabular-nums; }
+.sector-ranking em { display: inline-flex; align-items: center; justify-content: flex-end; gap: 1px; font-size: 9px; font-style: normal; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .rank-up { color: var(--teal); } .rank-down { color: var(--red); } .rank-flat { color: var(--subtle); }
 
 .detail-layer { position: fixed; inset: 0; z-index: 50; display: grid; justify-items: end; background: rgba(2, 8, 15, .62); backdrop-filter: blur(5px); animation: fade-in .18s ease-out; }
