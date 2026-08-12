@@ -15,7 +15,7 @@ describe("SectorDetailDrawer", () => {
     const onClose = vi.fn();
     render(<SectorDetailDrawer sector={{ sector_name: "半导体", phase_confirmed: "accel_up", phase_age: 4, phase_confidence: 0.72, composite_rank: 1, rank_change_1d: 2, coverage_ratio: 0.96, trend_level_score: 0.4, velocity_score: 0.5, acceleration_score: 0.3, participation_score: 0.4, volume_score: 0.2 }} level={2} asOfDate="2026-08-04" isLatestDate={false} onClose={onClose} />);
 
-    expect(screen.getByText("未知状态")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "加速走强 · 未知状态" })).toBeInTheDocument();
     expect(screen.getByTestId("sector-kline-card")).toHaveTextContent("半导体|2|2026-08-04");
     fireEvent.click(screen.getByRole("button", { name: "关闭详情" }));
     expect(onClose).toHaveBeenCalledOnce();
@@ -48,9 +48,26 @@ describe("SectorDetailDrawer", () => {
   it("展示当前 Lifecycle、转移与固定声明", () => {
     render(<SectorDetailDrawer sector={{ sector_name: "半导体", phase_confirmed: "accel_up", phase_age: 4, phase_confidence: 0.72, composite_rank: 1, rank_change_1d: 2, coverage_ratio: 0.96, trend_level_score: 0.4, velocity_score: 0.5, acceleration_score: 0.3, participation_score: 0.4, volume_score: 0.2, lifecycle_state: "trending", lifecycle_reason: "phase_accel_up", lifecycle_age: 3, lifecycle_changed: true }} previousLifecycleState="repair" level={2} asOfDate="2026-08-10" isLatestDate={false} onClose={vi.fn()} />);
 
-    expect(screen.getByText("趋势运行")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 3, name: "加速走强 · 趋势运行" })).toBeInTheDocument();
     expect(screen.getByText(/修复观察.*趋势运行/)).toBeInTheDocument();
     expect(screen.getByText("Lifecycle 为市场状态观察标签，不构成交易建议。")).toBeInTheDocument();
+  });
+
+  it("在行情信息与 K 线卡之前展示组合研究结论及 Lifecycle 指标", () => {
+    render(<SectorDetailDrawer sector={{ sector_name: "半导体", phase_confirmed: "reversal_confirmed", phase_age: 4, phase_confidence: 0.72, composite_rank: 1, rank_change_1d: 2, coverage_ratio: 0.96, trend_level_score: 0.4, velocity_score: 0.5, acceleration_score: 0.3, participation_score: 0.4, volume_score: 0.2, lifecycle_state: "emerging", lifecycle_reason: "reversal_confirmed", lifecycle_age: 3, lifecycle_changed: true }} previousLifecycleState="repair" level={2} asOfDate="2026-08-10" isLatestDate={false} onClose={vi.fn()} />);
+
+    const conclusion = screen.getByLabelText("组合研究结论");
+    const context = screen.getByLabelText("板块行情信息");
+    const klineCard = screen.getByTestId("sector-kline-card");
+    expect(conclusion).toHaveTextContent("修复确认 · 初步启动");
+    expect(conclusion).toHaveTextContent("可进入重点跟踪，等待排名与市场环境共同确认。");
+    expect(conclusion).toHaveTextContent("确认阶段为修复确认");
+    expect(conclusion).toHaveTextContent("持续天数");
+    expect(conclusion).toHaveTextContent("3 日");
+    expect(conclusion).toHaveTextContent("前态 → 当前态");
+    expect(conclusion).toHaveTextContent("修复观察 → 初步启动");
+    expect(conclusion.compareDocumentPosition(context) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(conclusion.compareDocumentPosition(klineCard) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it("在 K 线卡之前展示当前层级和截至日的板块行情信息卡", () => {

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { getPhaseMeta } from "../labels";
 import { getLifecycleMeta, getLifecycleReasonLabel, type LifecycleSectorFields } from "../lifecycle/meta";
+import { getCombinationConclusion } from "./combinationConclusion";
 import { SectorKlineCard } from "../kline/SectorKlineCard";
 import { DEFAULT_KLINE_WINDOW, type KlineWindow } from "../kline/sectorKlineConfig";
 import { SectorKlineModal } from "../kline/SectorKlineModal";
@@ -61,6 +62,7 @@ export function SectorDetailDrawer({ sector, previousLifecycleState, level, asOf
   const phaseMeta = getPhaseMeta(phase);
   const lifecycle = getLifecycleMeta(sector.lifecycle_state);
   const previousLifecycle = previousLifecycleState == null ? null : getLifecycleMeta(previousLifecycleState);
+  const conclusion = getCombinationConclusion(phase, sector.lifecycle_state);
   const closeRef = useRef<HTMLButtonElement>(null);
   const expandButtonRef = useRef<HTMLButtonElement>(null);
   // 窗口状态由抽屉统一持有，使缩略图和后续弹窗可共享同一观察区间且不重新读取行情。
@@ -101,13 +103,17 @@ export function SectorDetailDrawer({ sector, previousLifecycleState, level, asOf
         <div><p>SECTOR INSIGHT</p><h2>{sector.sector_name}</h2></div>
         <button ref={closeRef} className="icon-button" type="button" aria-label="关闭详情" onClick={onClose}><X aria-hidden="true" /></button>
       </header>
-      <section className="detail-lifecycle" aria-label="Lifecycle 详情">
-        <div><span>当前 Lifecycle</span><strong>{lifecycle.label}</strong></div>
-        <div><span>原因</span><strong>{getLifecycleReasonLabel(sector.lifecycle_reason)}</strong></div>
-        <div><span>持续天数</span><strong>{sector.lifecycle_age == null ? "数据不足" : `${sector.lifecycle_age} 日`}</strong></div>
-        <div><span>今日变化</span><strong>{sector.lifecycle_changed == null ? "数据不足" : sector.lifecycle_changed ? "是" : "否"}</strong></div>
-        <div><span>前态 → 当前态</span><strong>{previousLifecycle ? `${previousLifecycle.label} → ${lifecycle.label}` : "前一状态暂不可用"}</strong></div>
-        <p>Lifecycle 为市场状态观察标签，不构成交易建议。</p>
+      <section className={`detail-combination-conclusion tone-${conclusion.tone}`} aria-label="组合研究结论">
+        <p className="detail-combination-conclusion__eyebrow">组合研究结论</p>
+        <h3>{conclusion.title}</h3>
+        <p className="detail-combination-conclusion__guidance">{conclusion.guidance}</p>
+        <div className="detail-combination-reason"><span>原因</span><strong>{getLifecycleReasonLabel(sector.lifecycle_reason)}</strong></div>
+        <div className="detail-lifecycle-metrics">
+          <div><span>持续天数</span><strong>{sector.lifecycle_age == null ? "数据不足" : `${sector.lifecycle_age} 日`}</strong></div>
+          <div><span>今日变化</span><strong>{sector.lifecycle_changed == null ? "数据不足" : sector.lifecycle_changed ? "是" : "否"}</strong></div>
+          <div><span>前态 → 当前态</span><strong>{previousLifecycle ? `${previousLifecycle.label} → ${lifecycle.label}` : "前一状态暂不可用"}</strong></div>
+        </div>
+        <p className="detail-combination-conclusion__notice">Lifecycle 为市场状态观察标签，不构成交易建议。</p>
       </section>
       <section className="detail-market-context" aria-label="板块行情信息">
         <p>板块行情</p>
