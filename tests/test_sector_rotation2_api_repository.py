@@ -115,6 +115,38 @@ def test_list_available_dates_returns_only_successful_run_dates(monkeypatch: pyt
     assert captured["params"] == ("succeeded", 2, "v1")
 
 
+def test_load_calendar_availability_keeps_upstream_trade_dates_separate_from_successful_snapshots(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Break caught: deriving calendar trade days from successful snapshots hides pending upstream trading days."""
+    from morning_conference.sector_rotation2.api.repository import SectorRotationRepository
+
+    captured: list[tuple[str, tuple[object, ...]]] = []
+
+    def fake_execute_query(sql: str, params: tuple[object, ...]) -> list[dict[str, object]]:
+        captured.append((sql, params))
+        if "FROM trade_sector_daily" in sql:
+            return [{"trade_date": "2026-08-10"}, {"trade_date": "2026-08-11"}]
+        return [{"as_of_date": "2026-08-10"}]
+
+    monkeypatch.setattr("morning_conference.sector_rotation2.api.repository.execute_query", fake_execute_query)
+
+    trade_dates, snapshot_dates = SectorRotationRepository().load_calendar_availability(
+        2, "v1", "2026-08-10", "2026-08-11"
+    )
+
+    assert trade_dates == ["2026-08-10", "2026-08-11"]
+    assert snapshot_dates == ["2026-08-10"]
+    assert len(captured) == 2
+    trade_sql, trade_params = captured[0]
+    snapshot_sql, snapshot_params = captured[1]
+    assert "trade_date BETWEEN %s AND %s" in trade_sql
+    assert trade_params == (2, "2026-08-10", "2026-08-11")
+    assert "status = %s" in snapshot_sql
+    assert "as_of_date BETWEEN %s AND %s" in snapshot_sql
+    assert snapshot_params == ("succeeded", "2026-08-10", "2026-08-11", 2, "v1")
+
+
 def test_load_replay_bounds_date_range_and_only_reads_successful_runs(monkeypatch: pytest.MonkeyPatch) -> None:
     """输入：日期范围；输出：参数化的全市场历史快照。"""
     from morning_conference.sector_rotation2.api.repository import SectorRotationRepository

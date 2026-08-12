@@ -64,6 +64,16 @@ class AvailableDatesResponse(BaseModel):
     meta: ResponseMeta = Field(default_factory=ResponseMeta)
 
 
+class CalendarAvailabilityResponse(BaseModel):
+    """Bounded calendar availability from upstream data and successful snapshots."""
+
+    sector_level: int
+    model_version: str
+    trade_dates: list[str]
+    snapshot_dates: list[str]
+    latest_snapshot_date: str | None
+
+
 class HistoryResponse(BaseModel):
     """行业轨迹或市场回放的已存储历史点响应。"""
 

@@ -250,6 +250,57 @@ def test_available_dates_returns_successful_run_dates(monkeypatch) -> None:
     }
 
 
+def test_calendar_availability_returns_upstream_trade_dates_and_successful_snapshot_dates(monkeypatch) -> None:
+    """Break caught: calendar clients must see pending upstream trading days, not only snapshot days."""
+    from morning_conference.sector_rotation2.api.app import create_app
+    from morning_conference.sector_rotation2.api.repository import SectorRotationRepository
+
+    monkeypatch.setattr(
+        SectorRotationRepository,
+        "load_calendar_availability",
+        lambda *_: (["2026-08-10", "2026-08-11"], ["2026-08-10"]),
+    )
+
+    response = TestClient(create_app()).get(
+        "/api/v1/sector-rotation/calendar-availability",
+        params={
+            "level": 2,
+            "model_version": "v1",
+            "start_date": "2026-08-10",
+            "end_date": "2026-08-11",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "sector_level": 2,
+        "model_version": "v1",
+        "trade_dates": ["2026-08-10", "2026-08-11"],
+        "snapshot_dates": ["2026-08-10"],
+        "latest_snapshot_date": "2026-08-10",
+    }
+
+
+def test_calendar_availability_rejects_reversed_date_range_before_repository(monkeypatch) -> None:
+    """Break caught: an unbounded or reversed calendar range reaches the repository."""
+    from morning_conference.sector_rotation2.api.app import create_app
+    from morning_conference.sector_rotation2.api.repository import SectorRotationRepository
+
+    monkeypatch.setattr(
+        SectorRotationRepository,
+        "load_calendar_availability",
+        lambda *_: pytest.fail("invalid calendar range must not reach the repository"),
+    )
+
+    response = TestClient(create_app()).get(
+        "/api/v1/sector-rotation/calendar-availability",
+        params={"start_date": "2026-08-11", "end_date": "2026-08-10"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "INVALID_DATE_RANGE"
+
+
 def test_snapshot_serializes_mysql_decimal_metrics_as_json_numbers(monkeypatch) -> None:
     """输入：含 MySQL Decimal 指标的快照行；输出：前端可直接运算的 JSON number。"""
     from morning_conference.sector_rotation2.api.app import create_app

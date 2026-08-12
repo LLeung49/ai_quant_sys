@@ -10,6 +10,7 @@ from .kline import normalize_sector_kline_rows
 from .repository import MAX_HISTORY_SECTORS, SectorRotationRepository
 from .schemas import (
     AvailableDatesResponse,
+    CalendarAvailabilityResponse,
     HistoryResponse,
     ResponseMeta,
     SectorKlineMeta,
@@ -149,6 +150,30 @@ def get_available_dates(
         sector_level=level,
         model_version=model_version,
         dates=SectorRotationRepository().list_available_dates(level, model_version),
+    )
+
+
+@router.get("/calendar-availability", response_model=CalendarAvailabilityResponse, summary="读取交易日历可用性")
+def get_calendar_availability(
+    start_date: str = Query(description="起始交易日，格式 YYYY-MM-DD"),
+    end_date: str = Query(description="结束交易日，格式 YYYY-MM-DD"),
+    level: int = Query(default=2, ge=1, le=2, description="申万行业层级，仅支持 1 或 2"),
+    model_version: str = Query(default="v1", min_length=1, max_length=32, description="评分模型版本"),
+) -> CalendarAvailabilityResponse:
+    """Return bounded upstream trade dates and successful snapshot dates separately."""
+    _validate_date_range(start_date, end_date)
+    trade_dates, snapshot_dates = SectorRotationRepository().load_calendar_availability(
+        level,
+        model_version,
+        start_date,
+        end_date,
+    )
+    return CalendarAvailabilityResponse(
+        sector_level=level,
+        model_version=model_version,
+        trade_dates=trade_dates,
+        snapshot_dates=snapshot_dates,
+        latest_snapshot_date=snapshot_dates[-1] if snapshot_dates else None,
     )
 
 

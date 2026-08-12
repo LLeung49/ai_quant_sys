@@ -104,6 +104,51 @@ class SectorRotationRepository:
         rows = execute_query(sql, ("succeeded", sector_level, model_version))
         return [str(row["as_of_date"]) for row in rows]
 
+    def load_calendar_availability(
+        self,
+        sector_level: int,
+        model_version: str,
+        start_date: str,
+        end_date: str,
+    ) -> tuple[list[str], list[str]]:
+        """Return upstream trading dates and successful snapshot dates in one bounded range.
+
+        Trading dates come directly from ``trade_sector_daily`` so that a date with
+        upstream market data remains visible even before a sector-rotation snapshot
+        has been generated. Snapshot dates remain a separate, successful-run-only
+        set and are never used to infer the upstream calendar.
+        """
+        self._validate_level(sector_level)
+        if start_date > end_date:
+            raise ValueError("开始日期不能晚于结束日期")
+
+        trade_date_sql = """
+            SELECT DISTINCT trade_date
+            FROM trade_sector_daily
+            WHERE sector_level = %s
+              AND trade_date BETWEEN %s AND %s
+            ORDER BY trade_date ASC
+        """
+        snapshot_date_sql = """
+            SELECT DISTINCT s.as_of_date
+            FROM sector_rotation_sector_daily_snapshot AS s
+            INNER JOIN sector_rotation_run_log AS r ON r.run_id = s.run_id
+            WHERE r.status = %s
+              AND s.as_of_date BETWEEN %s AND %s
+              AND s.sector_level = %s
+              AND s.model_version = %s
+            ORDER BY s.as_of_date ASC
+        """
+        trade_rows = execute_query(trade_date_sql, (sector_level, start_date, end_date))
+        snapshot_rows = execute_query(
+            snapshot_date_sql,
+            ("succeeded", start_date, end_date, sector_level, model_version),
+        )
+        return (
+            [str(row["trade_date"]) for row in trade_rows],
+            [str(row["as_of_date"]) for row in snapshot_rows],
+        )
+
     def load_sector_history(
         self,
         sector_names: list[str],
