@@ -55,4 +55,17 @@ describe("mobile layout CSS contract", () => {
     expect(css).toMatch(/\.detail-market-context strong\s*\{[^}]*font-size:\s*14px/);
     expect(css).toMatch(/\.detail-market-context span\s*\{[^}]*font-size:\s*10px/);
   });
+
+  it("lays out the combination conclusion metrics responsively without relying on tone color", () => {
+    expect(css).toMatch(/\.detail-combination-conclusion\s*\{[^}]*border-radius:\s*12px/);
+    expect(css).toMatch(/\.detail-combination-conclusion\.tone-positive\s*\{/);
+    expect(css).toMatch(/\.detail-combination-conclusion\.tone-watch\s*\{/);
+    expect(css).toMatch(/\.detail-combination-conclusion\.tone-risk\s*\{/);
+    expect(css).toMatch(/\.detail-combination-conclusion\.tone-neutral\s*\{/);
+    expect(css).toMatch(/\.detail-lifecycle-metrics\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
+    expect(css).toMatch(/\.detail-lifecycle-metrics strong\s*\{[^}]*overflow-wrap:\s*anywhere/);
+    const mobileStart = css.lastIndexOf("@media (max-width: 640px)");
+    const mobileRules = css.slice(mobileStart);
+    expect(mobileRules).toMatch(/\.detail-lifecycle-metrics\s*\{[^}]*grid-template-columns:\s*1fr/);
+  });
 });
