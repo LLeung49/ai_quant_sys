@@ -55,7 +55,7 @@ export function SectorRanking({ sectors, onSelect, selectedSectorName }: SectorR
   return (
     <aside className="sector-ranking" aria-label="今日关注行业">
       <header className="panel-header ranking-header"><div><p>RANKING</p><h2>今日关注</h2></div><span>{ranked.length} 个有效行业</span></header>
-      <div className="ranking-columns" aria-hidden="true"><span>排名 / 行业</span><span>Lifecycle</span><span>阶段</span><span>得分</span><span>变化</span></div>
+      <div className="ranking-columns" aria-hidden="true"><span>排名 / 行业</span><span>阶段</span><span>得分</span><span>变化</span></div>
       <ol>{ranked.map((sector) => {
         const phase = getPhaseMeta(sector.phase_confirmed);
         const lifecycle = getLifecycleMeta(sector.lifecycle_state);

@@ -33,10 +33,11 @@ describe("mobile layout CSS contract", () => {
     expect(css).toMatch(/\.trading-calendar-trigger\s*\{/);
   });
 
-  it("reserves fixed desktop tracks for the complete Lifecycle label and ranking change", () => {
-    expect(css).toMatch(/\.rotation-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 470px/);
-    expect(css).toMatch(/\.ranking-columns, \.sector-ranking button\s*\{[^}]*grid-template-columns:[^;]*128px[^;]*72px/);
-    expect(css).toMatch(/\.lifecycle-pill\s*\{[^}]*white-space:\s*nowrap/);
+  it("gives Lifecycle its own wrapping desktop row while keeping ranking change visible", () => {
+    expect(css).toMatch(/\.rotation-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 390px/);
+    expect(css).toMatch(/\.sector-ranking button\s*\{[^}]*grid-template-areas:\s*"rank name phase score change"\s*"rank lifecycle lifecycle lifecycle lifecycle"/);
+    expect(css).toMatch(/\.lifecycle-pill\s*\{[^}]*flex-wrap:\s*wrap[^}]*white-space:\s*normal/);
+    expect(css).toMatch(/\.lifecycle-pill__segment\s*\{[^}]*overflow-wrap:\s*anywhere/);
     expect(css).toMatch(/\.sector-ranking em\s*\{[^}]*white-space:\s*nowrap/);
   });
 });

@@ -30,6 +30,16 @@ describe("SectorRanking", () => {
     expect(rows[1].querySelector(".rank-down svg")).toBeInTheDocument();
   });
 
+  it("保留最长 Lifecycle 状态、三位天数和今日切换的所有独立片段", () => {
+    render(<SectorRanking sectors={[
+      { sector_name: "完整标签行业", score_eligible: true, composite_rank: 1, composite_score: .8, phase_confirmed: "neutral", rank_change_1d: 1, lifecycle_state: "neutral", lifecycle_age: 999, lifecycle_changed: true },
+    ]} onSelect={vi.fn()} />);
+
+    const pill = screen.getByRole("button", { name: /完整标签行业/ }).querySelector(".lifecycle-pill");
+    expect(pill).toHaveTextContent("方向未明｜第 999 日｜今日切换");
+    expect(pill?.querySelectorAll(".lifecycle-pill__segment")).toHaveLength(3);
+  });
+
   it("只展示可评分行业，并回传用户选中的行业名称", () => {
     const onSelect = vi.fn();
     render(<SectorRanking sectors={[
