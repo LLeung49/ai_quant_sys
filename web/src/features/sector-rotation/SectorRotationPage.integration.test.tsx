@@ -250,4 +250,38 @@ describe("SectorRotationPage 统一工作台", () => {
     expect(screen.getByRole("button", { name: "今日 Lifecycle 变化" })).toBeDisabled();
     expect(screen.getByText("该快照缺少 Lifecycle 数据，暂不能筛选观察重点。")).toBeInTheDocument();
   });
+
+  it("resets URL lifecycle filters while a replay frame has no lifecycle data", async () => {
+    window.history.replaceState(null, "", "/?mode=replay&date=2026-08-03&lifecycle=risk&changed=1");
+    render(<SectorRotationPage />);
+
+    expect(await screen.findByRole("button", { name: "全部" })).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => expect(window.location.search).toContain("lifecycle=all"));
+    expect(window.location.search).not.toContain("changed=1");
+
+    fireEvent.click(screen.getByRole("button", { name: "下一帧" }));
+    fireEvent.click(screen.getByRole("button", { name: "下一帧" }));
+    fireEvent.click(screen.getByRole("button", { name: "下一帧" }));
+
+    expect(await screen.findByText("当前图表：半导体")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "全部" })).toHaveAttribute("aria-pressed", "true");
+    expect(window.location.search).toContain("lifecycle=all");
+    expect(window.location.search).not.toContain("changed=1");
+  });
+
+  it("maps trend, repair-or-emerging, and risk observation focuses to the workbench filters", async () => {
+    render(<SectorRotationPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "趋势" }));
+    expect(await screen.findByText("当前图表：教育")).toBeInTheDocument();
+    await waitFor(() => expect(window.location.search).toContain("lifecycle=trending"));
+
+    fireEvent.click(screen.getByRole("button", { name: "修复/初启" }));
+    expect(await screen.findByText("当前筛选条件下没有可展示行业")).toBeInTheDocument();
+    await waitFor(() => expect(window.location.search).toContain("lifecycle=repair_or_emerging"));
+
+    fireEvent.click(screen.getByRole("button", { name: "风险提示" }));
+    expect(await screen.findByText("当前图表：半导体、银行")).toBeInTheDocument();
+    await waitFor(() => expect(window.location.search).toContain("lifecycle=risk"));
+  });
 });

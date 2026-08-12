@@ -39,6 +39,21 @@ const OBSERVATION_FOCUSES: Array<{ label: string; lifecycle: LifecycleFilter; ch
   { label: "今日 Lifecycle 变化", lifecycle: "all", changedOnly: true },
 ];
 
+function LifecycleFilterReset({ lifecycleAvailable, lifecycleFilter, changedOnly, onLifecycleChange, onChangedOnlyChange }: {
+  lifecycleAvailable: boolean;
+  lifecycleFilter: LifecycleFilter;
+  changedOnly: boolean;
+  onLifecycleChange: (filter: LifecycleFilter) => void;
+  onChangedOnlyChange: (changedOnly: boolean) => void;
+}) {
+  useEffect(() => {
+    if (lifecycleAvailable) return;
+    if (lifecycleFilter !== "all") onLifecycleChange("all");
+    if (changedOnly) onChangedOnlyChange(false);
+  }, [changedOnly, lifecycleAvailable, lifecycleFilter, onChangedOnlyChange, onLifecycleChange]);
+  return null;
+}
+
 /**
  * 渲染单日观察与动态回放共用的板块轮动工作台。
  *
@@ -155,6 +170,7 @@ export function SectorRotationPage() {
     <RotationFilters dates={mode === "replay" ? [...replayState.dates].reverse() : dates.data ?? []} selectedDate={mode === "replay" ? displayDate ?? "" : selectedDate ?? loadedSnapshotDate ?? ""} level={level} modelVersion="v1" onDateChange={handleDateChange} onLevelChange={(nextLevel) => { setLevel(nextLevel); setSelectedDate(undefined); setSelectedSectorName(null); setComparisonSectors([]); setMode("snapshot"); }} searchQuery={searchQuery} phaseFilter={phaseFilter} onSearchChange={setSearchQuery} onPhaseChange={setPhaseFilter} lifecycleFilter={lifecycleFilter} changedOnly={changedOnly} lifecycleDisabled={!lifecycleAvailable} onLifecycleChange={setLifecycleFilter} onChangedOnlyChange={setChangedOnly} />
     {mode === "snapshot" && selectedDate && loadedSnapshotDate && selectedDate !== loadedSnapshotDate && <p role="status">{selectedDate} 的板块轮动快照尚未生成，当前展示 {loadedSnapshotDate} 的最近成功快照。</p>}
     <MarketSummary marketRegime={sectors[0]?.market_regime ?? "range"} />
+    <LifecycleFilterReset lifecycleAvailable={lifecycleAvailable} lifecycleFilter={lifecycleFilter} changedOnly={changedOnly} onLifecycleChange={setLifecycleFilter} onChangedOnlyChange={setChangedOnly} />
     <section className="rotation-workspace">
       <article className="chart-panel">
         <header className="panel-header">
