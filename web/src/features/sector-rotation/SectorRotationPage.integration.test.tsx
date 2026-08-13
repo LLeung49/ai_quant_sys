@@ -1,5 +1,6 @@
 /** 统一工作台在确定性接口夹具下的关键用户路径集成测试。 */
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, vi } from "vitest";
 
 const mockedResponses = vi.hoisted(() => ({
@@ -70,6 +71,18 @@ vi.mock("./useHistoryData", () => ({
   useHistoryData: () => mockedResponses.history,
 }));
 
+vi.mock("./short_term/api", () => ({
+  fetchShortTermAvailableDates: vi.fn().mockResolvedValue({ sector_level: 2, model_version: "v2_short_term", dates: ["2026-08-11", "2026-08-10"] }),
+  fetchShortTermSnapshot: vi.fn().mockResolvedValue({
+    as_of_date: "2026-08-11",
+    sector_level: 2,
+    model_version: "v2_short_term",
+    meta: { run_status: "succeeded", field_version: "v2_short_term", source_max_trade_date: "2026-08-11", eligible_sector_count: 30, skipped_sector_count: 5, pulse_up_count: 3, volume_spike_count: 2, limit_cluster_count: 1, limit_panic_count: 0 },
+    sectors: [],
+  }),
+  SHORT_TERM_LABEL_WHITELIST: ["pulse_up", "pulse_down", "volume_spike", "limit_cluster", "limit_panic", "extreme_up", "extreme_down", "short_rebound_candidate", "short_breakdown_candidate"],
+}));
+
 vi.mock("./detail/SectorDetailDrawer", () => ({
   SectorDetailDrawer: ({ asOfDate, level, isLatestDate }: { asOfDate: string; level: number; isLatestDate: boolean }) => <div data-testid="drawer-date">{asOfDate}|{level}|{String(isLatestDate)}</div>,
 }));
@@ -86,6 +99,12 @@ vi.mock("./history/LifecycleBands", () => ({
 
 import { SectorRotationPage } from "./SectorRotationPage";
 
+function renderWithProviders(ui: React.ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
+
+
 describe("SectorRotationPage 统一工作台", () => {
   afterEach(() => {
     // 每个用例都还原 URL，避免历史日期参数污染后续工作台初始化。
@@ -97,7 +116,7 @@ describe("SectorRotationPage 统一工作台", () => {
   });
 
   it("keeps a pending trading date in the URL and explains the loaded fallback snapshot", async () => {
-    const { unmount } = render(<SectorRotationPage />);
+    const { unmount } = renderWithProviders(<SectorRotationPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: /交易日.*2026-08-11.*尚未生成快照/ }));
     fireEvent.click(await screen.findByRole("button", { name: /^2026-08-11.*尚未生成快照/ }));
@@ -106,12 +125,12 @@ describe("SectorRotationPage 统一工作台", () => {
     await waitFor(() => expect(window.location.search).toContain("date=2026-08-11"));
 
     unmount();
-    render(<SectorRotationPage />);
+    renderWithProviders(<SectorRotationPage />);
     expect(await screen.findByRole("status")).toHaveTextContent("2026-08-11 的板块轮动快照尚未生成，当前展示 2026-08-10 的最近成功快照。");
   });
 
   it("只保留一个主象限，并让回放帧、选择尾迹和轨迹分析同步", async () => {
-    render(<SectorRotationPage />);
+    renderWithProviders(<SectorRotationPage />);
 
     expect(screen.getAllByTestId("quadrant")).toHaveLength(1);
     expect(screen.getByText("当前图表：半导体、银行、教育")).toBeInTheDocument();
@@ -130,7 +149,7 @@ describe("SectorRotationPage 统一工作台", () => {
   it("回放帧没有已选行业时不使用最新快照打开抽屉", async () => {
     // 单日观察明确选择不同于最新日期的历史快照，验证不会被 2026-08-04 覆盖。
     window.history.replaceState(null, "", "/?sector=教育&date=2026-08-03");
-    render(<SectorRotationPage />);
+    renderWithProviders(<SectorRotationPage />);
 
     expect(screen.getByTestId("drawer-date")).toHaveTextContent("2026-08-03|2|false");
     fireEvent.click(screen.getByRole("button", { name: /动态回放/ }));
@@ -139,7 +158,7 @@ describe("SectorRotationPage 统一工作台", () => {
 
   it("在历史日期与回放时不向状态带传入未来点", async () => {
     window.history.replaceState(null, "", "/?sector=教育&date=2026-08-03");
-    render(<SectorRotationPage />);
+    renderWithProviders(<SectorRotationPage />);
 
     expect(await screen.findByTestId("lifecycle-bands-props")).toHaveTextContent("2026-08-03|");
     fireEvent.click(screen.getByRole("button", { name: /动态回放/ }));
@@ -148,7 +167,7 @@ describe("SectorRotationPage 统一工作台", () => {
 
   it("Phase、Lifecycle、搜索和今日变化共同过滤图表与排名", async () => {
     window.history.replaceState(null, "", "/?phase=decel_up&lifecycle=risk&changed=1&q=半导体");
-    render(<SectorRotationPage />);
+    renderWithProviders(<SectorRotationPage />);
 
     expect(await screen.findByText("当前图表：半导体")).toBeInTheDocument();
     expect(screen.queryByText("当前图表：银行")).not.toBeInTheDocument();
@@ -159,7 +178,7 @@ describe("SectorRotationPage 统一工作台", () => {
 
   it("回放到 8 月 10 日时不使用 8 月 11 日的 Lifecycle", async () => {
     window.history.replaceState(null, "", "/?sector=半导体&mode=replay&date=2026-08-10");
-    render(<SectorRotationPage />);
+    renderWithProviders(<SectorRotationPage />);
 
     expect(await screen.findByLabelText("全市场回放控制")).toBeInTheDocument();
     await waitFor(() => expect(hasLifecyclePill("修复")).toBe(true));
@@ -169,7 +188,7 @@ describe("SectorRotationPage 统一工作台", () => {
 
   it("回放标题只显示当前帧截止日期，不显示最新快照截止日期", async () => {
     window.history.replaceState(null, "", "/?sector=半导体&mode=replay&date=2026-08-10");
-    render(<SectorRotationPage />);
+    renderWithProviders(<SectorRotationPage />);
 
     const header = await screen.findByText(/ROTATION WORKBENCH/);
     expect(header).toHaveTextContent("2026-08-10");
@@ -179,7 +198,7 @@ describe("SectorRotationPage 统一工作台", () => {
   it.each(["loading", "error"] as const)("回放不受快照 %s 状态阻塞", async (snapshotStatus) => {
     mockedResponses.snapshotStatus = snapshotStatus;
     window.history.replaceState(null, "", "/?sector=半导体&mode=replay&date=2026-08-10");
-    render(<SectorRotationPage />);
+    renderWithProviders(<SectorRotationPage />);
 
     expect(await screen.findByLabelText("全市场回放控制")).toBeInTheDocument();
     expect(screen.getByTestId("quadrant")).toBeInTheDocument();
@@ -188,7 +207,7 @@ describe("SectorRotationPage 统一工作台", () => {
   it("回放帧为空时不回退到最新快照", async () => {
     mockedResponses.replayData = [];
     window.history.replaceState(null, "", "/?sector=半导体&mode=replay&date=2026-08-10");
-    const { container } = render(<SectorRotationPage />);
+    const { container } = renderWithProviders(<SectorRotationPage />);
 
     expect(await screen.findByText("回放数据暂不可用")).toBeInTheDocument();
     expect(screen.queryByTestId("quadrant")).not.toBeInTheDocument();
@@ -201,7 +220,7 @@ describe("SectorRotationPage 统一工作台", () => {
   it("历史请求失败只在轨迹区局部降级", async () => {
     mockedResponses.history = { data: undefined, isLoading: false, isError: true };
     window.history.replaceState(null, "", "/?sector=半导体");
-    render(<SectorRotationPage />);
+    renderWithProviders(<SectorRotationPage />);
 
     expect(await screen.findByText("历史轨迹暂不可用，当前快照保持可用。")).toBeInTheDocument();
     expect(screen.getByTestId("quadrant")).toBeInTheDocument();
@@ -211,7 +230,7 @@ describe("SectorRotationPage 统一工作台", () => {
   });
 
   it("页面不渲染交易动作或仓位乘数", () => {
-    const { container } = render(<SectorRotationPage />);
+    const { container } = renderWithProviders(<SectorRotationPage />);
 
     expect(container).not.toHaveTextContent("lifecycle_action");
     expect(container).not.toHaveTextContent("lifecycle_position_multiplier");
@@ -222,7 +241,7 @@ describe("SectorRotationPage 统一工作台", () => {
   });
 
   it("filters the workbench to lifecycle changes through the observation-focus control", async () => {
-    render(<SectorRotationPage />);
+    renderWithProviders(<SectorRotationPage />);
 
     const focusGroup = await screen.findByRole("group", { name: "观察重点" });
     expect(focusGroup).toHaveTextContent("全部趋势修复/初启风险提示今日 Lifecycle 变化");
@@ -241,7 +260,7 @@ describe("SectorRotationPage 统一工作台", () => {
   it("keeps only the all-focus control available when a replay snapshot lacks lifecycle data", async () => {
     mockedResponses.replayData = [defaultReplayData[0]];
     window.history.replaceState(null, "", "/?mode=replay&date=2026-08-03");
-    render(<SectorRotationPage />);
+    renderWithProviders(<SectorRotationPage />);
 
     expect(await screen.findByRole("button", { name: "全部" })).not.toBeDisabled();
     expect(screen.getByRole("button", { name: "趋势" })).toBeDisabled();
@@ -253,7 +272,7 @@ describe("SectorRotationPage 统一工作台", () => {
 
   it("resets URL lifecycle filters while a replay frame has no lifecycle data", async () => {
     window.history.replaceState(null, "", "/?mode=replay&date=2026-08-03&lifecycle=risk&changed=1");
-    render(<SectorRotationPage />);
+    renderWithProviders(<SectorRotationPage />);
 
     expect(await screen.findByRole("button", { name: "全部" })).toHaveAttribute("aria-pressed", "true");
     await waitFor(() => expect(window.location.search).toContain("lifecycle=all"));
@@ -270,7 +289,7 @@ describe("SectorRotationPage 统一工作台", () => {
   });
 
   it("maps trend, repair-or-emerging, and risk observation focuses to the workbench filters", async () => {
-    render(<SectorRotationPage />);
+    renderWithProviders(<SectorRotationPage />);
 
     fireEvent.click(await screen.findByRole("button", { name: "趋势" }));
     expect(await screen.findByText("当前图表：教育")).toBeInTheDocument();

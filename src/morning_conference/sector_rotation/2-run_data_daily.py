@@ -13,6 +13,9 @@ run_daily.py -- 每日增量
 预期耗时:
     单日增量约 5-15 分钟, 建议 8:30 cron 触发, 给晨会 (9:00) 留充足准备时间
 
+执行命令
+D:/Programs/Python/Python313/python.exe d:/aiQuant/ai_quant_sys/src/morning_conference/sector_rotation/2-run_data_daily.py --level 2
+
 结果查询：
 1. 窗口内板块涨幅
     SELECT sector_name,

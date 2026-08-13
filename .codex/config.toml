@@ -1,0 +1,5 @@
+# 项目级配置文件：.codex/config.toml
+# 项目已被 ~/.codex/config.toml 中的 projects.<path>.trust_level = "trusted" 标记为受信任，本文件才会被加载。
+# 将沙箱升级等提示交给自动审核子代理处理，减少对你的人工打扰。
+
+approvals_reviewer = "auto_review"

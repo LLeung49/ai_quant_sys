@@ -1,5 +1,6 @@
-/** Renders the snapshot-level market environment summary. */
+﻿/** Renders the snapshot-level market environment summary. */
 import { Activity } from "lucide-react";
+import { HintIcon } from "../HintIcon";
 
 interface MarketSummaryProps {
   /** Market-regime field from the displayed snapshot. */
@@ -21,7 +22,8 @@ export function MarketSummary({ marketRegime }: MarketSummaryProps) {
     <section className="market-summary" aria-label="当日市场摘要">
       <article className="summary-card summary-card--regime">
         <div className="summary-icon"><Activity aria-hidden="true" /></div>
-        <div><span>市场环境</span><strong>{regime.label}</strong><p>{regime.hint}</p></div>
+        <div><span>市场环境</span><strong>{regime.label}</strong></div>
+        <HintIcon text={regime.hint} tone="cool" placement="left" />
       </article>
     </section>
   );

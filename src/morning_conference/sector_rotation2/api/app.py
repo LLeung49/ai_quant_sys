@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from pymysql import MySQLError
 
 from .router import router
+from ..short_term.api import short_term_router
 
 
 LOGGER = logging.getLogger(__name__)
@@ -139,4 +140,5 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     app.include_router(router)
+    app.include_router(short_term_router)
     return app

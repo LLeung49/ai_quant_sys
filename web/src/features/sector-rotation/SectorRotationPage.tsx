@@ -1,4 +1,4 @@
-/** 板块轮动统一工作台的数据状态、回放帧与视图编排。 */
+﻿/** 板块轮动统一工作台的数据状态、回放帧与视图编排。 */
 import { useEffect, useMemo, useReducer, useState } from "react";
 import { CircleHelp, History, Pause, Play, Route } from "lucide-react";
 import type { QuadrantSector } from "./chart/quadrantOption";
@@ -7,6 +7,7 @@ import { SectorDetailDrawer, type DetailSector } from "./detail/SectorDetailDraw
 import { RotationFilters } from "./filters/RotationFilters";
 import { SectorRanking, type RankingSector } from "./ranking/SectorRanking";
 import { MarketSummary } from "./summary/MarketSummary";
+import { ShortTermAnomalyModule } from "./short_term/ShortTermAnomalyModule";
 import { useRotationData } from "./useRotationData";
 import { useReplayData } from "./useReplayData";
 import { useHistoryData } from "./useHistoryData";
@@ -170,6 +171,8 @@ export function SectorRotationPage() {
     <RotationFilters dates={mode === "replay" ? [...replayState.dates].reverse() : dates.data ?? []} selectedDate={mode === "replay" ? displayDate ?? "" : selectedDate ?? loadedSnapshotDate ?? ""} level={level} modelVersion="v1" onDateChange={handleDateChange} onLevelChange={(nextLevel) => { setLevel(nextLevel); setSelectedDate(undefined); setSelectedSectorName(null); setComparisonSectors([]); setMode("snapshot"); }} searchQuery={searchQuery} phaseFilter={phaseFilter} onSearchChange={setSearchQuery} onPhaseChange={setPhaseFilter} lifecycleFilter={lifecycleFilter} changedOnly={changedOnly} lifecycleDisabled={!lifecycleAvailable} onLifecycleChange={setLifecycleFilter} onChangedOnlyChange={setChangedOnly} />
     {mode === "snapshot" && selectedDate && loadedSnapshotDate && selectedDate !== loadedSnapshotDate && <p role="status">{selectedDate} 的板块轮动快照尚未生成，当前展示 {loadedSnapshotDate} 的最近成功快照。</p>}
     <MarketSummary marketRegime={sectors[0]?.market_regime ?? "range"} />
+    {mode === "snapshot" && displayDate && <ShortTermAnomalyModule level={level} asOfDate={displayDate} availableDates={dates.data} />}
+
     <LifecycleFilterReset lifecycleAvailable={lifecycleAvailable} lifecycleFilter={lifecycleFilter} changedOnly={changedOnly} onLifecycleChange={setLifecycleFilter} onChangedOnlyChange={setChangedOnly} />
     <section className="rotation-workspace">
       <article className="chart-panel">
@@ -217,3 +220,4 @@ export function SectorRotationPage() {
     {comparisonSectors.length > 0 && <section className="sector-history content-panel"><header className="panel-header"><div><p>SECTOR TRAJECTORY</p><h2><History aria-hidden="true" />行业轨迹对比</h2></div><div className="segmented-control">{([5, 20, 60] as const).map((windowValue) => <button className={historyWindow === windowValue ? "is-active" : ""} key={windowValue} type="button" onClick={() => setHistoryWindow(windowValue)}>{windowValue} 日</button>)}</div></header><TrajectoryControls sectorNames={comparisonSectors} onRemove={(sectorName) => { setComparisonSectors((current) => current.filter((item) => item !== sectorName)); if (selectedSectorName === sectorName) setSelectedSectorName(null); }} />{history.isLoading ? <div className="trajectory-loading">正在加载行业历史轨迹…</div> : history.isError ? <div className="history-error" role="status">历史轨迹暂不可用，当前快照保持可用。</div> : <><LazySectorTrajectory trajectories={trajectories} /><LifecycleBands sectorNames={comparisonSectors.slice(0, 5)} points={lifecycleHistoryPoints} expectedDates={visibleHistoryDates} /></>}{!history.isError && historyGaps.length > 0 && <div className="history-gaps"><strong>数据缺口</strong>{historyGaps.map((gap) => <span key={gap.sector_name}>{gap.sector_name}：{gap.dates.length} 个交易日缺少有效坐标（轨迹已断开）</span>)}</div>}</section>}
   </div>;
 }
+
