@@ -15,6 +15,7 @@ type Row = {
   change_pct?: number | null;
   macd_hist?: number | null;
   gc_label?: string | null;
+  gc_offset?: number | null;
 };
 const labels: Record<string, string> = {
   etf: "ETF",
@@ -116,6 +117,7 @@ export function MacdPoolPage() {
       hurst: row.hurst_60,
       hist: row.macd_hist,
       gcAge: row.gc_label?.startsWith("T-") ? Number(row.gc_label.slice(2)) : null,
+      isNew: row.gc_offset === 0 || row.gc_label === "T-0",
     }));
   const total = Object.values(groups).reduce(
     (count, rows) => count + rows.length,
@@ -123,24 +125,21 @@ export function MacdPoolPage() {
   );
   return (
     <section className="rotation-page macd-pool-page" aria-label="MACD 标的池">
-      <header className="panel-header">
-        <div>
-          <p>MACD POOL</p>
-          <h2>MACD 标的池</h2>
+      <header className="panel-header macd-pool-header">
+        <div className="macd-pool-header__left">
+          <div>
+            <p>MACD POOL</p>
+            <h2>MACD 标的池</h2>
+          </div>
+          <TradingCalendar
+            displayedMonth={month}
+            onDisplayedMonthChange={setMonth}
+            tradeDates={dates.filter((item) => item >= bounds.start && item <= bounds.end)}
+            snapshotDates={dates.filter((item) => item >= bounds.start && item <= bounds.end)}
+            selectedDate={date}
+            onDateChange={setSelectedDate}
+          />
         </div>
-        <TradingCalendar
-          displayedMonth={month}
-          onDisplayedMonthChange={setMonth}
-          tradeDates={dates.filter(
-            (item) => item >= bounds.start && item <= bounds.end,
-          )}
-          snapshotDates={dates.filter(
-            (item) => item >= bounds.start && item <= bounds.end,
-          )}
-          selectedDate={date}
-          onDateChange={setSelectedDate}
-        />
-        <span>{query.isLoading ? "加载中…" : `命中 ${total} 个`}</span>
       </header>
       {query.isError ? (
         <div className="empty-panel">该日期暂无 MACD 板块池数据</div>
@@ -172,7 +171,7 @@ export function MacdPoolPage() {
                       )
                       .map((row, index) => (
                         <button
-                          className={selected?.entity_type === row.entity_type && selected?.stock_code === row.stock_code ? "macd-ranking__row is-selected" : "macd-ranking__row"}
+                          className={["macd-ranking__row", selected?.entity_type === row.entity_type && selected?.stock_code === row.stock_code ? "is-selected" : "", row.gc_offset === 0 || row.gc_label === "T-0" ? "is-new-entry" : ""].filter(Boolean).join(" ")}
                           onClick={() => setSelected(row)}
                           key={`${key}-${row.stock_code}`}
                         >
@@ -193,3 +192,4 @@ export function MacdPoolPage() {
     </section>
   );
 }
+

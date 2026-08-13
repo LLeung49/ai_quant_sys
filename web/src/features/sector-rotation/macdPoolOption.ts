@@ -1,6 +1,6 @@
 export type MacdPoint = {
   name: string; code: string; er: number; adx: number; volume: number; momentum: number;
-  rsi?: number | null; hurst?: number | null; hist?: number | null; entityType?: string; gcAge?: number | null;
+  rsi?: number | null; hurst?: number | null; hist?: number | null; entityType?: string; gcAge?: number | null; isNew?: boolean;
 };
 export type MacdTrajectory = {
   stock_code: string;
@@ -18,8 +18,8 @@ export function buildMacdPoolOption(points: MacdPoint[], trajectory?: MacdTrajec
       borderColor: selectedCode === point.code ? "#ffffff" : "#dce8f8",
       borderWidth: selectedCode === point.code ? 3 : 1.2,
       opacity: selectedCode === point.code ? 1 : selectedCode ? 0.45 : Math.max(0.42, 1 - Math.min(point.gcAge ?? 10, 10) * 0.055),
-      shadowBlur: 8,
-      shadowColor: "rgba(0,0,0,.25)",
+      shadowBlur: point.isNew ? 18 : 8,
+      shadowColor: point.isNew ? "rgba(255,209,102,.9)" : "rgba(0,0,0,.25)",
     },
   }));
   const path = trajectory?.points

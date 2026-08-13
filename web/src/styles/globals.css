@@ -147,6 +147,8 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
 .macd-ranking-panel { min-width:0; min-height:560px; display:flex; flex-direction:column; }
 .macd-ranking__row { display:grid; grid-template-columns:30px minmax(0,1fr) 48px 58px; grid-template-areas:"rank name phase score" "rank metrics metrics metrics"; align-items:center; gap:3px 8px; width:100%; padding:8px 9px; border:1px solid transparent; border-radius:9px; background:rgba(12,25,43,.62); color:var(--text); text-align:left; cursor:pointer; }
 .macd-ranking__row:hover,.macd-ranking__row.is-selected { border-color:rgba(240,79,95,.35); background:rgba(240,79,95,.09); }
+.macd-ranking__row.is-new-entry { border-color:rgba(255,209,102,.72); background:linear-gradient(90deg,rgba(255,209,102,.16),rgba(12,25,43,.62)); box-shadow:0 0 0 1px rgba(255,209,102,.12),0 0 14px rgba(255,209,102,.12); }
+.macd-ranking__row.is-new-entry .macd-ranking__phase { border-color:rgba(255,209,102,.72); color:#ffd166; }
 .macd-ranking__rank { grid-area:rank; display:grid; place-items:center; width:25px; height:25px; border-radius:7px; background:rgba(99,119,149,.14); color:#9aaac0; font-size:10px; font-weight:700; }
 .macd-ranking__row:nth-child(-n+3) .macd-ranking__rank { background:rgba(240,79,95,.16); color:#f58a98; }
 .macd-ranking__name { grid-area:name; min-width:0; overflow:hidden; font-size:11px; font-weight:650; text-overflow:ellipsis; white-space:nowrap; }
@@ -984,3 +986,6 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
 .short-term-leaders__chart { height: 260px; margin-top: -12px; margin-bottom: -4px; } .short-term-leaders__count { padding-top: 0; padding-bottom: 4px; line-height: 14px; }
 .short-term-leaders__chart { height: 360px; margin-top: -8px; margin-bottom: 0; } .short-term-leaders__count { padding: 0 12px 10px; line-height: normal; }
 .short-term-anomaly__filter select { background:#101d31; color:#e6eefb; border-color:rgba(115,142,184,.35); } .short-term-anomaly__filter select option { background:#101d31; color:#e6eefb; }
+
+.macd-pool-header { justify-content: flex-start; }
+.macd-pool-header__left { display: flex; align-items: center; gap: 28px; }

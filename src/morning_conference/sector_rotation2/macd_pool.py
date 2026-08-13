@@ -106,12 +106,12 @@ def step2_filter_trap_avoidance(df: pd.DataFrame) -> dict:
 
 
 def evaluate_macd_entity(group: pd.DataFrame, *, entity_type: str, volume_threshold: float,
-                         enable_step2: bool = True, gc_lookback: int = 10) -> dict:
+                         enable_step2: bool = True, gc_lookback: int = 7, require_zero_above: bool = True) -> dict:
     """Calculate daily metrics for one entity and mark whether it enters the pool."""
     group = group.sort_values("trade_date").tail(120)
     if len(group) < 2:
         return {"entity_type": entity_type, "is_triggered": 0}
-    ok, details = step1_filter_macd_momentum_trend(group, vol_ratio_threshold=volume_threshold, gc_lookback=gc_lookback)
+    ok, details = step1_filter_macd_momentum_trend(group, vol_ratio_threshold=volume_threshold, gc_lookback=gc_lookback, require_zero_above=require_zero_above)
     if not details:
         close = pd.to_numeric(group["close"], errors="coerce").to_numpy(float)
         volume = pd.to_numeric(group["volume"], errors="coerce").to_numpy(float)
@@ -168,7 +168,7 @@ def run_macd_pool_scan(level: int, as_of_date: str, end_date: str | None = None,
 
 
 
-def run_macd_sector_scan(level: int, as_of_date: str, enable_step2: bool = True, volume_thresholds: dict[str, float] | None = None, gc_lookback: int = 10) -> pd.DataFrame:
+def run_macd_sector_scan(level: int, as_of_date: str, enable_step2: bool = True, volume_thresholds: dict[str, float] | None = None, gc_lookback: int = 7) -> pd.DataFrame:
     """Scan申万一级/二级板块指数 using trade_sector_daily."""
     thresholds = {**ENTITY_VOLUME_THRESHOLDS, **(volume_thresholds or {})}
     from data_ingestion.db_config import execute_query
@@ -178,7 +178,7 @@ def run_macd_sector_scan(level: int, as_of_date: str, enable_step2: bool = True,
     if not rows: return pd.DataFrame()
     for name, group in pd.DataFrame(rows).groupby("sector_name"):
         group=group.sort_values("trade_date").tail(120)
-        ok, details=step1_filter_macd_momentum_trend(group, vol_ratio_threshold=thresholds[f"sector_l{level}"])
+        ok, details=step1_filter_macd_momentum_trend(group, vol_ratio_threshold=thresholds[f"sector_l{level}"], gc_lookback=gc_lookback, require_zero_above=False)
         if not ok: continue
         details.update({"entity_type": f"sector_l{level}", "stock_code": name, "stock_name": name, "sector_1": name if level == 1 else None, "sector_2": name if level == 2 else None})
         if enable_step2: details.update(step2_filter_trap_avoidance(group))
@@ -221,7 +221,7 @@ def run_macd_daily_metrics(as_of_date: str, enable_step2: bool = True, volume_th
             latest_name = group.iloc[-1].get("stock_name")
             if is_excluded_bond_etf(code, latest_name):
                 continue
-            details = evaluate_macd_entity(group, entity_type="etf", volume_threshold=thresholds["etf"], enable_step2=enable_step2)
+            details = evaluate_macd_entity(group, entity_type="etf", volume_threshold=thresholds["etf"], enable_step2=enable_step2, gc_lookback=7, require_zero_above=True)
             latest = group.iloc[-1]
             details.update({"stock_code": code, "stock_name": latest.get("stock_name"), "sector_1": latest.get("sector_1"), "sector_2": latest.get("sector_2")})
             frames.append(details)
@@ -234,7 +234,7 @@ def run_macd_daily_metrics(as_of_date: str, enable_step2: bool = True, volume_th
         if not sector_rows:
             continue
         for name, group in pd.DataFrame(sector_rows).groupby("sector_name"):
-            details = evaluate_macd_entity(group, entity_type=f"sector_l{level}", volume_threshold=thresholds[f"sector_l{level}"], enable_step2=enable_step2)
+            details = evaluate_macd_entity(group, entity_type=f"sector_l{level}", volume_threshold=thresholds[f"sector_l{level}"], enable_step2=enable_step2, gc_lookback=7, require_zero_above=False)
             details.update({"stock_code": name, "stock_name": name, "sector_1": name if level == 1 else None, "sector_2": name if level == 2 else None})
             frames.append(details)
     return pd.DataFrame(frames)
