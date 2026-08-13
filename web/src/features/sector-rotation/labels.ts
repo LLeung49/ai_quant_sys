@@ -3,8 +3,8 @@
 export const PHASE_META: Record<string, { label: string; color: string; softColor: string; description: string }> = {
   accel_up: {
     label: "加速走强",
-    color: "#37d6b0",
-    softColor: "rgba(55, 214, 176, 0.16)",
+    color: "#f04f5f",
+    softColor: "rgba(240, 79, 95, 0.16)",
     description: "相对强势与趋势加速同时出现，关注量能和行业内部参与度能否保持。",
   },
   decel_up: {
@@ -27,8 +27,8 @@ export const PHASE_META: Record<string, { label: string; color: string; softColo
   },
   accel_down: {
     label: "加速走弱",
-    color: "#ff7285",
-    softColor: "rgba(255, 114, 133, 0.16)",
+    color: "#26a69a",
+    softColor: "rgba(38, 166, 154, 0.16)",
     description: "相对弱势与趋势走弱同时出现，应关注风险信号是否进一步扩散。",
   },
   neutral: {

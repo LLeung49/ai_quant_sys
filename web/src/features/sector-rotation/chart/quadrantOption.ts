@@ -116,9 +116,9 @@ export function buildQuadrantOption(sectors: QuadrantSector[], selectedSectorNam
         silent: true,
         itemStyle: { opacity: 1 },
         data: [
-          [{ xAxis: 0, yAxis: 1, itemStyle: { color: "rgba(55, 214, 176, 0.035)" } }, { xAxis: 1, yAxis: 0 }],
+          [{ xAxis: 0, yAxis: 1, itemStyle: { color: "rgba(240, 79, 95, 0.035)" } }, { xAxis: 1, yAxis: 0 }],
           [{ xAxis: 0, yAxis: 0, itemStyle: { color: "rgba(240, 182, 90, 0.03)" } }, { xAxis: 1, yAxis: -1 }],
-          [{ xAxis: -1, yAxis: 0, itemStyle: { color: "rgba(255, 114, 133, 0.03)" } }, { xAxis: 0, yAxis: -1 }],
+          [{ xAxis: -1, yAxis: 0, itemStyle: { color: "rgba(38, 166, 154, 0.03)" } }, { xAxis: 0, yAxis: -1 }],
           [{ xAxis: -1, yAxis: 1, itemStyle: { color: "rgba(145, 133, 255, 0.03)" } }, { xAxis: 0, yAxis: 0 }],
         ],
       },

@@ -13,6 +13,7 @@ from pymysql import MySQLError
 
 from .router import router
 from ..short_term.api import short_term_router
+from .macd_router import macd_router
 
 
 LOGGER = logging.getLogger(__name__)
@@ -141,4 +142,5 @@ def create_app() -> FastAPI:
 
     app.include_router(router)
     app.include_router(short_term_router)
+    app.include_router(macd_router)
     return app

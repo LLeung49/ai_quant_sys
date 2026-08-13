@@ -19,11 +19,11 @@ export interface LifecycleMeta {
 
 export const LIFECYCLE_META: Record<LifecycleState, LifecycleMeta> = {
   repair: { state: "repair", label: "修复观察", description: "弱势阶段出现初步修复迹象，仍需观察确认。", color: "#8b9cff", softColor: "rgba(139,156,255,.12)" },
-  emerging: { state: "emerging", label: "初步启动", description: "修复已经确认或强势尚未出现风险警告。", color: "#56c7d9", softColor: "rgba(86,199,217,.12)" },
-  trending: { state: "trending", label: "趋势运行", description: "相对强势与趋势加速同时存在。", color: "#37d6b0", softColor: "rgba(55,214,176,.12)" },
+  emerging: { state: "emerging", label: "初步启动", description: "修复已经确认或强势尚未出现风险警告。", color: "#f58ab3", softColor: "rgba(245,138,179,.14)" },
+  trending: { state: "trending", label: "趋势运行", description: "相对强势与趋势加速同时存在。", color: "#f04f5f", softColor: "rgba(240,79,95,.12)" },
   crowded: { state: "crowded", label: "强势拥挤", description: "强势持续时间较长，进入拥挤观察区。", color: "#f0b65a", softColor: "rgba(240,182,90,.12)" },
-  divergence: { state: "divergence", label: "强弱背离", description: "强势降温且参与度或排名同步转弱。", color: "#ff8a78", softColor: "rgba(255,138,120,.12)" },
-  exit: { state: "exit", label: "加速转弱", description: "趋势已经进入加速走弱状态。", color: "#ff7285", softColor: "rgba(255,114,133,.12)" },
+  divergence: { state: "divergence", label: "强弱背离", description: "强势降温且参与度或排名同步转弱。", color: "#d9a441", softColor: "rgba(217,164,65,.12)" },
+  exit: { state: "exit", label: "加速转弱", description: "趋势已经进入加速走弱状态。", color: "#26a69a", softColor: "rgba(38,166,154,.12)" },
   neutral: { state: "neutral", label: "方向未明", description: "当前证据不足以归入其他观察状态。", color: "#7f8da3", softColor: "rgba(127,141,163,.12)" },
 };
 

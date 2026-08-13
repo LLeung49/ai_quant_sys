@@ -2,11 +2,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Activity, DatabaseZap } from "lucide-react";
 import { useState } from "react";
-import { SectorRotationPage } from "../features/sector-rotation/SectorRotationPage";
+import { SectorRotationPage } from "../features/sector-rotation/SectorRotationPage";
+import { MacdPoolPage } from "../features/sector-rotation/MacdPoolPage";
 
-type WorkspaceTab = "rotation";
+type WorkspaceTab = "rotation" | "macd";
 
 const TAB_META: Record<WorkspaceTab, { label: string; caption: string; Icon: typeof Activity }> = {
+  macd: { label: "MACD 板块池", caption: "MACD POOL · 动能与趋势筛选", Icon: DatabaseZap },
   rotation: { label: "板块轮动", caption: "SECTOR ROTATION · 申万行业研究", Icon: Activity },
 };
 
@@ -46,7 +48,7 @@ export function App() {
             </button>
           ))}
         </nav>
-        <SectorRotationPage />
+        {tab === "rotation" ? <SectorRotationPage /> : <MacdPoolPage />}
         <footer className="disclaimer">
           <span>AI Quant Research · Sector Rotation V1</span>
           <span>本页面仅供量化研究参考，不构成投资建议。</span>

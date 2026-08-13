@@ -68,11 +68,10 @@ export function QuadrantChart({ sectors, selectedSectorName, onSelect, labelDens
     }
   }, [option]);
 
-  return <div className="quadrant-chart-shell">
+  return <div className="quadrant-chart-shell sector-quadrant-shell">
     <div ref={containerRef} className="quadrant-chart" aria-label="板块轮动象限气泡图" role="img" />
     <span className="quadrant-caption quadrant-caption--repair">修复 / 弱转强观察</span>
     <span className="quadrant-caption quadrant-caption--strong">加速走强</span>
-    <span className="quadrant-caption quadrant-caption--weak">加速走弱</span>
-    <span className="quadrant-caption quadrant-caption--cooling">强势降温</span>
+    <div className="quadrant-caption-row"><span>加速走弱</span><span>强势降温</span></div>
   </div>;
 }
