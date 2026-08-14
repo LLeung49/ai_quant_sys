@@ -6,6 +6,7 @@ import { fetchShortTermAvailableDates, fetchShortTermSnapshot, SHORT_TERM_LABEL_
 import { ShortTermKpi } from "./ShortTermKpi";
 import { ShortTermLeaders } from "./ShortTermLeaders";
 import { ShortTermDetailDrawer } from "./ShortTermDetailDrawer";
+import { NextDayWatchPanel } from "./NextDayWatchPanel";
 import { HintIcon } from "../HintIcon";
 import { parseLabelsCsv } from "./labels";
 
@@ -138,6 +139,7 @@ export function ShortTermAnomalyModule({ level, asOfDate, availableDates, onSect
       <div className="short-term-anomaly__kpi short-term-anomaly__kpi--top">
         <ShortTermKpi meta={meta} layout="grid" />
       </div>
+      <NextDayWatchPanel sectors={sectors} onSelect={handleSelect} />
       <div className="short-term-anomaly__heatmaps">
         <ShortTermLeaders direction="up" sectors={filteredSectors} selectedSectorName={selectedSectorName} onSelect={handleSelect} />
         <ShortTermLeaders direction="down" sectors={filteredSectors} selectedSectorName={selectedSectorName} onSelect={handleSelect} />
@@ -147,9 +149,3 @@ export function ShortTermAnomalyModule({ level, asOfDate, availableDates, onSect
     </section>
   );
 }
-
-
-
-
-
-

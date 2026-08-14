@@ -1,4 +1,4 @@
-/** 短期异动标签与强度的视觉语义（与方案文档 §10.3 一致）。 */
+﻿/** 短期异动标签与强度的视觉语义（与方案文档 §10.3 一致）。 */
 
 export const SHORT_TERM_LABEL_META: Record<string, { label: string; color: string; softColor: string; description: string }> = {
   pulse_up: {
@@ -70,7 +70,7 @@ export const SHORT_TERM_LABEL_PRIORITY: readonly string[] = [
   "short_breakdown_candidate",
 ];
 
-/** 获取任一标签的展示元数据；未知值安全回退到原值。 */
+/** 获取任一标签的展示元信息；未知值安全回退到原值。 */
 export function getShortTermLabelMeta(label: string | null | undefined) {
   if (!label) return null;
   return SHORT_TERM_LABEL_META[label] ?? null;
@@ -107,4 +107,66 @@ export function getIntensityMeta(intensity: string | null | undefined) {
 export function orderLabelsByPriority(labels: string[]): string[] {
   const rank = new Map(SHORT_TERM_LABEL_PRIORITY.map((label, index) => [label, index] as const));
   return [...labels].sort((left, right) => (rank.get(left) ?? 99) - (rank.get(right) ?? 99));
+}
+
+/**
+ * 次日研究观察候选情景的展示元信息（仅用于研究与提示，不构成交易信号等级）。
+ *
+ * 关键字段：
+ * - `title`：情景的中文展示名；
+ * - `tone`：配色基调，与短期强度配色保持区分；
+ * - `iconName`：Lucide 图标名，由 `NextDayWatchPanel` 解析为组件；
+ * - `description`：卡片头部的一句话研究说明；
+ * - `hint`：悬停展开的细则。
+ */
+export interface NextDayWatchGroupMeta {
+  title: string;
+  tone: "warm" | "rose" | "teal" | "violet";
+  iconName: "trending-up" | "siren" | "corner-down-left" | "corner-down-right";
+  description: string;
+  hint: string;
+}
+
+export const NEXT_DAY_WATCH_GROUP_META: Record<string, NextDayWatchGroupMeta> = {
+  strength_follow_through: {
+    title: "强势跟进观察",
+    tone: "warm",
+    iconName: "trending-up",
+    description: "相对强势与量能同步出现，次日重点复核延续性与广度。",
+    hint: "同时命中 pulse_up + volume_spike 的板块；用于辅助判断次日是否仍具备动量与资金配合。",
+  },
+  panic_reversal_watch: {
+    title: "恐慌修复观察",
+    tone: "rose",
+    iconName: "siren",
+    description: "下行压力或跌停集群已显化，次日重点复核恐慌是否扩散或收敛。",
+    hint: "同时含 pulse_down + volume_spike，或独立命中 limit_panic 的板块；用于辅助判断次日情绪是否缓解。",
+  },
+  short_rebound_watch: {
+    title: "V 形反弹观察",
+    tone: "teal",
+    iconName: "corner-down-left",
+    description: "前 5 日相对弱势后出现当日转强，次日重点复核反弹质量。",
+    hint: "命中 short_rebound_candidate 的板块；用于辅助判断弱势板块是否完成反转。",
+  },
+  short_breakdown_watch: {
+    title: "破位警惕观察",
+    tone: "violet",
+    iconName: "corner-down-right",
+    description: "前 5 日相对强势后出现当日转弱，次日重点复核风险是否延续。",
+    hint: "命中 short_breakdown_candidate 的板块；用于辅助判断强势板块是否开始走弱。",
+  },
+};
+
+/** 获取候选情景的展示元信息；未知 id 安全回退到原 id 的空对象。 */
+export function getNextDayWatchGroupMeta(id: string): NextDayWatchGroupMeta {
+  return (
+    NEXT_DAY_WATCH_GROUP_META[id] ?? {
+      title: id,
+      tone: "warm",
+      iconName: "trending-up",
+      description: "",
+      hint: "",
+    }
+  );
 }
