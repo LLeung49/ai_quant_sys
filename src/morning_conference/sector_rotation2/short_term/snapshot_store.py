@@ -1,4 +1,4 @@
-"""v2_short_term 短期快照的事务持久化。
+﻿"""v2_short_term 短期快照的事务持久化。
 
 独立表 ``sector_rotation_short_term_daily_snapshot`` 不会触碰 v1 快照。
 所有写入均在同一事务内批量 upsert；任意一行失败时整批回滚。
@@ -18,7 +18,7 @@ SHORT_TERM_SNAPSHOT_COLUMNS: tuple[str, ...] = (
     "as_of_date", "sector_level", "sector_name", "model_version", "run_id",
     "coverage_ratio",
     "ret_1", "ret_2", "ret_3",
-    "rs_1", "rs_2", "rs5_accel_1d", "ma5_slope",
+    "rs_1", "rs_2", "rs_5", "rs5_accel_1d", "ma5_slope",
     "rvol_1_20", "rvol_1_60",
     "amount_share_today", "share_impulse_1d",
     "breadth_up", "breadth_above_ma5", "breadth_new_high_5",
@@ -90,7 +90,7 @@ def persist_short_term_snapshot(
             as_of_date, sector_level, name, model_version, run_id,
             row.get("coverage_ratio"),
             row.get("ret_1"), row.get("ret_2"), row.get("ret_3"),
-            row.get("rs_1"), row.get("rs_2"),
+            row.get("rs_1"), row.get("rs_2"), row.get("rs_5"),
             row.get("rs5_accel_1d"), row.get("ma5_slope"),
             row.get("rvol_1_20"), row.get("rvol_1_60"),
             row.get("amount_share_today"), row.get("share_impulse_1d"),
@@ -153,19 +153,21 @@ def create_short_term_run(
         connection.close()
 
 
-def mark_short_term_run_succeeded(run_id: str, eligible_sector_count: int, skipped_sector_count: int) -> int:
-    """把短期运行的审计行标记为 succeeded。"""
+def mark_short_term_run_succeeded(run_id: str, snapshot_rows: int) -> int:
+    """把审计行标记为 ``succeeded`` 并记录落盘行数。"""
     connection = get_connection()
     cursor = connection.cursor()
     try:
         cursor.execute(
             """
             UPDATE sector_rotation_run_log
-            SET status = %s, finished_at = NOW(),
-                eligible_sector_count = %s, skipped_sector_count = %s
-            WHERE run_id = %s
+               SET status = 'succeeded',
+                   finished_at = %s,
+                   snapshot_rows = %s
+             WHERE run_id = %s
+               AND model_version LIKE %s
             """,
-            ("succeeded", eligible_sector_count, skipped_sector_count, run_id),
+            (datetime.now(), snapshot_rows, run_id, 'v2_%'),
         )
         connection.commit()
         return cursor.rowcount
@@ -177,18 +179,21 @@ def mark_short_term_run_succeeded(run_id: str, eligible_sector_count: int, skipp
         connection.close()
 
 
-def mark_short_term_run_failed(run_id: str, error_summary: str) -> int:
-    """把短期运行的审计行标记为 failed；事务失败时调用。"""
+def mark_short_term_run_failed(run_id: str, reason: str) -> int:
+    """把审计行标记为 ``failed`` 并记录失败原因。"""
     connection = get_connection()
     cursor = connection.cursor()
     try:
         cursor.execute(
             """
             UPDATE sector_rotation_run_log
-            SET status = %s, finished_at = NOW(), error_summary = %s
-            WHERE run_id = %s
+               SET status = 'failed',
+                   finished_at = %s,
+                   error_message = %s
+             WHERE run_id = %s
+               AND model_version LIKE %s
             """,
-            ("failed", error_summary, run_id),
+            (datetime.now(), reason, run_id, 'v2_%'),
         )
         connection.commit()
         return cursor.rowcount

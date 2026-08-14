@@ -1,4 +1,4 @@
-"""v2_short_term 短期原始特征的纯计算函数。
+﻿"""v2_short_term 短期原始特征的纯计算函数。
 
 本模块只计算特征，不直接访问数据库；调用方需要在传入前准备好板块日 K 线
 与对应成分股面板。算法定义与字段语义严格对齐
@@ -73,6 +73,25 @@ def _breadth_up_series(extras: pd.DataFrame) -> pd.Series:
     return (rise / safe_denom).replace([np.inf, -np.inf], np.nan)
 
 
+def _relative_strength(close: pd.Series, benchmark_close: pd.Series, lookback: int) -> float:
+    """计算 ``lookback`` 日累计相对强度 ``rs_n = sector_ret_n - bench_ret_n``。
+
+    与 ``rs_1`` / ``rs_2`` 共用同一口径（基于 ``build_market_benchmark`` 的归一化基准），
+    仅窗口不同；窗口不足或基准缺失返回 NaN。
+    """
+    if len(close) <= lookback or len(benchmark_close) <= lookback:
+        return float("nan")
+    sector_close_today = _safe_float(close.iloc[-1])
+    sector_close_prev = _safe_float(close.iloc[-lookback - 1])
+    bench_close_today = _safe_float(benchmark_close.iloc[-1])
+    bench_close_prev = _safe_float(benchmark_close.iloc[-lookback - 1])
+    if sector_close_prev <= 0 or bench_close_prev <= 0:
+        return float("nan")
+    sector_ret = sector_close_today / sector_close_prev - 1.0
+    bench_ret = bench_close_today / bench_close_prev - 1.0
+    return _safe_float(sector_ret - bench_ret)
+
+
 # ----- 板块层短期特征 -----------------------------------------------------------
 
 
@@ -105,33 +124,18 @@ def calculate_sector_short_term_features(
     ret_2 = _safe_float(close.iloc[-1] / _previous_value(close, 2) - 1.0) if len(close) >= 3 else float("nan")
     ret_3 = _safe_float(close.iloc[-1] / _previous_value(close, 3) - 1.0) if len(close) >= 4 else float("nan")
 
-    # 相对强度：板块 ret_n 减去基准 ret_n；n 取 1、2。
-    rs_1 = float("nan")
-    rs_2 = float("nan")
-    if len(close) >= 2 and len(benchmark_close) >= 2:
-        bench_ret_1 = _safe_float(
-            benchmark_close.iloc[-1] / _previous_value(benchmark_close, 1) - 1.0
-        )
-        if not np.isnan(bench_ret_1):
-            rs_1 = ret_1 - bench_ret_1
-    if len(close) >= 3 and len(benchmark_close) >= 3:
-        bench_ret_2 = _safe_float(
-            benchmark_close.iloc[-1] / _previous_value(benchmark_close, 2) - 1.0
-        )
-        if not np.isnan(bench_ret_2):
-            rs_2 = ret_2 - bench_ret_2
+    # 相对强度：板块 ret_n 减去基准 ret_n；n 取 1、2、5。
+    rs_1 = _relative_strength(close, benchmark_close, lookback=1)
+    rs_2 = _relative_strength(close, benchmark_close, lookback=2)
+    rs_5 = _relative_strength(close, benchmark_close, lookback=5)
 
     # 5 日相对强度的 1 日变化：rs_5 当日 - rs_5 昨日。
     rs5_accel_1d = float("nan")
     if len(close) >= 6 and len(benchmark_close) >= 6:
-        def _rs5(window_close: pd.Series, window_bench: pd.Series) -> float:
-            if len(window_close) < 6 or len(window_bench) < 6:
-                return float("nan")
-            sector_ret = window_close.iloc[-1] / window_close.iloc[-6] - 1.0
-            bench_ret = window_bench.iloc[-1] / window_bench.iloc[-6] - 1.0
-            return _safe_float(sector_ret - bench_ret)
-
-        rs5_accel_1d = _rs5(close, benchmark_close) - _rs5(close.iloc[:-1], benchmark_close.iloc[:-1])
+        rs5_today = _relative_strength(close, benchmark_close, lookback=5)
+        rs5_yesterday = _relative_strength(close.iloc[:-1], benchmark_close.iloc[:-1], lookback=5)
+        if not np.isnan(rs5_today) and not np.isnan(rs5_yesterday):
+            rs5_accel_1d = _safe_float(rs5_today - rs5_yesterday)
 
     # ma5_slope：MA5 末日 - 前一日值。
     ma5 = close.rolling(5, min_periods=5).mean() if len(close) >= 5 else pd.Series(dtype=float)
@@ -186,29 +190,30 @@ def calculate_sector_short_term_features(
             limit_down = float(latest.get("limit_down", 0) or 0)
             limit_up_ratio = _safe_float(limit_up / total_house)
             limit_down_ratio = _safe_float(limit_down / total_house)
-        streak_top_limit_up = _streak(
-            pd.to_numeric(sector_daily_extras.get("limit_up"), errors="coerce").fillna(0) >= 1,
-            streak_cap,
-        )
-        breadth_up_series = _breadth_up_series(sector_daily_extras)
-        if not breadth_up_series.empty:
-            last_value = breadth_up_series.iloc[-1]
-            breadth_up = _safe_float(last_value)
-        streak_high_breadth = _streak(breadth_up_series.dropna() > 0.5, streak_cap)
+            rise_count = float(latest.get("rise_count", 0) or 0)
+            breadth_up = _safe_float(rise_count / total_house)
+        rise_history = pd.to_numeric(sector_daily_extras.get("rise_count"), errors="coerce").fillna(0)
+        flat_history = pd.to_numeric(sector_daily_extras.get("flat_count"), errors="coerce").fillna(0)
+        fall_history = pd.to_numeric(sector_daily_extras.get("fall_count"), errors="coerce").fillna(0)
+        denom_history = rise_history + flat_history + fall_history
+        high_breadth_history = (rise_history / denom_history.where(denom_history > 0)) > 0.5
+        streak_high_breadth = _streak(high_breadth_history.fillna(False), streak_cap)
+        limit_up_history = pd.to_numeric(sector_daily_extras.get("limit_up"), errors="coerce").fillna(0)
+        streak_top_limit_up = _streak(limit_up_history >= 1, streak_cap)
 
-    # —— 个股层面广度（来自 ``member_amount_history``） ————————————————————
     breadth_features = _calculate_member_breadth_features(
         member_amount_history,
         streak_cap,
         int(config.min_member_samples),
     )
 
-    features = {
+    result: dict[str, float] = {
         "ret_1": ret_1,
         "ret_2": ret_2,
         "ret_3": ret_3,
         "rs_1": rs_1,
         "rs_2": rs_2,
+        "rs_5": rs_5,
         "rs5_accel_1d": rs5_accel_1d,
         "ma5_slope": ma5_slope,
         "rvol_1_20": rvol_1_20,
@@ -218,12 +223,12 @@ def calculate_sector_short_term_features(
         "breadth_up": breadth_up,
         "limit_up_ratio": limit_up_ratio,
         "limit_down_ratio": limit_down_ratio,
-        "streak_pos_ret": int(streak_pos_ret),
-        "streak_high_breadth": int(streak_high_breadth),
-        "streak_top_limit_up": int(streak_top_limit_up),
+        "streak_pos_ret": float(streak_pos_ret),
+        "streak_high_breadth": float(streak_high_breadth),
+        "streak_top_limit_up": float(streak_top_limit_up),
     }
-    features.update(breadth_features)
-    return features
+    result.update(breadth_features)
+    return result
 
 
 def _calculate_member_breadth_features(
@@ -231,12 +236,14 @@ def _calculate_member_breadth_features(
     streak_cap: int,
     min_member_samples: int,
 ) -> dict[str, float]:
-    """从个股面板计算 ``breadth_above_ma5``、``breadth_new_high_5`` 等需要个股的字段。
+    """根据个股面板计算短期广度 4 项 + intraday_range / ret_dispersion。
 
-    注意：``breadth_up`` 与 ``streak_high_breadth`` 已从板块日线计算（与 v1 口径一致），
-    本函数不重复计算。
+    返回:
+        包含 ``breadth_above_ma5`` / ``breadth_new_high_5`` / ``breadth_strong_1d`` /
+        ``breadth_weak_1d`` / ``breadth_rvol_1d`` / ``intraday_range`` / ``ret_dispersion``
+        的字典；个股面板不足时返回空值。
     """
-    empty = {
+    empty: dict[str, float] = {
         "breadth_above_ma5": float("nan"),
         "breadth_new_high_5": float("nan"),
         "breadth_strong_1d": float("nan"),
@@ -246,8 +253,6 @@ def _calculate_member_breadth_features(
         "ret_dispersion": float("nan"),
     }
     if member_amount_history is None or member_amount_history.empty:
-        return empty
-    if "close" not in member_amount_history.columns:
         return empty
 
     history = member_amount_history.copy()
