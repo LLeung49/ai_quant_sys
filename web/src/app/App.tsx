@@ -8,7 +8,7 @@ import { MacdPoolPage } from "../features/sector-rotation/MacdPoolPage";
 type WorkspaceTab = "rotation" | "macd";
 
 const TAB_META: Record<WorkspaceTab, { label: string; caption: string; Icon: typeof Activity }> = {
-  macd: { label: "MACD 板块池", caption: "MACD POOL · 动能与趋势筛选", Icon: DatabaseZap },
+  macd: { label: "MACD 标的池", caption: "MACD POOL · 动能与趋势筛选", Icon: DatabaseZap },
   rotation: { label: "板块轮动", caption: "SECTOR ROTATION · 申万行业研究", Icon: Activity },
 };
 
