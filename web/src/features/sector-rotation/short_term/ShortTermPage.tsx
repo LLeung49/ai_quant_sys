@@ -1,12 +1,14 @@
-/** v2_short_term 短期异动页面：KPI + 异动榜。气泡图因解读价值有限已下线。 */
+/** v2_short_term 短期异动独立页面:API + 异动榜。短期历史详情抽屉已下线,改用统一的 SectorDetailDrawer。*/
+
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarRange } from "lucide-react";
-import { fetchShortTermAvailableDates, fetchShortTermSnapshot, type ShortTermSector } from "./api";
-import { SHORT_TERM_LABEL_WHITELIST, type ShortTermLabel } from "./api";
+import { fetchShortTermAvailableDates, fetchShortTermSnapshot, SHORT_TERM_LABEL_WHITELIST, type ShortTermLabel, type ShortTermSector } from "./api";
 import { ShortTermKpi } from "./ShortTermKpi";
 import { ShortTermLeaders } from "./ShortTermLeaders";
-import { ShortTermDetailDrawer } from "./ShortTermDetailDrawer";
+import { SectorDetailDrawer } from "../detail/SectorDetailDrawer";
+import { useRotationData } from "../useRotationData";
+import type { SectorPoint } from "../api";
 
 const DEFAULT_LEVEL: 1 | 2 = 2;
 const DEFAULT_MODEL = "v2_short_term";
@@ -28,18 +30,45 @@ function isLabel(value: string): value is ShortTermLabel {
   return (SHORT_TERM_LABEL_WHITELIST as readonly string[]).includes(value);
 }
 
-/** 板块至少命中一个标签或强度档位非 none 时才算有异动。 */
+/** 板块至少命中一个标签或强度档位非 none 时才算有异动。*/
 function hasAnomaly(sector: ShortTermSector): boolean {
   if (sector.short_term_intensity && sector.short_term_intensity !== "none") return true;
   const labels = (sector.short_term_labels ?? "").split(",").map((part) => part.trim()).filter(Boolean);
   return labels.length > 0;
 }
 
+function toDetailSector(sector: SectorPoint) {
+  const num = (v: unknown): number | null => (typeof v === "number" && !Number.isNaN(v) ? v : null);
+  const numOpt = (v: unknown): number | null | undefined => {
+    if (v == null) return v as null | undefined;
+    return typeof v === "number" && !Number.isNaN(v) ? v : null;
+  };
+  const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
+  return {
+    sector_name: sector.sector_name,
+    phase_confirmed: str(sector.phase_confirmed),
+    phase_age: numOpt(sector.phase_age),
+    phase_confidence: num(sector.phase_confidence),
+    composite_rank: num(sector.composite_rank),
+    rank_change_1d: num(sector.rank_change_1d),
+    coverage_ratio: numOpt(sector.coverage_ratio),
+    trend_level_score: num(sector.trend_level_score),
+    velocity_score: num(sector.velocity_score),
+    acceleration_score: num(sector.acceleration_score),
+    participation_score: num(sector.participation_score),
+    volume_score: num(sector.volume_score),
+    lifecycle_state: sector.lifecycle_state ?? null,
+    lifecycle_reason: sector.lifecycle_reason ?? null,
+    lifecycle_changed: sector.lifecycle_changed == null ? null : Boolean(sector.lifecycle_changed),
+    lifecycle_age: numOpt(sector.lifecycle_age),
+  };
+}
+
 /**
- * 短期异动独立页面：顶部 KPI、异动榜，板块详情抽屉。
+ * 短期异动独立页面:顶部 KPI、异动榜、板块详情抽屉。
  *
- * 输入：无；状态由 URL 与用户交互驱动。
- * 输出：完整的异动观察页面，可在 ``App.tsx`` 中作为单独标签页渲染。
+ * 输入:无;状态由 URL 与用户交互驱动。
+ * 输出:完整的异动观察页面,可在 App.tsx 中作为单独标签页渲染。
  */
 export function ShortTermPage() {
   const [level, setLevel] = useState<1 | 2>(DEFAULT_LEVEL);
@@ -66,6 +95,13 @@ export function ShortTermPage() {
     enabled: Boolean(effectiveDate),
   });
 
+  // v1 快照,只为详情抽屉提供 lifecycle / phase / 评分族字段;queryKey 与 SectorRotationPage 共用。
+  const v1Rotation = useRotationData(level, "v1", effectiveDate);
+  const v1Sectors = useMemo<SectorPoint[]>(
+    () => (v1Rotation.snapshot.data?.sectors ?? []) as SectorPoint[],
+    [v1Rotation.snapshot.data],
+  );
+
   const sectors = snapshotQuery.data?.sectors ?? [];
   const isScoreEligible = (sector: ShortTermSector) => Boolean(sector.score_eligible);
   const filteredSectors = useMemo<ShortTermSector[]>(() => {
@@ -78,6 +114,11 @@ export function ShortTermPage() {
     if (!selectedSectorName) return null;
     return sectors.find((sector) => sector.sector_name === selectedSectorName) ?? null;
   }, [sectors, selectedSectorName]);
+
+  const selectedV1Sector = useMemo(() => {
+    if (!selectedSectorName) return null;
+    return v1Sectors.find((sector) => sector.sector_name === selectedSectorName) ?? null;
+  }, [v1Sectors, selectedSectorName]);
 
   const meta = snapshotQuery.data?.meta;
   const isLatestDate = effectiveDate != null && availableDatesQuery.data?.dates?.[0] === effectiveDate;
@@ -133,7 +174,7 @@ export function ShortTermPage() {
             <span><strong>最近成功日期</strong> {availableDatesQuery.data.dates[0]}</span>
           )}
           {meta?.source_max_trade_date && (
-            <span><strong>上游行情截至</strong> {meta.source_max_trade_date}</span>
+            <span><strong>上交所行情截止</strong> {meta.source_max_trade_date}</span>
           )}
           {meta?.field_version && (
             <span className="short-term-toolbar__version">{meta.field_version}</span>
@@ -141,13 +182,13 @@ export function ShortTermPage() {
         </div>
       </header>
 
-      {availableDatesQuery.isLoading && <div className="empty-panel" role="status">正在加载可用日期…</div>}
+      {availableDatesQuery.isLoading && <div className="empty-panel" role="status">正在加载可用日期...</div>}
       {!availableDatesQuery.isLoading && !effectiveDate && (
         <div className="empty-panel" role="status">
           当前模型版本（{DEFAULT_MODEL}）暂无可用快照。请确认后端是否已成功运行。
         </div>
       )}
-      {effectiveDate && snapshotQuery.isLoading && <div className="empty-panel" role="status">短期异动快照加载中…</div>}
+      {effectiveDate && snapshotQuery.isLoading && <div className="empty-panel" role="status">短期异动快照加载中...</div>}
       {snapshotQuery.isError && (
         <div className="empty-panel" role="status">
           短期异动数据加载失败：{snapshotQuery.error instanceof Error ? snapshotQuery.error.message : "未知错误"}
@@ -165,7 +206,16 @@ export function ShortTermPage() {
         </>
       )}
 
-      <ShortTermDetailDrawer sector={selectedSector} onClose={() => setSelectedSectorName(null)} level={level} asOfDate={effectiveDate ?? ""} isLatestDate={isLatestDate} />
+      {selectedV1Sector && (
+        <SectorDetailDrawer
+          sector={toDetailSector(selectedV1Sector)}
+          shortTerm={selectedSector}
+          level={level}
+          asOfDate={effectiveDate ?? ""}
+          isLatestDate={isLatestDate}
+          onClose={() => setSelectedSectorName(null)}
+        />
+      )}
     </div>
   );
 }

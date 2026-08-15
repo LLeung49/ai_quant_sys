@@ -1350,3 +1350,340 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
   .next-day-watch__grid { grid-template-columns: minmax(0, 1fr); }
   .next-day-watch__caption { font-size: 10px; }
 }
+
+/* ============================================================
+ * P3 详情抽屉统一化 + 5 日连续性 strip (Task 8)
+ * ============================================================
+ * 新增类:
+ * - .detail-two-col:详情抽屉内的双列布局(短期命中 + 中长期观察)
+ * - .detail-col / .detail-col--short-term / .detail-col--v1:双列的具体列
+ * - .short-term-strip:5 日连续性 strip 容器
+ * - .short-term-strip__cell:每个交易日单元格
+ * - .short-term-strip__cell.is-now:当日单元格强调
+ * - .short-term-strip__cell.is-empty:无命中占位
+ * - .short-term-strip__cell.is-intense / .is-moderate / .is-mild:三档强度背景色
+ * - .short-term-empty:短期列空态卡片
+ * - .short-term-summary / .short-term-labels / .short-term-returns / .short-term-breadth:短期列内部区段
+ * - .short-term-intensity-chip / .short-term-label-chip:短期列 chip
+ * - .detail-phase:中长期观察列内的阶段 / 置信度区段
+ * ============================================================ */
+
+.detail-two-col {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  margin-top: 18px;
+}
+.detail-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(115, 142, 184, 0.22);
+  border-radius: 10px;
+  background: rgba(7, 16, 29, 0.4);
+}
+.detail-col__title {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.detail-col--short-term { border-color: rgba(255, 132, 71, 0.28); }
+.detail-col--v1 { border-color: rgba(115, 142, 184, 0.32); }
+
+/* --- 短期列内部区段 --- */
+.short-term-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.short-term-summary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(7, 16, 29, 0.5);
+}
+.short-term-summary span {
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+.short-term-summary strong {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+.short-term-intensity-chip {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid currentColor;
+  align-self: flex-start;
+}
+
+.short-term-labels h4,
+.short-term-returns h4,
+.short-term-breadth h4 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.short-term-labels > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.short-term-label-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(115, 142, 184, 0.18);
+  border: 1px solid rgba(115, 142, 184, 0.32);
+  color: var(--text);
+  font-size: 11px;
+}
+.short-term-returns dl,
+.short-term-breadth dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 4px 14px;
+  margin: 0;
+}
+.short-term-returns dt,
+.short-term-breadth dt {
+  font-size: 11px;
+  color: var(--muted);
+}
+.short-term-returns dd,
+.short-term-breadth dd {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  text-align: right;
+}
+
+.short-term-empty {
+  margin: 0;
+  padding: 14px;
+  border-radius: 8px;
+  background: rgba(7, 16, 29, 0.5);
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* --- 中长期观察列内阶段 / 置信度区段 --- */
+.detail-phase {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(7, 16, 29, 0.45);
+}
+.detail-phase > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.detail-phase span {
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: 0.04em;
+}
+.detail-phase strong {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ============================================================
+ * 5 日连续性 strip 组件
+ * ============================================================ */
+
+.short-term-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 14px;
+  border: 1px solid rgba(115, 142, 184, 0.22);
+  border-radius: 10px;
+  background: rgba(7, 16, 29, 0.4);
+}
+
+.short-term-strip__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.short-term-strip__eyebrow {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.short-term-strip__title {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+}
+.short-term-strip__hint {
+  margin: 0;
+  font-size: 10px;
+  color: var(--subtle);
+  max-width: 320px;
+  text-align: right;
+  line-height: 1.5;
+}
+
+.short-term-strip__loading,
+.short-term-strip__error {
+  margin: 0;
+  padding: 14px 0;
+  text-align: center;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.short-term-strip__table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 6px 4px;
+  table-layout: fixed;
+}
+.short-term-strip__th {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+  letter-spacing: 0.04em;
+  position: relative;
+  padding-bottom: 2px;
+}
+
+.short-term-strip__cell {
+  position: relative;
+  height: 44px;
+  min-width: 56px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  text-align: center;
+  vertical-align: middle;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  overflow: hidden;
+}
+.short-term-strip__cell svg {
+  display: block;
+  margin: 0 auto 2px;
+}
+.short-term-strip__cell-text {
+  display: block;
+  font-size: 10px;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+.short-term-strip__cell.is-empty {
+  background: rgba(127, 141, 163, 0.14);
+  color: var(--subtle);
+}
+.short-term-strip__cell.is-empty span {
+  display: block;
+  font-size: 14px;
+  color: var(--subtle);
+}
+
+.short-term-strip__cell.is-intense {
+  background: rgba(255, 107, 53, 0.18);
+  border-left: 4px solid #ff6b35;
+}
+.short-term-strip__cell.is-moderate {
+  background: rgba(240, 182, 90, 0.18);
+  border-left: 4px solid #f0b65a;
+}
+.short-term-strip__cell.is-mild {
+  background: rgba(103, 195, 162, 0.18);
+  border-left: 4px solid #67c3a2;
+}
+
+.short-term-strip__cell.is-now {
+  border: 1.5px solid #ffd9b3;
+  box-shadow: inset 0 0 0 1px rgba(255, 217, 179, 0.25);
+}
+
+.short-term-strip__now-dot {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffd9b3;
+  box-shadow: 0 0 6px rgba(255, 217, 179, 0.7);
+}
+
+/* ============================================================
+ * 响应式断点
+ * ============================================================ */
+
+@media (max-width: 1100px) {
+  .detail-two-col {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .short-term-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .short-term-returns dl,
+  .short-term-breadth dl {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 760px) {
+  .detail-two-col {
+    gap: 12px;
+  }
+  .short-term-strip {
+    padding: 12px;
+  }
+  .short-term-strip__hint {
+    max-width: none;
+    text-align: left;
+  }
+  .short-term-strip__table {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+    border-spacing: 6px 4px;
+  }
+  .short-term-strip__cell {
+    min-width: 64px;
+  }
+  .short-term-strip__th,
+  .short-term-strip__cell {
+    min-width: 64px;
+  }
+}
