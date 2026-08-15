@@ -18,7 +18,7 @@ import { INTENSITY_META, getShortTermLabelMeta } from "../short_term/labels";
 import type { ShortTermHistoryResponse } from "../short_term/api";
 import { STRIP_WINDOW_DAYS, buildShortTermStripRow, describeStripCell, type StripCell } from "./shortTermStrip";
 
-export interface ShortTermStripProps {
+export interface ShortTermStripViewProps {
   history: ShortTermHistoryResponse | null;
   sectorName: string;
   asOfDate: string;
@@ -88,7 +88,7 @@ function NowIndicator() {
   return <span className="short-term-strip__now-dot" aria-hidden="true" />;
 }
 
-export function ShortTermStrip({ history, sectorName, asOfDate, days = STRIP_WINDOW_DAYS, isLoading = false, isError = false }: ShortTermStripProps) {
+export function ShortTermStripView({ history, sectorName, asOfDate, days = STRIP_WINDOW_DAYS, isLoading = false, isError = false }: ShortTermStripViewProps) {
   const cells = buildShortTermStripRow(history, sectorName, asOfDate, days);
   const isNow = (cell: StripCell) => cell.as_of_date === asOfDate;
 
