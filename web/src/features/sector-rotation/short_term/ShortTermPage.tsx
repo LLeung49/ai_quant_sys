@@ -1,4 +1,4 @@
-﻿/** v2_short_term 短期异动页面：KPI + 异动榜。气泡图因解读价值有限已下线。 */
+/** v2_short_term 短期异动页面：KPI + 异动榜。气泡图因解读价值有限已下线。 */
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarRange } from "lucide-react";
@@ -80,6 +80,7 @@ export function ShortTermPage() {
   }, [sectors, selectedSectorName]);
 
   const meta = snapshotQuery.data?.meta;
+  const isLatestDate = effectiveDate != null && availableDatesQuery.data?.dates?.[0] === effectiveDate;
   const summaryText = useMemo(() => {
     if (!meta) return "";
     const eligible = meta.eligible_sector_count ?? null;
@@ -154,7 +155,7 @@ export function ShortTermPage() {
       )}
       {snapshotQuery.data && (
         <>
-          <ShortTermKpi meta={meta} />
+          <ShortTermKpi meta={meta} onSectorSelect={setSelectedSectorName} />
           {summaryText && <p className="short-term-summary-note" role="note">{summaryText}</p>}
           <ShortTermLeaders
             sectors={filteredSectors}
@@ -164,7 +165,7 @@ export function ShortTermPage() {
         </>
       )}
 
-      <ShortTermDetailDrawer sector={selectedSector} onClose={() => setSelectedSectorName(null)} />
+      <ShortTermDetailDrawer sector={selectedSector} onClose={() => setSelectedSectorName(null)} level={level} asOfDate={effectiveDate ?? ""} isLatestDate={isLatestDate} />
     </div>
   );
 }

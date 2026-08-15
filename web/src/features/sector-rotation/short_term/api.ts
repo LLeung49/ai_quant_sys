@@ -13,6 +13,10 @@ const responseMetaSchema = z.object({
   volume_spike_count: z.number().int().nullable(),
   limit_cluster_count: z.number().int().nullable(),
   limit_panic_count: z.number().int().nullable(),
+  pulse_up_sectors: z.array(z.string()).nullable().optional(),
+  volume_spike_sectors: z.array(z.string()).nullable().optional(),
+  limit_cluster_sectors: z.array(z.string()).nullable().optional(),
+  limit_panic_sectors: z.array(z.string()).nullable().optional(),
 });
 export type ShortTermResponseMeta = z.infer<typeof responseMetaSchema>;
 
