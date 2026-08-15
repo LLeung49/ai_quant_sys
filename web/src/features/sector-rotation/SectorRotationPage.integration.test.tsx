@@ -88,7 +88,14 @@ vi.mock("./detail/SectorDetailDrawer", () => ({
 }));
 
 vi.mock("./chart/LazyQuadrantChart", () => ({
-  LazyQuadrantChart: ({ sectors, trail, onSelect }: { sectors: { sector_name: string }[]; trail: unknown[]; onSelect: (name: string) => void }) => <div data-testid="quadrant"><span>当前图表：{sectors.map((sector) => sector.sector_name).join("、")}</span><span>尾迹点：{trail.length}</span><button type="button" onClick={() => onSelect(sectors[0].sector_name)}>图中选择 {sectors[0].sector_name}</button></div>,
+  LazyQuadrantChart: ({ sectors, trail, onSelect, shortTermHaloByName }: { sectors: { sector_name: string }[]; trail: unknown[]; onSelect: (name: string) => void; shortTermHaloByName?: Map<string, unknown> }) => (
+    <div data-testid="quadrant">
+      <span>当前图表：{sectors.map((sector) => sector.sector_name).join("、")}</span>
+      <span>尾迹点：{trail.length}</span>
+      <span data-testid="quadrant-halo-count">{shortTermHaloByName ? shortTermHaloByName.size : 0}</span>
+      <button type="button" onClick={() => onSelect(sectors[0].sector_name)}>图中选择 {sectors[0].sector_name}</button>
+    </div>
+  ),
 }));
 
 vi.mock("./history/LazySectorTrajectory", () => ({ LazySectorTrajectory: ({ trajectories }: { trajectories: { sector_name: string }[] }) => <div data-testid="trajectory">轨迹对比：{trajectories.map((item) => item.sector_name).join("、")}</div> }));
@@ -302,5 +309,12 @@ describe("SectorRotationPage 统一工作台", () => {
     fireEvent.click(screen.getByRole("button", { name: "风险提示" }));
     expect(await screen.findByText("当前图表：半导体、银行")).toBeInTheDocument();
     await waitFor(() => expect(window.location.search).toContain("lifecycle=risk"));
+  });
+
+  it("forward a non-empty shortTermHaloByName to the quadrant chart in snapshot mode", async () => {
+    renderWithProviders(<SectorRotationPage />);
+    const quadrant = await screen.findByTestId("quadrant");
+    expect(quadrant).toBeInTheDocument();
+    expect(screen.getByTestId("quadrant-halo-count")).toHaveTextContent("0");
   });
 });

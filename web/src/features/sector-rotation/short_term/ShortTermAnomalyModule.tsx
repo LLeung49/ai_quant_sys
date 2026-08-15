@@ -1,16 +1,15 @@
-﻿/** 板块轮动工作台内嵌入的“短期异动模块”： 2×2 KPI 加异动榜。 */
+﻿/** 板块轮动工作台内嵌入的"短期异动模块":2x2 KPI 加异动榜与候选面板。 */
 import { useCallback, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CalendarRange, Filter } from "lucide-react";
-import { fetchShortTermAvailableDates, fetchShortTermSnapshot, SHORT_TERM_LABEL_WHITELIST, type ShortTermLabel, type ShortTermSector } from "./api";
+import { fetchShortTermAvailableDates, SHORT_TERM_LABEL_WHITELIST, type ShortTermLabel, type ShortTermSector } from "./api";
 import { ShortTermKpi } from "./ShortTermKpi";
 import { ShortTermLeaders } from "./ShortTermLeaders";
 import { ShortTermDetailDrawer } from "./ShortTermDetailDrawer";
 import { NextDayWatchPanel } from "./NextDayWatchPanel";
 import { HintIcon } from "../HintIcon";
 import { parseLabelsCsv } from "./labels";
-
-const DEFAULT_MODEL = "v2_short_term";
+import { useShortTermHaloSectors } from "./useShortTermHaloSectors";
 
 const LABEL_FILTER_OPTIONS: Array<{ value: ShortTermLabel | "all"; label: string }> = [
   { value: "all", label: "全部标签" },
@@ -36,21 +35,24 @@ function hasAnomaly(sector: ShortTermSector): boolean {
 }
 
 export interface ShortTermAnomalyModuleProps {
-  /** 与板块轮动页面共享的申万行业层级。 */
+  /** 与板块轮动页面共享的当日行业层级。 */
   level: 1 | 2;
-  /** 与板块轮动页面共享的当前成功快照日期。未提供时则会自动退回最近可用日期。 */
+  /** 与板块轮动页面共享的当前成功快照日期。未提供时会自动回退到最近可用日期。 */
   asOfDate: string;
-  /** 作为层级提供的最近成功日期列表，未提供则不展示。 */
+  /** 作为层级提供的最近成功日期列表,未提供则不展示。 */
   availableDates?: string[];
-  /** 输入：点击名称；输出：通知父页面同步选中状态以打开详情抽屉。 */
+  /** 输入:点击名称;输出:通知父页面同步选中状态以打开详情抽屉。 */
   onSectorSelect?: (sectorName: string) => void;
 }
 
 /**
- * 渲染“短期异动模块”： 2×2 KPI 加异动榜的统一面板。
+ * 渲染"短期异动模块":2x2 KPI 加异动榜的统一面板。
  *
- * 输入：与板块轮动页面共享的行业层级与当前日期，可选参数由父页控制。
- * 输出：与主面板风格一致的“市场环境”同一层级的短期异动面板，包含标题、 KPI 与异动榜以及板块详情抽屉。
+ * 输入:与板块轮动页面共享的行业层级与当前日期,可选参数由父页面控制。
+ * 输出:与主面板调性一致的"市场环境"同一层级的短期异动面板,包含标题、KPI 与异动榜以及板块详情抽屉。
+ *
+ * 数据请求统一通过 useShortTermHaloSectors hook,与 SectorRotationPage 共用 queryKey 以实现
+ * TanStack Query 自动 dedupe,避免在两个组件里都调用 fetchShortTermSnapshot。
  */
 export function ShortTermAnomalyModule({ level, asOfDate, availableDates, onSectorSelect }: ShortTermAnomalyModuleProps) {
   const [labelFilter, setLabelFilter] = useState<ShortTermLabel | "all">("all");
@@ -58,21 +60,17 @@ export function ShortTermAnomalyModule({ level, asOfDate, availableDates, onSect
 
   const availableDatesQuery = useQuery({
     queryKey: ["short-term-available-dates", level],
-    queryFn: () => fetchShortTermAvailableDates(level, DEFAULT_MODEL),
+    queryFn: () => fetchShortTermAvailableDates(level),
     staleTime: 5 * 60 * 1000,
     enabled: !availableDates,
   });
 
   const effectiveAvailableDates = availableDates ?? availableDatesQuery.data?.dates;
 
-  const snapshotQuery = useQuery({
-    queryKey: ["short-term-snapshot", level, asOfDate],
-    queryFn: () => fetchShortTermSnapshot(asOfDate, level, DEFAULT_MODEL),
-    enabled: Boolean(asOfDate),
-  });
-
-  const sectors = snapshotQuery.data?.sectors ?? [];
-  const meta = snapshotQuery.data?.meta;
+  const haloQuery = useShortTermHaloSectors(level, asOfDate);
+  const sectors = haloQuery.sectors;
+  const meta = haloQuery.snapshot?.meta ?? null;
+  const isLatestDate = asOfDate != null && effectiveAvailableDates?.[0] === asOfDate;
 
   const summaryText = useMemo(() => {
     if (!meta) return "";
@@ -100,7 +98,6 @@ export function ShortTermAnomalyModule({ level, asOfDate, availableDates, onSect
   }, [onSectorSelect]);
 
   const lastSuccessDate = effectiveAvailableDates?.[0];
-  const fieldVersion = meta?.field_version;
   const sourceCutoff = meta?.source_max_trade_date;
 
   return (
@@ -113,7 +110,7 @@ export function ShortTermAnomalyModule({ level, asOfDate, availableDates, onSect
           <HintIcon
             tone="cool"
             placement="left"
-            text="同一快照日期下的极短期异动示例，右侧供可点击详查。"
+            text="同一快照日期下的极短期异动示例，右侧可点击详情。"
           />
           <label className="short-term-anomaly__filter">
             <Filter aria-hidden="true" size={12} />
@@ -132,12 +129,12 @@ export function ShortTermAnomalyModule({ level, asOfDate, availableDates, onSect
 
       <div className="short-term-anomaly__meta">
         {lastSuccessDate && <span><strong>最近成功日期</strong> {lastSuccessDate}</span>}
-        {sourceCutoff && <span><strong>上游行情截至</strong> {sourceCutoff}</span>}
+        {sourceCutoff && <span><strong>上交所行情截止</strong> {sourceCutoff}</span>}
         {summaryText && <span className="short-term-anomaly__summary">{summaryText}</span>}
       </div>
 
       <div className="short-term-anomaly__kpi short-term-anomaly__kpi--top">
-        <ShortTermKpi meta={meta} layout="grid" />
+        <ShortTermKpi meta={meta ?? undefined} layout="grid" onSectorSelect={handleSelect} />
       </div>
       <NextDayWatchPanel sectors={sectors} onSelect={handleSelect} />
       <div className="short-term-anomaly__heatmaps">
@@ -145,7 +142,7 @@ export function ShortTermAnomalyModule({ level, asOfDate, availableDates, onSect
         <ShortTermLeaders direction="down" sectors={filteredSectors} selectedSectorName={selectedSectorName} onSelect={handleSelect} />
       </div>
 
-      <ShortTermDetailDrawer sector={selectedSector} onClose={() => setSelectedSectorName(null)} />
+      <ShortTermDetailDrawer sector={selectedSector} onClose={() => setSelectedSectorName(null)} level={level} asOfDate={asOfDate} isLatestDate={isLatestDate} />
     </section>
   );
 }

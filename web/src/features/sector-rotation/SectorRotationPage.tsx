@@ -25,6 +25,10 @@ import { parseWorkbenchUrl, serializeWorkbenchUrl, type LabelDensity, type Workb
 import { findPreviousLifecycle, hasLifecycleCoverage, matchesLifecycleFilter } from "./lifecycle/derive";
 import type { LifecycleFilter } from "./lifecycle/meta";
 import type { SectorPoint } from "./api";
+import { useShortTermHaloSectors } from "./short_term/useShortTermHaloSectors";
+import { buildShortTermHaloIndex } from "./chart/shortTermHalo";
+import { INTENSITY_META } from "./short_term/labels";
+import type { ShortTermHaloInfo } from "./chart/shortTermHalo";
 
 type DisplaySector = SectorPoint & QuadrantSector & RankingSector & DetailSector & {
   as_of_date: string;
@@ -94,6 +98,12 @@ export function SectorRotationPage() {
   const replayDate = replayState.dates[replayState.index];
   const displayDate = mode === "replay" ? replayDate : loadedSnapshotDate;
   const urlDate = mode === "replay" ? displayDate : selectedDate;
+
+  const haloQuery = useShortTermHaloSectors(level, displayDate);
+  const shortTermHaloByName = useMemo<ReadonlyMap<string, ShortTermHaloInfo>>(
+    () => (mode === "snapshot" && !haloQuery.isLoading ? buildShortTermHaloIndex(haloQuery.sectors) : new Map()),
+    [mode, haloQuery.isLoading, haloQuery.sectors],
+  );
 
   useEffect(() => {
     const nextSearch = serializeWorkbenchUrl({ date: urlDate, level, mode, phase: phaseFilter, query: searchQuery, sector: selectedSectorName, historyWindow, labelDensity, lifecycle: lifecycleFilter, changedOnly });
@@ -199,11 +209,26 @@ export function SectorRotationPage() {
           <div className="phase-legend">{Object.entries(PHASE_META).filter(([key]) => key !== "neutral").map(([key, meta]) => <span key={key}><i style={{ background: meta.color }} />{meta.label}</span>)}</div>
           <label className="label-density"><span>标注密度</span><select value={labelDensity} onChange={(event) => setLabelDensity(event.target.value as LabelDensity)}><option value="compact">精简</option><option value="focus">关注</option><option value="all">全部</option></select></label>
         </div>
+        {mode === "snapshot" && (
+          <div className="quadrant-anomaly-legend" role="group" aria-label="短期异动强度图例">
+            <span className="quadrant-anomaly-legend__title">短期异动强度</span>
+            {(["intense", "moderate", "mild"] as const).map((tone) => {
+              const meta = INTENSITY_META[tone];
+              return (
+                <span key={tone} className="quadrant-anomaly-legend__item" data-tone={tone}>
+                  <i style={{ background: meta.color }} aria-hidden="true" />
+                  <span>{meta.label}</span>
+                </span>
+              );
+            })}
+            <span className="quadrant-anomaly-legend__hint">当日命中短期标签的行业在右上角展示主标签形状；橙色=强异动,琥珀=中等异动,蓝绿=轻度异动,形状大小随强度同步调整。</span>
+          </div>
+        )}
         {mode === "replay" && <ReplayControls dates={replayState.dates} index={replayState.index} playing={replayState.playing} speed={replayState.speed} dispatch={replayDispatch} />}
         {replayUnavailable
           ? <div className="empty-panel" role="status">{replay.isLoading ? "回放数据加载中" : "回放数据暂不可用"}</div>
           : filteredSectors.length > 0
-            ? <LazyQuadrantChart sectors={filteredSectors} selectedSectorName={selectedSectorName} onSelect={setSelectedSectorName} labelDensity={labelDensity} trail={trail} />
+            ? <LazyQuadrantChart sectors={filteredSectors} selectedSectorName={selectedSectorName} onSelect={setSelectedSectorName} labelDensity={labelDensity} trail={trail} shortTermHaloByName={mode === "snapshot" ? shortTermHaloByName : undefined} />
             : <div className="empty-panel">当前筛选条件下没有可展示行业</div>}
         <footer className="chart-note"><span>气泡大小：量能活跃度</span><span>透明度：阶段置信度</span><span>描边：行业内部参与度</span>{mode === "replay" && selectedSectorName && <span className="trail-note"><Route size={11} />虚线：{selectedSectorName} 近10日尾迹</span>}<span>坐标分数不是收益率</span></footer>
       </article>
