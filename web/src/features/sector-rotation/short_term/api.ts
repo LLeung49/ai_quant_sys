@@ -196,7 +196,7 @@ export async function fetchShortTermHistory(
     level: String(level),
     model_version: modelVersion,
   });
-  sectorNames.forEach((name) => query.append("sector_name", name));
+  sectorNames.forEach((name) => query.append("sector_names", name));
   return historySchema.parse(await requestJson("/api/v1/sector-rotation/short-term/history", query));
 }
 
