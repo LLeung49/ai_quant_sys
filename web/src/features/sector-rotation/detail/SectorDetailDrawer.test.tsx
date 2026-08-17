@@ -197,8 +197,11 @@ describe("SectorDetailDrawer", () => {
     expect(screen.getByText("单日脉冲上涨")).toBeInTheDocument();
     expect(screen.getByText("量能异动")).toBeInTheDocument();
     expect(screen.getByText("评分拆解")).toBeInTheDocument();
-    expect(screen.getByText("排名与数据质量")).toBeInTheDocument();
-    expect(screen.getByText("阶段 / 置信度")).toBeInTheDocument();
+    expect(screen.getByText("数据覆盖率")).toBeInTheDocument();
+    expect(screen.getByText("阶段置信度")).toBeInTheDocument();
+    expect(screen.getByText("阶段持续")).toBeInTheDocument();
+    expect(screen.getByText("当前阶段")).toBeInTheDocument();
+    expect(screen.getByText("综合排名")).toBeInTheDocument();
   });
 
   it("shortTerm 为 null 时短期列显示空态卡片,不抛错", async () => {

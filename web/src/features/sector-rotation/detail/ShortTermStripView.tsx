@@ -53,7 +53,7 @@ function StripCellView({ cell, isNow }: CellVisualProps) {
 
   const [w, h] = getShortTermGlyphSize(primaryLabel, cell.intensity);
   const path = getShortTermGlyphPath(primaryLabel, cell.intensity);
-  const color = getShortTermGlyphColor(cell.intensity);
+  const color = getShortTermGlyphColor(primaryLabel, cell.intensity);
   const meta = getShortTermLabelMeta(primaryLabel);
   const shortText = getShortTermChipText(primaryLabel) ?? primaryLabel;
   const desc = describeStripCell(cell);
@@ -89,15 +89,17 @@ function NowIndicator() {
 }
 
 export function ShortTermStripView({ history, sectorName, asOfDate, days = STRIP_WINDOW_DAYS, isLoading = false, isError = false }: ShortTermStripViewProps) {
-  const cells = buildShortTermStripRow(history, sectorName, asOfDate, days);
+  // buildShortTermStripRow 按 as_of_date desc 返回(最新在前),这里反转成 asc(最旧在前),
+  // 与下方 K 线图 X 轴方向对齐,方便用户左右对照。
+  const cells = buildShortTermStripRow(history, sectorName, asOfDate, days).reverse();
   const isNow = (cell: StripCell) => cell.as_of_date === asOfDate;
 
-  // 决定 strip 实际列数:如果历史不足 N 天,在左侧补空 cell,使 strip 仍对齐 N 列
+  // 历史不足 N 天时,在右侧补空 cell,使 strip 仍对齐 N 列且保持左旧右新。
   const paddedCells: (StripCell | null)[] = [...cells];
   while (paddedCells.length < days) {
-    paddedCells.unshift(null);
+    paddedCells.push(null);
   }
-  const visibleCells = paddedCells.slice(-days);
+  const visibleCells = paddedCells.slice(0, days);
 
   return (
     <section className="short-term-strip" aria-label="5 日连续性时间轴">

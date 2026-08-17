@@ -53,7 +53,23 @@ function formatShortTermValue(field: string, v: number | null | undefined, forma
   return `${(v * 100).toFixed(1)}%`;
 }
 
-/** 短期命中列:展示 composite / rank / 强度 chip / 命中标签 chip / 收益 / 广度。*/
+/**
+ *
+ * 短期命中列:顶部高亮摘要条 + 命中标签 + 收益(全 6 项) + 广度(关键 4 项)。
+ *
+ * 设计意图:
+ * - "短期综合分"作为最重要指标放大字号,行业一眼能看出当日方向;
+ * - "短期排名" + "强度 chip" 同行右侧,强度档再分主次;
+ * - 收益保留全部 6 项;广度只保留最关键的 4 项(上涨家数 / 站上 MA5 / 涨停 / 跌停),
+ *   其余 4 项次要指标暂不展示,避免把卡片撑得过长。
+ */
+const BREADTH_KEY_FIELDS: ReadonlyArray<{ field: string; label: string }> = [
+  { field: "breadth_up", label: "上涨家数占比" },
+  { field: "breadth_above_ma5", label: "站上 MA5 家数占比" },
+  { field: "limit_up_ratio", label: "涨停家数占比" },
+  { field: "limit_down_ratio", label: "跌停家数占比" },
+];
+
 function ShortTermColumn({ shortTerm }: { shortTerm: ShortTermSector | null }) {
   if (!shortTerm) {
     return (
@@ -64,18 +80,21 @@ function ShortTermColumn({ shortTerm }: { shortTerm: ShortTermSector | null }) {
   const intensity = getIntensityMeta(shortTerm.short_term_intensity);
   return (
     <>
-      <div className="short-term-summary">
-        <div><span>短期综合分</span><strong>{shortTerm.short_term_composite?.toFixed(3) ?? "—"}</strong></div>
-        <div><span>短期排名</span><strong>{shortTerm.short_term_composite_rank ?? "—"}</strong></div>
-        <div>
-          <span>强度</span>
-          <span
-            className="short-term-intensity-chip"
-            style={{ background: intensity.softColor, color: intensity.color, borderColor: intensity.color }}
-          >
-            {intensity.label}
-          </span>
+      <div className="short-term-headline">
+        <div className="headline-metric headline-metric--primary">
+          <span>短期综合分</span>
+          <strong>{shortTerm.short_term_composite?.toFixed(3) ?? "—"}</strong>
         </div>
+        <div className="headline-metric">
+          <span>短期排名</span>
+          <strong>{shortTerm.short_term_composite_rank ?? "—"}</strong>
+        </div>
+        <span
+          className="short-term-intensity-chip"
+          style={{ background: intensity.softColor, color: intensity.color, borderColor: intensity.color }}
+        >
+          {intensity.label}
+        </span>
       </div>
       <section className="short-term-labels">
         <h4>命中标签</h4>
@@ -113,9 +132,9 @@ function ShortTermColumn({ shortTerm }: { shortTerm: ShortTermSector | null }) {
         </dl>
       </section>
       <section className="short-term-breadth">
-        <h4>个股层面广度</h4>
+        <h4>广度</h4>
         <dl>
-          {BREADTH_FIELDS.map((f) => {
+          {BREADTH_KEY_FIELDS.map((f) => {
             const value = shortTerm[f.field as keyof ShortTermSector] as number | null | undefined;
             return (
               <div key={f.field}>
@@ -215,19 +234,27 @@ export function SectorDetailDrawer({
           </button>
         </header>
         <section className={`detail-combination-conclusion tone-${conclusion.tone}`} aria-label="组合研究结论">
-          <p className="detail-combination-conclusion__eyebrow">组合研究结论</p>
-          <h3>{conclusion.title}</h3>
-          <p className="detail-combination-conclusion__guidance">{conclusion.guidance}</p>
-          <div className="detail-combination-reason">
-            <span>原因</span>
-            <strong>{getLifecycleReasonLabel(sector.lifecycle_reason)}</strong>
+          <header className="conclusion-header">
+            <span className="conclusion-pill">组合研究结论</span>
+            <h3>{conclusion.title}</h3>
+          </header>
+          <p className="conclusion-guidance">{conclusion.guidance}</p>
+          <p className="conclusion-reason"><span>确认阶段为</span><strong>{getLifecycleReasonLabel(sector.lifecycle_reason)}</strong></p>
+          <div className="conclusion-metrics">
+            <div>
+              <span className="conclusion-metrics__label">持续天数</span>
+              <strong className="conclusion-metrics__value">{sector.lifecycle_age == null ? "数据不足" : `${sector.lifecycle_age} 日`}</strong>
+            </div>
+            <div>
+              <span className="conclusion-metrics__label">今日变化</span>
+              <strong className="conclusion-metrics__value">{sector.lifecycle_changed == null ? "数据不足" : sector.lifecycle_changed ? "是" : "否"}</strong>
+            </div>
+            <div>
+              <span className="conclusion-metrics__label">前态 → 当前态</span>
+              <strong className="conclusion-metrics__value">{previousLifecycle ? `${previousLifecycle.label} → ${lifecycle.label}` : "前一状态暂不可用"}</strong>
+            </div>
           </div>
-          <div className="detail-lifecycle-metrics">
-            <div><span>持续天数</span><strong>{sector.lifecycle_age == null ? "数据不足" : `${sector.lifecycle_age} 日`}</strong></div>
-            <div><span>今日变化</span><strong>{sector.lifecycle_changed == null ? "数据不足" : sector.lifecycle_changed ? "是" : "否"}</strong></div>
-            <div><span>前态 → 当前态</span><strong>{previousLifecycle ? `${previousLifecycle.label} → ${lifecycle.label}` : "前一状态暂不可用"}</strong></div>
-          </div>
-          <p className="detail-combination-conclusion__notice">Lifecycle 为市场状态观察标签,不构成交易建议。</p>
+          <p className="conclusion-notice">Lifecycle 为市场状态观察标签,不构成交易建议。</p>
         </section>
         <section className="detail-market-context" aria-label="板块行情信息">
           <p>板块行情</p>
@@ -241,11 +268,36 @@ export function SectorDetailDrawer({
           </div>
           <div className="detail-col detail-col--v1">
             <h3 className="detail-col__title">中长期观察</h3>
+            {/* 顶部高亮摘要条:阶段 + 综合排名 + 排名变化 */}
+            <div className="v1-headline">
+              <div className="headline-metric">
+                <span>当前阶段</span>
+                <strong>{phaseMeta.label}</strong>
+              </div>
+              <div className="headline-metric">
+                <span>综合排名</span>
+                <strong>{sector.composite_rank == null ? "—" : sector.composite_rank}</strong>
+              </div>
+              <div className="headline-metric headline-metric--rank">
+                <span>单日排名变化</span>
+                <strong>
+                  {sector.rank_change_1d == null
+                    ? "—"
+                    : (
+                      <>
+                        {sector.rank_change_1d >= 0 ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
+                        {Math.abs(sector.rank_change_1d)}
+                      </>
+                    )}
+                </strong>
+              </div>
+            </div>
+            {/* 评分拆解 */}
             <section className="score-breakdown">
-              <div className="detail-section-title">
+              <h4 className="detail-section-title">
                 <span>评分拆解</span>
                 <small>-1 至 1 的当日截面相对得分</small>
-              </div>
+              </h4>
               <dl>
                 {scores.map(([name, value]) => (
                   <div key={name as string}>
@@ -260,35 +312,20 @@ export function SectorDetailDrawer({
                 ))}
               </dl>
             </section>
-            <section className="detail-metrics">
-              <div className="detail-section-title"><span>排名与数据质量</span></div>
-              <div>
-                <span>单日排名变化</span>
-                <strong>
-                  {sector.rank_change_1d == null
-                    ? "—"
-                    : (
-                      <>
-                        {sector.rank_change_1d >= 0 ? <ArrowUp size={14} /> : <ArrowDown size={14} />}
-                        {Math.abs(sector.rank_change_1d)}
-                      </>
-                    )}
-                </strong>
-              </div>
+            {/* 数据质量合并为单行:覆盖率 + 阶段置信度 + 阶段持续 */}
+            <section className="v1-quality">
               <div>
                 <span>数据覆盖率</span>
-                <strong>{sector.coverage_ratio == null ? "数据不足" : `${(sector.coverage_ratio * 100).toFixed(0)}%`}</strong>
+                <strong>{sector.coverage_ratio == null ? "—" : `${(sector.coverage_ratio * 100).toFixed(0)}%`}</strong>
               </div>
               <div>
-                <span>综合排名</span>
-                <strong>{sector.composite_rank == null ? "—" : sector.composite_rank}</strong>
+                <span>阶段置信度</span>
+                <strong>{sector.phase_confidence == null ? "—" : sector.phase_confidence.toFixed(2)}</strong>
               </div>
-            </section>
-            <section className="detail-phase">
-              <div className="detail-section-title"><span>阶段 / 置信度</span></div>
-              <div><span>当前阶段</span><strong>{phaseMeta.label}</strong></div>
-              <div><span>阶段置信度</span><strong>{sector.phase_confidence == null ? "数据不足" : sector.phase_confidence.toFixed(2)}</strong></div>
-              <div><span>阶段持续天数</span><strong>{sector.phase_age == null ? "数据不足" : `${sector.phase_age} 日`}</strong></div>
+              <div>
+                <span>阶段持续</span>
+                <strong>{sector.phase_age == null ? "—" : `${sector.phase_age} 日`}</strong>
+              </div>
             </section>
           </div>
         </section>

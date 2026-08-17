@@ -62,10 +62,10 @@ describe("mobile layout CSS contract", () => {
     expect(css).toMatch(/\.detail-combination-conclusion\.tone-watch\s*\{/);
     expect(css).toMatch(/\.detail-combination-conclusion\.tone-risk\s*\{/);
     expect(css).toMatch(/\.detail-combination-conclusion\.tone-neutral\s*\{/);
-    expect(css).toMatch(/\.detail-lifecycle-metrics\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\)/);
-    expect(css).toMatch(/\.detail-lifecycle-metrics strong\s*\{[^}]*overflow-wrap:\s*anywhere/);
+    expect(css).toMatch(/\.conclusion-metrics\s*\{[^}]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/);
+    expect(css).toMatch(/\.conclusion-metrics__value\s*\{[^}]*overflow-wrap:\s*anywhere/);
     const mobileStart = css.lastIndexOf("@media (max-width: 640px)");
     const mobileRules = css.slice(mobileStart);
-    expect(mobileRules).toMatch(/\.detail-lifecycle-metrics\s*\{[^}]*grid-template-columns:\s*1fr/);
+    expect(mobileRules).toMatch(/\.conclusion-metrics\s*\{[^}]*grid-template-columns:\s*1fr/);
   });
 });

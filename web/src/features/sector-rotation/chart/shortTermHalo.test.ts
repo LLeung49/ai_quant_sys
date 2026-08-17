@@ -8,11 +8,14 @@ import {
   SHORT_TERM_GLYPH_INTENSITY_SCALE,
   SHORT_TERM_GLYPH_PATHS,
   SHORT_TERM_HALO_STYLE,
+  SHORT_TERM_LABEL_DIRECTION_COLOR,
   buildShortTermHaloIndex,
   buildShortTermHaloInfo,
   getShortTermChipText,
+  getShortTermDirectionColor,
   getShortTermGlyphBaseSize,
   getShortTermGlyphColor,
+  getShortTermGlyphColorByIntensity,
   getShortTermGlyphOffset,
   getShortTermGlyphPath,
   getShortTermGlyphShadowBlur,
@@ -140,9 +143,9 @@ describe("SHORT_TERM_HALO_STYLE / getShortTermHaloStyle", () => {
   });
 
   it("三档强度色为 6 位 hex,与 INTENSITY_META 对齐", () => {
-    expect(SHORT_TERM_HALO_STYLE.intense.color).toMatch(/^#[0-9a-f]{6}$/i);
-    expect(SHORT_TERM_HALO_STYLE.moderate.color).toMatch(/^#[0-9a-f]{6}$/i);
-    expect(SHORT_TERM_HALO_STYLE.mild.color).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(SHORT_TERM_HALO_STYLE.intense.color).toBe("#ef5350");
+    expect(SHORT_TERM_HALO_STYLE.moderate.color).toBe("#f0b65a");
+    expect(SHORT_TERM_HALO_STYLE.mild.color).toBe("#67c3a2");
   });
 
   it("getShortTermHaloStyle 仅在已知三档返回样式,null 与 unknown 一律 null", () => {
@@ -293,11 +296,31 @@ describe("getShortTermGlyphShadowBlur", () => {
   });
 });
 
-describe("getShortTermGlyphColor", () => {
-  it("返回与 SHORT_TERM_HALO_STYLE color 一致的颜色", () => {
-    expect(getShortTermGlyphColor("intense")).toBe(SHORT_TERM_HALO_STYLE.intense.color);
-    expect(getShortTermGlyphColor("moderate")).toBe(SHORT_TERM_HALO_STYLE.moderate.color);
-    expect(getShortTermGlyphColor("mild")).toBe(SHORT_TERM_HALO_STYLE.mild.color);
+describe("getShortTermGlyphColor / getShortTermDirectionColor", () => {
+  it("pulse_up / pulse_down 等涨/跌主标签走对应方向色,intensity 仅调整 alpha", () => {
+    const pulseUpIntense = getShortTermGlyphColor("pulse_up", "intense");
+    const pulseUpMild = getShortTermGlyphColor("pulse_up", "mild");
+    // 同主标签的颜色 base rgb 一致,只在 alpha 上有别
+    expect(pulseUpIntense).toMatch(/^rgba\(239, 83, 80, 1\)$/);
+    expect(pulseUpMild).toMatch(/^rgba\(239, 83, 80, 0\.66\)$/);
+    // pulse_down 与 pulse_up 必须不同色调
+    expect(getShortTermGlyphColor("pulse_down", "intense")).toMatch(/^rgba\(38, 166, 154,/);
+  });
+
+  it("中间量能 / 反弹 / 破位三类标签走各自专属方向色", () => {
+    expect(getShortTermGlyphColor("volume_spike", "intense")).toMatch(/^rgba\(240, 182, 90,/);
+    expect(getShortTermGlyphColor("short_rebound_candidate", "intense")).toMatch(/^rgba\(103, 169, 255,/);
+    expect(getShortTermGlyphColor("short_breakdown_candidate", "intense")).toMatch(/^rgba\(145, 133, 255,/);
+  });
+
+  it("未知主标签走中性灰而非误用其它方向色", () => {
+    expect(getShortTermDirectionColor("not_a_label")).toBe("#8795ab");
+    expect(getShortTermGlyphColor("not_a_label", "moderate")).toMatch(/^rgba\(135, 149, 171, 0\.86\)$/);
+  });
+
+  it("getShortTermGlyphColorByIntensity 走中性色 + intensity alpha,用于 strip 空 cell 等无主标签场景", () => {
+    expect(getShortTermGlyphColorByIntensity("intense")).toMatch(/^rgba\(135, 149, 171, 1\)$/);
+    expect(getShortTermGlyphColorByIntensity("mild")).toMatch(/^rgba\(135, 149, 171, 0\.66\)$/);
   });
 });
 

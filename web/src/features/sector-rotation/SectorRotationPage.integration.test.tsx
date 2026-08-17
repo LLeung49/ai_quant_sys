@@ -78,13 +78,21 @@ vi.mock("./short_term/api", () => ({
     sector_level: 2,
     model_version: "v2_short_term",
     meta: { run_status: "succeeded", field_version: "v2_short_term", source_max_trade_date: "2026-08-11", eligible_sector_count: 30, skipped_sector_count: 5, pulse_up_count: 3, volume_spike_count: 2, limit_cluster_count: 1, limit_panic_count: 0 },
-    sectors: [],
+    sectors: [
+      { sector_name: "半导体", score_eligible: true, short_term_composite: 0.82, short_term_composite_rank: 2, short_term_intensity: "intense", short_term_labels: "pulse_up,volume_spike" },
+      { sector_name: "教育", score_eligible: true, short_term_composite: 0.55, short_term_composite_rank: 7, short_term_intensity: "mild", short_term_labels: "short_rebound_candidate" },
+    ],
   }),
   SHORT_TERM_LABEL_WHITELIST: ["pulse_up", "pulse_down", "volume_spike", "limit_cluster", "limit_panic", "extreme_up", "extreme_down", "short_rebound_candidate", "short_breakdown_candidate"],
 }));
 
 vi.mock("./detail/SectorDetailDrawer", () => ({
-  SectorDetailDrawer: ({ asOfDate, level, isLatestDate }: { asOfDate: string; level: number; isLatestDate: boolean }) => <div data-testid="drawer-date">{asOfDate}|{level}|{String(isLatestDate)}</div>,
+  SectorDetailDrawer: ({ asOfDate, level, isLatestDate, shortTerm }: { asOfDate: string; level: number; isLatestDate: boolean; shortTerm: { sector_name: string; short_term_composite: number; short_term_labels?: string | null } | null }) => (
+    <div>
+      <div data-testid="drawer-date">{asOfDate}|{level}|{String(isLatestDate)}</div>
+      <div data-testid="drawer-short-term">{shortTerm ? `${shortTerm.sector_name}|${shortTerm.short_term_composite}|${shortTerm.short_term_labels ?? ""}` : "empty"}</div>
+    </div>
+  ),
 }));
 
 vi.mock("./chart/LazyQuadrantChart", () => ({
@@ -309,6 +317,24 @@ describe("SectorRotationPage 统一工作台", () => {
     fireEvent.click(screen.getByRole("button", { name: "风险提示" }));
     expect(await screen.findByText("当前图表：半导体、银行")).toBeInTheDocument();
     await waitFor(() => expect(window.location.search).toContain("lifecycle=risk"));
+  });
+
+  it("从今日关注点击后，抽屉会透出选中行业的短期命中数据", async () => {
+    window.history.replaceState(null, "", "/?sector=半导体");
+    renderWithProviders(<SectorRotationPage />);
+
+    // 等 haloQuery 加载完成后抽屉 shortTerm 列才会注入语义化的内容。
+    await waitFor(() =>
+      expect(screen.getByTestId("drawer-short-term")).toHaveTextContent("半导体|0.82|pulse_up,volume_spike"),
+    );
+  });
+
+  it("选中行业未列入 v2_short_term 快照时，抽屉保持短期命中空态", async () => {
+    // "银行" 不在 fetchShortTermSnapshot mock sectors 中，验证空态语义未被破坏。
+    window.history.replaceState(null, "", "/?sector=银行");
+    renderWithProviders(<SectorRotationPage />);
+
+    expect(await screen.findByTestId("drawer-short-term")).toHaveTextContent("empty");
   });
 
   it("forward a non-empty shortTermHaloByName to the quadrant chart in snapshot mode", async () => {

@@ -21,18 +21,73 @@ export interface ShortTermHaloInfo {
  * (borderColor)。原有 shadow / border / halo 字段只为 Layer B 服务,一并删除。
  */
 export interface ShortTermHaloStyle {
-  /** 形状填充与短码颜色(与 INTENSITY_META[i].color 对齐)。 */
+  /** 仅留供对外透露的题面颜色(在 tooltip / 图例 / 抽屉 chip 中使用)。
+   *  与 Layer C 形状实际填充色视觉上能对齐,但并不是形状填充的唯一资源。 */
   color: string;
 }
 
 /**
- * 短期信号强度档位对应的颜色。
+ * Layer C 形状填充色按主标签的方向走,alpha 按 intensity 走。
  *
- * 与 SHORT_TERM_LABEL_WHITELIST 的语义保持一致,intense=intense / moderate=moderate / mild=mild;
- * 颜色直接采用 INTENSITY_META 同档位的色,确保 Layer C 形状与 tooltip、图例的视觉一致。
+ * 原因:在起始设计中 Layer C 颜色按 intensity (强/中/弱) 给出三色,子强度下 pulse_up 与 pulse_down
+ * 仅依靠上/下三角区分,在屏幕上一眼难辨方向。现以主标签的语义走色:
+ * 涨=pulse_up/extreme_up/limit_cluster 走红色系,
+ * 跌=pulse_down/extreme_down/limit_panic 走青绿色系,
+ * 中间量能=volume_spike 走琥珀色,
+ * 反弹=short_rebound_candidate 走蓝色,
+ * 破位=short_breakdown_candidate 走紫色;
+ * intensity 仅以 alpha 表达(透明度随强度减弱),保持形状与 shadowBlur 与填充色一致。
+ * 颜色表参考 PHASE_META 的 5 档色,确保主工作台变量的视觉一致。
+ */
+
+/** 各主标签的方向色基调。参考 PHASE_META 的 5 档色调亮后定下。 */
+export const SHORT_TERM_LABEL_DIRECTION_COLOR: Readonly<Record<string, string>> = Object.freeze({
+  pulse_up: "#ef5350",
+  extreme_up: "#ef5350",
+  limit_cluster: "#ef5350",
+  pulse_down: "#26a69a",
+  extreme_down: "#26a69a",
+  limit_panic: "#26a69a",
+  volume_spike: "#f0b65a",
+  short_rebound_candidate: "#67a9ff",
+  short_breakdown_candidate: "#9185ff",
+});
+
+/** intensity 对应的 alpha(强=不透明,中=轻,弱=明显透明)。 */
+export const SHORT_TERM_INTENSITY_ALPHA: Record<ShortTermIntensity, number> = {
+  intense: 1,
+  moderate: 0.86,
+  mild: 0.66,
+};
+
+/** 未知主标签的默认色:中性灰。 */
+export const SHORT_TERM_NEUTRAL_COLOR = "#8795ab";
+
+/**
+ * 颜色转 rgba 的纯函数辅助。仅接受 6 位 hex (不含 #),输出 rgba(r, g, b, alpha)。
+ */
+function hexToRgba(hex: string, alpha: number): string {
+  const value = hex.replace("#", "");
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+/**
+ * 取主标签的方向色。未知标签走中性灰。
+ */
+export function getShortTermDirectionColor(primaryLabel: string): string {
+  return SHORT_TERM_LABEL_DIRECTION_COLOR[primaryLabel] ?? SHORT_TERM_NEUTRAL_COLOR;
+}
+
+/**
+ * 颜色纯函数映射表,供 tooltip / 图例 / 抽屉 chip 使用。
+ * 与 Layer C 形状填充色不同:该映射仅以 intensity 决定颜色,保证在那些需要
+ * 强调"强/中/弱"档位而非方向(比如图例)的场景下视觉一致。
  */
 export const SHORT_TERM_HALO_STYLE: Record<ShortTermIntensity, ShortTermHaloStyle> = {
-  intense: { color: "#ff6b35" },
+  intense: { color: "#ef5350" },
   moderate: { color: "#f0b65a" },
   mild: { color: "#67c3a2" },
 };
@@ -267,9 +322,26 @@ export function getShortTermGlyphShadowBlur(intensity: ShortTermIntensity): numb
   return 4;
 }
 
-/** 取形状填充色,默认与 halo style color 保持一致。 */
-export function getShortTermGlyphColor(intensity: ShortTermIntensity): string {
-  return SHORT_TERM_HALO_STYLE[intensity].color;
+/**
+ * 取 Layer C 形状填充色。
+ *
+ * 输入:主标签(决定调色方向) + intensity(决定 alpha)。
+ * 输出:rgba 字面量,Layer C 一致填充与 shadow。
+ *
+ * 为何不接受只有 intensity 的旧签名:为向后兼容,仅 intensity 的场景请用 `getShortTermGlyphColorByIntensity`。
+ */
+export function getShortTermGlyphColor(primaryLabel: string, intensity: ShortTermIntensity): string {
+  const base = getShortTermDirectionColor(primaryLabel);
+  const alpha = SHORT_TERM_INTENSITY_ALPHA[intensity];
+  return hexToRgba(base, alpha);
+}
+
+/**
+ * 同 intensity 下的合适默认色。仅在调用方只知 intensity 不知主标签时使用 (如抽屉 strip 空 cell),
+ * 该路径走中性色 + intensity alpha,以保证不会在方向不明的场景使用误读的颜色。
+ */
+export function getShortTermGlyphColorByIntensity(intensity: ShortTermIntensity): string {
+  return hexToRgba(SHORT_TERM_NEUTRAL_COLOR, SHORT_TERM_INTENSITY_ALPHA[intensity]);
 }
 
 /**

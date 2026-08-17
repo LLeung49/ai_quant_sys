@@ -211,7 +211,8 @@ describe("buildQuadrantOption", () => {
       expect(glyphData[0].symbol.startsWith("path://")).toBe(true);
       expect(glyphData[0].symbol).toContain(SHORT_TERM_GLYPH_PATHS.pulse_up_intense);
       expect(glyphData[0].symbolSize).toEqual([12, 13]);
-      expect(glyphData[0].itemStyle.color).toBe(SHORT_TERM_HALO_STYLE.intense.color);
+      // pulse_up 走红色系 (rgba(239, 83, 80, alpha=1) 因为 intensity=intense)
+      expect(glyphData[0].itemStyle.color).toMatch(/^rgba\(239, 83, 80, 1\)$/);
       expect(glyphData[0].label.show).toBe(false);
     });
 

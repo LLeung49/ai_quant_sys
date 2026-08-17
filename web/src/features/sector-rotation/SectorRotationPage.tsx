@@ -27,8 +27,9 @@ import type { LifecycleFilter } from "./lifecycle/meta";
 import type { SectorPoint } from "./api";
 import { useShortTermHaloSectors } from "./short_term/useShortTermHaloSectors";
 import { buildShortTermHaloIndex } from "./chart/shortTermHalo";
-import { INTENSITY_META } from "./short_term/labels";
+import { SHORT_TERM_LABEL_DIRECTION_COLOR } from "./chart/shortTermHalo";
 import type { ShortTermHaloInfo } from "./chart/shortTermHalo";
+import type { ShortTermSector } from "./short_term/api";
 
 type DisplaySector = SectorPoint & QuadrantSector & RankingSector & DetailSector & {
   as_of_date: string;
@@ -114,6 +115,20 @@ export function SectorRotationPage() {
     if (!selectedSectorName) return;
     setComparisonSectors((current) => addTrajectorySector(current, selectedSectorName));
   }, [selectedSectorName]);
+
+  /**
+   * 选中行业在 v2_short_term 快照中的完整字段,用于主工作台抽屉透出"短期命中"。
+   * 与 ShortTermAnomalyModule / 象限图光晕共用同一份 haloQuery,
+   * 二次点击走 TanStack Query 缓存,无额外请求。
+   * 在 replay 模式下 haloQuery 仍然按当前 displayDate(= replayDate)查询,
+   * 因此短期命中列对应的就是抽屉顶部标注的 asOfDate,语义与 v1 列保持一致。
+   * 必须位于下方三个 loading 早返 early return 之前,避免加载 / 失败分支中 React 调用 hooks 顺序不一致。
+   */
+  const selectedShortTerm = useMemo<ShortTermSector | null>(() => {
+    if (!selectedSectorName) return null;
+    if (haloQuery.isLoading || haloQuery.isError) return null;
+    return haloQuery.sectors.find((sector) => sector.sector_name === selectedSectorName) ?? null;
+  }, [haloQuery.sectors, haloQuery.isLoading, haloQuery.isError, selectedSectorName]);
 
   if (dates.isLoading || (mode === "snapshot" && snapshot.isLoading)) return <section className="loading-panel" aria-live="polite">正在加载最新板块快照…</section>;
   if (dates.isError || (mode === "snapshot" && snapshot.isError)) return <section className="loading-panel" role="alert">读取板块轮动数据失败，请稍后重试或检查 API 服务。</section>;
@@ -210,18 +225,34 @@ export function SectorRotationPage() {
           <label className="label-density"><span>标注密度</span><select value={labelDensity} onChange={(event) => setLabelDensity(event.target.value as LabelDensity)}><option value="compact">精简</option><option value="focus">关注</option><option value="all">全部</option></select></label>
         </div>
         {mode === "snapshot" && (
-          <div className="quadrant-anomaly-legend" role="group" aria-label="短期异动强度图例">
-            <span className="quadrant-anomaly-legend__title">短期异动强度</span>
-            {(["intense", "moderate", "mild"] as const).map((tone) => {
-              const meta = INTENSITY_META[tone];
-              return (
-                <span key={tone} className="quadrant-anomaly-legend__item" data-tone={tone}>
-                  <i style={{ background: meta.color }} aria-hidden="true" />
-                  <span>{meta.label}</span>
-                </span>
-              );
-            })}
-            <span className="quadrant-anomaly-legend__hint">当日命中短期标签的行业在右上角展示主标签形状；橙色=强异动,琥珀=中等异动,蓝绿=轻度异动,形状大小随强度同步调整。</span>
+          <div className="quadrant-anomaly-legend" role="group" aria-label="短期异动信号图例">
+            <span className="quadrant-anomaly-legend__title">短期异动方向</span>
+            {([
+              { key: "up",        label: "涨红",     swatch: SHORT_TERM_LABEL_DIRECTION_COLOR.pulse_up },
+              { key: "down",      label: "跌绿",     swatch: SHORT_TERM_LABEL_DIRECTION_COLOR.pulse_down },
+              { key: "volume",    label: "量能",     swatch: SHORT_TERM_LABEL_DIRECTION_COLOR.volume_spike },
+              { key: "rebound",   label: "反弹",     swatch: SHORT_TERM_LABEL_DIRECTION_COLOR.short_rebound_candidate },
+              { key: "breakdown", label: "破位",     swatch: SHORT_TERM_LABEL_DIRECTION_COLOR.short_breakdown_candidate },
+            ] as const).map((entry) => (
+              <span key={entry.key} className="quadrant-anomaly-legend__item" data-tone={entry.key}>
+                <i style={{ background: entry.swatch }} aria-hidden="true" />
+                <span>{entry.label}</span>
+              </span>
+            ))}
+            <span className="quadrant-anomaly-legend__divider" aria-hidden="true">强度</span>
+            {([
+              // 强度档演示色与 INTENSITY_META 完全对齐,保证图例颜色与抽屉 / KPI / 候选情景里的 chip 一致。
+              // alpha 区分强 / 中 / 弱:实色 = 强,0.86 = 中,0.66 = 弱。
+              { key: "intense",   label: "强异动",   swatch: "rgba(255, 107, 53, 1)" },
+              { key: "moderate",  label: "中等异动", swatch: "rgba(240, 182, 90, 0.86)" },
+              { key: "mild",      label: "轻度异动", swatch: "rgba(103, 195, 162, 0.66)" },
+            ] as const).map((entry) => (
+              <span key={entry.key} className="quadrant-anomaly-legend__item" data-tone={`intensity-${entry.key}`}>
+                <i style={{ background: entry.swatch }} aria-hidden="true" />
+                <span>{entry.label}</span>
+              </span>
+            ))}
+            <span className="quadrant-anomaly-legend__hint">当日命中短期标签的行业在右上角展示主标签形状；颜色按方向(涨红/跌绿/量能/反弹/破位)区分,透明度与形状大小随强度递减。</span>
           </div>
         )}
         {mode === "replay" && <ReplayControls dates={replayState.dates} index={replayState.index} playing={replayState.playing} speed={replayState.speed} dispatch={replayDispatch} />}
@@ -236,6 +267,7 @@ export function SectorRotationPage() {
     </section>
     {selected && displayDate && <SectorDetailDrawer
       sector={selected}
+      shortTerm={selectedShortTerm}
       level={level}
       asOfDate={displayDate}
       isLatestDate={displayDate === dates.data?.[0]}

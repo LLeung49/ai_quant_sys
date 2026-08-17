@@ -113,11 +113,11 @@ export function buildQuadrantOption(
         name: `${sector.sector_name}-chip`,
         value: [sector.velocity_score, sector.acceleration_score, sector.volume_score ?? 0, primaryLabel],
         itemStyle: {
-          color: getShortTermGlyphColor(intensity),
+          color: getShortTermGlyphColor(primaryLabel, intensity),
           borderColor: SHORT_TERM_GLYPH_BORDER,
           borderWidth: SHORT_TERM_GLYPH_BORDER_WIDTH,
           shadowBlur: getShortTermGlyphShadowBlur(intensity),
-          shadowColor: getShortTermGlyphColor(intensity),
+          shadowColor: getShortTermGlyphColor(primaryLabel, intensity),
         },
         emphasis: { disabled: true },
         silent: false,
