@@ -19,6 +19,7 @@ from datetime import date, timedelta
 
 from xtquant import xtdata
 
+from akshare_market_fallback import fetch_valid_rows
 from db_config import execute_query
 from price_corporate_actions import run_due_refresh_tasks, sync_qmt_factor_snapshot
 from price_projection_store import (
@@ -103,7 +104,7 @@ def _is_invalid_market_value(value) -> bool:
         return True
 
 
-def _rows_from_dataframe(stock_code: str, dataframe, dividend_type: str) -> list[dict]:
+def _split_qmt_rows(stock_code: str, dataframe, dividend_type: str) -> tuple[list[dict], set[str]]:
     """把 QMT 行转为固定库表字段，保留原始行情特有的昨收和停牌标记。
 
     三个模式共享 OHLCV/成交额字段；只有 ``none`` 是交易事实，因而额外保存
@@ -111,6 +112,7 @@ def _rows_from_dataframe(stock_code: str, dataframe, dividend_type: str) -> list
     ``None``，避免把原始表字段误复制到派生表。
     """
     rows = []
+    dirty_dates = set()
     for index_value, row in dataframe.iterrows():
         trade_date = _as_trade_date(index_value)
         invalid_field = next(
@@ -127,6 +129,7 @@ def _rows_from_dataframe(stock_code: str, dataframe, dividend_type: str) -> list
                 f"stock={stock_code} trade_date={trade_date} mode={dividend_type} "
                 f"field={invalid_field} value={row[invalid_field]!r}; skipped row"
             )
+            dirty_dates.add(trade_date)
             continue
         item = {
             "stock_code": stock_code,
@@ -145,7 +148,50 @@ def _rows_from_dataframe(stock_code: str, dataframe, dividend_type: str) -> list
         else:
             item["turnover_rate"] = None
         rows.append(item)
+    return rows, dirty_dates
+
+
+def _rows_from_dataframe(stock_code: str, dataframe, dividend_type: str) -> list[dict]:
+    """Compatibility wrapper for callers that only need valid QMT rows."""
+    return _split_qmt_rows(stock_code, dataframe, dividend_type)[0]
+
+
+def _rows_from_fallback(stock_code: str, rows_by_date: dict[str, dict], dividend_type: str) -> list[dict]:
+    rows = []
+    for trade_date, values in rows_by_date.items():
+        if any(_is_invalid_market_value(values.get(field)) for field in REQUIRED_MARKET_FIELDS):
+            continue
+        item = {
+            "stock_code": stock_code,
+            "trade_date": trade_date,
+            "open_price": float(values["open"]),
+            "high_price": float(values["high"]),
+            "low_price": float(values["low"]),
+            "close_price": float(values["close"]),
+            "volume": int(values["volume"]),
+            "amount": float(values["amount"]),
+        }
+        if dividend_type == "none":
+            item["pre_close"] = None
+            item["suspend_flag"] = None
+        else:
+            item["turnover_rate"] = None
+        rows.append(item)
     return rows
+
+
+def _rows_with_fallback(stock_code: str, dataframe, dividend_type: str) -> tuple[list[dict], dict[str, str]]:
+    rows, dirty_dates = _split_qmt_rows(stock_code, dataframe, dividend_type)
+    if not dirty_dates:
+        return rows, {}
+    fallback_rows, failures = fetch_valid_rows(stock_code, dividend_type, dirty_dates)
+    rows.extend(_rows_from_fallback(stock_code, fallback_rows, dividend_type))
+    if failures:
+        _progress(
+            f"[行情回退失败] stock={stock_code} mode={dividend_type} "
+            f"dates={sorted(failures)} reasons={failures}"
+        )
+    return rows, failures
 
 
 def download_and_save_mode(
@@ -175,12 +221,17 @@ def download_and_save_mode(
         raise RuntimeError(
             f"empty QMT {MODE_LABELS[dividend_type]} market response for {stock_code}"
         )
-    rows = _rows_from_dataframe(stock_code, dataframe, dividend_type)
+    rows, fallback_failures = _rows_with_fallback(stock_code, dataframe, dividend_type)
     if not rows:
         raise RuntimeError(
             f"QMT returned no valid {MODE_LABELS[dividend_type]} rows for {stock_code}"
         )
     write_daily_rows(dividend_type, rows, adjustment_asof)
+    if fallback_failures:
+        raise RuntimeError(
+            f"AkShare could not repair {MODE_LABELS[dividend_type]} rows for {stock_code}: "
+            f"{sorted(fallback_failures)}"
+        )
     return len(rows)
 
 
@@ -261,10 +312,14 @@ def download_and_save_batch(
             if dataframe is None or len(dataframe) == 0:
                 failed_codes.add(stock_code)
                 continue
-            code_rows = _rows_from_dataframe(stock_code, dataframe, dividend_type)
+            code_rows, fallback_failures = _rows_with_fallback(
+                stock_code, dataframe, dividend_type
+            )
             if not code_rows:
                 failed_codes.add(stock_code)
                 continue
+            if fallback_failures:
+                failed_codes.add(stock_code)
             rows.extend(code_rows)
         missing = sum(
             1

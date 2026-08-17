@@ -283,7 +283,7 @@ def test_collector_skips_nan_core_field_and_logs_full_context(capsys):
 
 
 def test_batch_writes_valid_rows_when_another_row_has_nan(monkeypatch):
-    """One invalid daily row must not turn its stock or the entire batch into a failure."""
+    """A valid fallback keeps both the stock and its normal QMT row writable."""
     class TwoRowDataFrame:
         def __len__(self):
             return 2
@@ -311,6 +311,20 @@ def test_batch_writes_valid_rows_when_another_row_has_nan(monkeypatch):
         get_market_data_ex=lambda **kwargs: {"600519.SH": TwoRowDataFrame()},
     )
     collector = load_collector(fake_xtdata)
+    monkeypatch.setattr(
+        collector,
+        "fetch_valid_rows",
+        lambda code, mode, dates: (
+            {
+                "2026-07-28": {
+                    "open": 10.0, "high": 11.0, "low": 9.0, "close": 10.5,
+                    "volume": 100, "amount": 1000.0,
+                }
+            },
+            {},
+        ),
+        raising=False,
+    )
     writes = []
     monkeypatch.setattr(
         collector,
@@ -323,8 +337,107 @@ def test_batch_writes_valid_rows_when_another_row_has_nan(monkeypatch):
     )
 
     assert failures == []
+    assert counts == {"none": 2, "front": 2, "back": 2}
+    assert all(
+        {row["trade_date"] for row in rows} == {"2026-07-28", "2026-07-29"}
+        for _, rows in writes
+    )
+
+
+def test_batch_replaces_only_qmt_invalid_row_with_akshare_row(monkeypatch):
+    """Removing the merge must leave the dirty date absent instead of repaired."""
+    class TwoRowDataFrame:
+        def __len__(self):
+            return 2
+
+        def iterrows(self):
+            yield "20260728", {
+                "open": 10.0, "high": 11.0, "low": 9.0, "close": 10.5,
+                "volume": 100, "amount": 1000.0,
+            }
+            yield "20260729", {
+                "open": 20.0, "high": 21.0, "low": 19.0, "close": 20.5,
+                "volume": 200, "amount": float("nan"),
+            }
+
+    fake_xtdata = types.SimpleNamespace(
+        download_history_data=lambda *args, **kwargs: None,
+        get_market_data_ex=lambda **kwargs: {"600519.SH": TwoRowDataFrame()},
+    )
+    collector = load_collector(fake_xtdata)
+    monkeypatch.setattr(
+        collector,
+        "fetch_valid_rows",
+        lambda code, mode, dates: (
+            {
+                "2026-07-29": {
+                    "open": 30.0, "high": 31.0, "low": 29.0, "close": 30.5,
+                    "volume": 300, "amount": 3000.0,
+                }
+            },
+            {},
+        ),
+        raising=False,
+    )
+    writes = []
+    monkeypatch.setattr(
+        collector,
+        "write_daily_rows_batch",
+        lambda mode, rows, adjustment_asofs: writes.append((mode, rows)),
+    )
+
+    counts, failures = collector.download_and_save_batch(
+        ["600519.SH"], "20260728", {"600519.SH": None}
+    )
+
+    assert failures == []
+    assert counts == {"none": 2, "front": 2, "back": 2}
+    for _, rows in writes:
+        by_date = {row["trade_date"]: row for row in rows}
+        assert by_date["2026-07-28"]["close_price"] == 10.5
+        assert by_date["2026-07-29"]["close_price"] == 30.5
+
+
+def test_batch_marks_stock_failed_when_akshare_cannot_fill_qmt_dirty_date(monkeypatch):
+    """Removing incomplete-fallback handling must not silently report the stock healthy."""
+    class TwoRowDataFrame:
+        def __len__(self):
+            return 2
+
+        def iterrows(self):
+            yield "20260728", {
+                "open": 10.0, "high": 11.0, "low": 9.0, "close": 10.5,
+                "volume": 100, "amount": 1000.0,
+            }
+            yield "20260729", {
+                "open": 20.0, "high": 21.0, "low": 19.0, "close": 20.5,
+                "volume": 200, "amount": float("nan"),
+            }
+
+    collector = load_collector(types.SimpleNamespace(
+        download_history_data=lambda *args, **kwargs: None,
+        get_market_data_ex=lambda **kwargs: {"600519.SH": TwoRowDataFrame()},
+    ))
+    monkeypatch.setattr(
+        collector,
+        "fetch_valid_rows",
+        lambda *args: ({}, {"2026-07-29": "Sina response missing target date"}),
+        raising=False,
+    )
+    writes = []
+    monkeypatch.setattr(
+        collector,
+        "write_daily_rows_batch",
+        lambda mode, rows, adjustment_asofs: writes.append(rows),
+    )
+
+    counts, failures = collector.download_and_save_batch(
+        ["600519.SH"], "20260728", {"600519.SH": None}
+    )
+
+    assert failures == ["600519.SH"]
     assert counts == {"none": 1, "front": 1, "back": 1}
-    assert all(rows[0]["trade_date"] == "2026-07-29" for _, rows in writes)
+    assert all(row["trade_date"] == "2026-07-28" for rows in writes for row in rows)
 
 
 def test_batch_marks_stock_failed_when_all_rows_have_nan(monkeypatch):
@@ -348,6 +461,12 @@ def test_batch_marks_stock_failed_when_all_rows_have_nan(monkeypatch):
         get_market_data_ex=lambda **kwargs: {"600519.SH": NanOnlyDataFrame()},
     )
     collector = load_collector(fake_xtdata)
+    monkeypatch.setattr(
+        collector,
+        "fetch_valid_rows",
+        lambda *args: ({}, {"2026-07-28": "test fallback unavailable"}),
+        raising=False,
+    )
     monkeypatch.setattr(
         collector,
         "write_daily_rows_batch",
