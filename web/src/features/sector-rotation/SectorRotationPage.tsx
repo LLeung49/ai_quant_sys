@@ -241,18 +241,17 @@ export function SectorRotationPage() {
             ))}
             <span className="quadrant-anomaly-legend__divider" aria-hidden="true">强度</span>
             {([
-              // 强度档演示色与 INTENSITY_META 完全对齐,保证图例颜色与抽屉 / KPI / 候选情景里的 chip 一致。
-              // alpha 区分强 / 中 / 弱:实色 = 强,0.86 = 中,0.66 = 弱。
-              { key: "intense",   label: "强异动",   swatch: "rgba(255, 107, 53, 1)" },
-              { key: "moderate",  label: "中等异动", swatch: "rgba(240, 182, 90, 0.86)" },
-              { key: "mild",      label: "轻度异动", swatch: "rgba(103, 195, 162, 0.66)" },
+              // 强度不使用第二套颜色：主形状保留方向色，透明度 / 大小 / 发光随强度递减。
+              { key: "intense",   label: "强：实",     swatch: "rgba(220, 232, 248, 1)" },
+              { key: "moderate",  label: "中：半透明", swatch: "rgba(220, 232, 248, 0.68)" },
+              { key: "mild",      label: "轻：淡",     swatch: "rgba(220, 232, 248, 0.38)" },
             ] as const).map((entry) => (
               <span key={entry.key} className="quadrant-anomaly-legend__item" data-tone={`intensity-${entry.key}`}>
                 <i style={{ background: entry.swatch }} aria-hidden="true" />
                 <span>{entry.label}</span>
               </span>
             ))}
-            <span className="quadrant-anomaly-legend__hint">当日命中短期标签的行业在右上角展示主标签形状；颜色按方向(涨红/跌绿/量能/反弹/破位)区分,透明度与形状大小随强度递减。</span>
+            <span className="quadrant-anomaly-legend__hint">当日命中短期标签的行业在右上角展示主标签形状；颜色按方向(涨红/跌绿/量能/反弹/破位)区分；强度由形状透明度、大小与发光递减表示，脉冲三角越尖越强。</span>
           </div>
         )}
         {mode === "replay" && <ReplayControls dates={replayState.dates} index={replayState.index} playing={replayState.playing} speed={replayState.speed} dispatch={replayDispatch} />}

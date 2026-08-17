@@ -130,6 +130,16 @@ describe("SectorRotationPage 统一工作台", () => {
     mockedResponses.loadedSnapshotDate = "2026-08-11";
   });
 
+  it("用实际形状编码说明短期异动强度，避免把强度误读为另一套颜色", async () => {
+    renderWithProviders(<SectorRotationPage />);
+
+    expect(await screen.findByText("强：实")).toBeInTheDocument();
+    expect(screen.getByText("中：半透明")).toBeInTheDocument();
+    expect(screen.getByText("轻：淡")).toBeInTheDocument();
+    expect(screen.getByText(/脉冲三角越尖越强/)).toBeInTheDocument();
+    expect(screen.queryByText("中等异动")).not.toBeInTheDocument();
+  });
+
   it("keeps a pending trading date in the URL and explains the loaded fallback snapshot", async () => {
     const { unmount } = renderWithProviders(<SectorRotationPage />);
 
