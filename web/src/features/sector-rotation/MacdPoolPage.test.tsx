@@ -28,6 +28,23 @@ function mockApi(responses: Record<string, unknown>) {
 }
 
 describe("MacdPoolPage", () => {
+ it("filters ETF points whose names are missing or still equal to the code", async () => {
+    mockApi({
+      dates: { dates: ["2026-08-13"] },
+      pool: { groups: { etf: [
+        { entity_type: "etf", stock_code: "511010.SH", stock_name: null, kama_efficiency: 0.6, adx_14: 24 },
+        { entity_type: "etf", stock_code: "511020.SH", stock_name: "511020.SH", kama_efficiency: 0.5, adx_14: 22 },
+        { entity_type: "etf", stock_code: "511030.SH", stock_name: "511030", kama_efficiency: 0.5, adx_14: 22 },
+        { entity_type: "etf", stock_code: "510300.SH", stock_name: "沪深300ETF", kama_efficiency: 0.7, adx_14: 26 },
+      ], sector_l1: [], sector_l2: [] } },
+      trajectory: { trajectory: { stock_code: "510300.SH", points: [] } },
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("macd-chart")).toHaveAttribute("data-points", "1"));
+    expect(screen.getByRole("button", { name: /沪深300ETF/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /511010|511020|511030/ })).not.toBeInTheDocument();
+ });
+
  it("renders grouped entities", async () => {
     mockApi({
       dates: { dates: ["2026-08-13"] },

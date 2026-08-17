@@ -44,6 +44,15 @@ function trajectoryState(points?: Array<{ er: number | null; adx: number | null 
   if (erDelta < -0.05 && adxDelta >= 2) return "强度上升但变乱";
   return "结构迁移";
 }
+
+function hasResolvedEtfName(row: Row): boolean {
+  if (row.entity_type !== "etf") return true;
+  const name = row.stock_name?.trim();
+  if (!name) return false;
+  const normalizeCodeLike = (value: string) => value.toUpperCase().replace(/\.(SH|SZ|BJ)$/, "");
+  return normalizeCodeLike(name) !== normalizeCodeLike(row.stock_code.trim());
+}
+
 export function MacdPoolPage() {
   const datesQuery = useQuery({
     queryKey: ["macd-pool-dates"],
@@ -74,6 +83,9 @@ export function MacdPoolPage() {
     enabled: Boolean(date),
   });
   const groups = query.data?.groups ?? {};
+  const displayGroups: Record<string, Row[]> = Object.fromEntries(
+    Object.entries(groups).map(([key, rows]) => [key, rows.filter(hasResolvedEtfName)]),
+  );
   const [selected, setSelected] = useState<Row | null>(null);
   const trajectoryQuery = useQuery({
     queryKey: [
@@ -102,9 +114,9 @@ export function MacdPoolPage() {
       }>,
     enabled: Boolean(date && selected),
   });
-  const allRows = Object.values(groups).flat();
+  const allRows = Object.values(displayGroups).flat();
   const chartPoints = allRows
-    .filter((row) => row.kama_efficiency != null && row.adx_14 != null)
+    .filter((row) => hasResolvedEtfName(row) && row.kama_efficiency != null && row.adx_14 != null)
     .map((row) => ({
       name: row.stock_name || row.stock_code,
       code: row.stock_code,
@@ -160,10 +172,10 @@ export function MacdPoolPage() {
           <div className="macd-ranking-grid">
           {Object.entries(labels).map(([key, label]) => (
             <article className="content-panel macd-ranking-panel" key={key}>
-              <header className="panel-header ranking-header macd-ranking-header"><div><p>MACD POOL</p><h3>{label}</h3></div><span>{groups[key]?.length ?? 0} 个命中</span></header>
-              {groups[key]?.length ? (
+              <header className="panel-header ranking-header macd-ranking-header"><div><p>MACD POOL</p><h3>{label}</h3></div><span>{displayGroups[key]?.length ?? 0} 个命中</span></header>
+              {displayGroups[key]?.length ? (
                 <div className="macd-ranking">
-                    {[...groups[key]]
+                    {[...displayGroups[key]]
                       .sort(
                         (a, b) =>
                           (b.adx_14 ?? 0) * (b.kama_efficiency ?? 0) -

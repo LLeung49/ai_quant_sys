@@ -22,6 +22,10 @@ class ShortTermResponseMeta(BaseModel):
     volume_spike_count: int | None = Field(default=None, description="命中 volume_spike 的板块数")
     limit_cluster_count: int | None = Field(default=None, description="命中 limit_cluster 的板块数")
     limit_panic_count: int | None = Field(default=None, description="命中 limit_panic 的板块数")
+    pulse_up_sectors: list[str] | None = Field(default=None, description="pulse_up 命中的板块名称列表")
+    volume_spike_sectors: list[str] | None = Field(default=None, description="volume_spike 命中的板块名称列表")
+    limit_cluster_sectors: list[str] | None = Field(default=None, description="limit_cluster 命中的板块名称列表")
+    limit_panic_sectors: list[str] | None = Field(default=None, description="limit_panic 命中的板块名称列表")
 
 
 class ShortTermSnapshotResponse(BaseModel):

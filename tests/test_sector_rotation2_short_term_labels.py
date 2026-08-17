@@ -18,8 +18,8 @@ def _row(**overrides) -> pd.Series:
         "breadth_up": np.nan,
         "rvol_1_20": np.nan,
         "share_impulse_1d": np.nan,
-        "limit_up": np.nan,
-        "limit_down": np.nan,
+        "limit_up_ratio": np.nan,
+        "limit_down_ratio": np.nan,
         "ret_1": np.nan,
     }
     base.update(overrides)
@@ -93,3 +93,47 @@ def test_score_ineligible_sector_never_triggers_rebound_or_breakdown():
         _row(score_eligible=False, rs_1=0.02, rs_5=-0.01), DEFAULT_SHORT_TERM_CONFIG,
     )
     assert labels == ""
+
+
+def test_limit_cluster_triggers_when_up_ratio_above_threshold_and_down_ratio_low():
+    labels, intensity = classify_short_term_labels(
+        _row(limit_up_ratio=0.08, limit_down_ratio=0.005), DEFAULT_SHORT_TERM_CONFIG,
+    )
+    assert _has(labels, "limit_cluster")
+    assert intensity == "intense"
+
+
+def test_limit_cluster_does_not_trigger_when_up_ratio_below_threshold():
+    labels, _ = classify_short_term_labels(
+        _row(limit_up_ratio=0.04, limit_down_ratio=0.0), DEFAULT_SHORT_TERM_CONFIG,
+    )
+    assert not _has(labels, "limit_cluster")
+
+
+def test_limit_cluster_does_not_trigger_when_down_ratio_too_high():
+    labels, _ = classify_short_term_labels(
+        _row(limit_up_ratio=0.10, limit_down_ratio=0.03), DEFAULT_SHORT_TERM_CONFIG,
+    )
+    assert not _has(labels, "limit_cluster")
+
+
+def test_limit_panic_triggers_when_down_ratio_above_threshold_and_up_ratio_low():
+    labels, intensity = classify_short_term_labels(
+        _row(limit_up_ratio=0.005, limit_down_ratio=0.09), DEFAULT_SHORT_TERM_CONFIG,
+    )
+    assert _has(labels, "limit_panic")
+    assert intensity == "intense"
+
+
+def test_limit_panic_does_not_trigger_when_down_ratio_below_threshold():
+    labels, _ = classify_short_term_labels(
+        _row(limit_up_ratio=0.0, limit_down_ratio=0.04), DEFAULT_SHORT_TERM_CONFIG,
+    )
+    assert not _has(labels, "limit_panic")
+
+
+def test_limit_labels_skip_when_ratios_missing():
+    labels, intensity = classify_short_term_labels(_row(), DEFAULT_SHORT_TERM_CONFIG)
+    assert not _has(labels, "limit_cluster")
+    assert not _has(labels, "limit_panic")
+    assert intensity == "none"

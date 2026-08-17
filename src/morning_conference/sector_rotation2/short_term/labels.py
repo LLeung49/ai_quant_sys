@@ -79,12 +79,13 @@ def classify_short_term_labels(row: pd.Series, config: ModelConfigShortTerm) -> 
     elif pd.notna(row.get("share_impulse_1d", float("nan"))) and row["share_impulse_1d"] >= volume["share_impulse_min"]:
         labels.append("volume_spike")
 
-    limit_up = row.get("limit_up", float("nan"))
-    limit_down = row.get("limit_down", float("nan"))
-    if pd.notna(limit_up) and pd.notna(limit_down):
-        if limit_up >= limit["up_min"] and limit_down <= limit["down_max_for_cluster"]:
+    # 阈值使用 ratio (涨跌停家数 / 有效家数)，与快照表中的 limit_up_ratio / limit_down_ratio 同口径。
+    limit_up_ratio = row.get("limit_up_ratio", float("nan"))
+    limit_down_ratio = row.get("limit_down_ratio", float("nan"))
+    if pd.notna(limit_up_ratio) and pd.notna(limit_down_ratio):
+        if limit_up_ratio >= limit["up_min"] and limit_down_ratio <= limit["down_max_for_cluster"]:
             labels.append("limit_cluster")
-        if limit_down >= limit["down_min_for_panic"] and limit_up <= limit["up_max_for_panic"]:
+        if limit_down_ratio >= limit["down_min_for_panic"] and limit_up_ratio <= limit["up_max_for_panic"]:
             labels.append("limit_panic")
 
     if pd.notna(row.get("ret_1", float("nan"))):

@@ -1,6 +1,6 @@
-﻿"""v2_short_term 鐭湡寮傚姩鐨勬瘡鏃ヨ繍琛屽叆鍙ｄ笌 CLI銆?
+"""v2_short_term 短期异动的每日运行入口与 CLI。
 
-璋冪敤鏍蜂緥锛堜笌 v1 鍚屾锛?:
+调用样例（与 v1 同款）::
 
     $env:PYTHONPATH = "src"
     python -m morning_conference.sector_rotation2.short_term.run_daily --level 2 --as-of-date 2026-08-08
@@ -8,8 +8,8 @@
     python -m morning_conference.sector_rotation2.short_term.run_daily --level 2 --as-of-date 2026-08-08 --csv-output outputs/short_term
     python -m morning_conference.sector_rotation2.short_term.run_daily --level 2 --as-of-date 2026-08-08 --dry-run --csv-output outputs/short_term
 
-``run_short_term_for`` 鏄紪绋嬪紡鍏ュ彛锛宍`main`` 鏄?argparse CLI 鍏ュ彛锛?
-浜岃€呭叡鐢ㄥ悓涓€濂楀唴閮ㄨ緟鍔╁嚱鏁般€?
+``run_short_term_for`` 是编程式入口，``main`` 是 argparse CLI 入口；
+二者共用同一套内部辅助函数。
 """
 from __future__ import annotations
 
@@ -37,7 +37,7 @@ from .snapshot_store import (
 LOGGER = logging.getLogger(__name__)
 
 
-# CSV 鍒楅『搴忥細淇濈暀鏂囨。 搂7.1 涓０鏄庣殑瀛楁椤哄簭锛屼究浜庝汉鑲夋瘮瀵广€?
+# CSV 列顺序：保留文档 §7.1 中声明的字段顺序，便于人肉比对。
 _CSV_COLUMNS: tuple[str, ...] = (
     "as_of_date", "sector_level", "sector_name", "model_version",
     "score_eligible",
@@ -58,7 +58,7 @@ _CSV_COLUMNS: tuple[str, ...] = (
 
 @dataclass(frozen=True)
 class ShortTermRunResult:
-    """鍗曟棩鐭湡杩愯鐨勪笉鍙彉缁撴灉銆?""
+    """单日短期运行的不可变结果。"""
 
     run_id: str
     as_of_date: str
@@ -71,7 +71,7 @@ class ShortTermRunResult:
 
 
 def _attach_member_counters(features: pd.DataFrame, members: dict[str, tuple[int, int]]) -> pd.DataFrame:
-    """鎶婂閮ㄨ绠楃殑 ``eligible_member_count``銆乣`valid_member_count`` 鎸傚洖鍒扮壒寰佽〃銆?""
+    """把外部计算的 ``eligible_member_count``、``valid_member_count`` 挂回到特征表。"""
     if not members:
         features["eligible_member_count"] = pd.NA
         features["valid_member_count"] = pd.NA
@@ -87,19 +87,19 @@ def run_short_term_for(
     panel: dict[str, pd.DataFrame] | None = None,
     benchmark: pd.DataFrame | None = None,
 ) -> ShortTermRunResult:
-    """瀵瑰崟涓氦鏄撴棩鎵ц瀹屾暣鐨勭煭鏈熷紓鍔ㄦ祦姘寸嚎锛堢紪绋嬪紡鍏ュ彛锛夈€?
+    """对单个交易日执行完整的短期异动流水线（编程式入口）。
 
-    姝ラ锛?
-        1. 鐢熸垚杩愯 UUID 涓庨厤缃搱甯岋紱
-        2. 鍐欏叆 ``running`` 瀹¤琛岋紱
-        3. 鍔犺浇鏉垮潡闈㈡澘骞舵瀯寤哄師濮嬬壒寰侊紱
-        4. 鍚堟垚鐭湡璇勫垎锛?
-        5. 搴旂敤寮傚姩鏍囩涓庡己搴﹀垎绾э紱
-        6. 鎵归噺 upsert 鐭湡蹇収锛?
-        7. 鏇存柊瀹¤琛屼负 succeeded銆?
+    步骤：
+        1. 生成运行 UUID 与配置哈希；
+        2. 写入 ``running`` 审计行；
+        3. 加载板块面板并构建原始特征；
+        4. 合成短期评分；
+        5. 应用异动标签与强度分级；
+        6. 批量 upsert 短期快照；
+        7. 更新审计行为 succeeded。
 
-    寮傚父:
-        浠讳綍姝ラ澶辫触閮戒細鎶婂璁¤鏍囪涓?failed 骞跺師鏍锋姏鍑恒€?
+    异常:
+        任何步骤失败都会把审计行标记为 failed 并原样抛出。
     """
     cfg = config or DEFAULT_SHORT_TERM_CONFIG
     run_id = str(uuid.uuid4())
@@ -118,7 +118,7 @@ def run_short_term_for(
         features = build_short_term_features(sector_level, as_of_date, cfg)
         if features.empty:
             mark_short_term_run_succeeded(run_id, eligible_sector_count=0, skipped_sector_count=0)
-            LOGGER.warning("鐭湡鐗瑰緛涓虹┖锛?s level=%s", as_of_date, sector_level)
+            LOGGER.warning("短期特征为空：%s level=%s", as_of_date, sector_level)
             return ShortTermRunResult(
                 run_id=run_id,
                 as_of_date=as_of_date,
@@ -132,7 +132,7 @@ def run_short_term_for(
 
         scored = score_short_term_panel(features, cfg)
         labelled = label_dataframe(scored, cfg)
-        # ``coverage_ratio`` 鐢辫皟鐢ㄦ柟鏍规嵁鎴愬憳鏄犲皠璁＄畻鍚庢敞鍏ワ紱鏈鏋剁暀 NaN 鍗犱綅銆?
+        # ``coverage_ratio`` 由调用方根据成员映射计算后注入；本骨架留 NaN 占位。
         labelled["coverage_ratio"] = pd.NA
         snapshot_rows = persist_short_term_snapshot(
             labelled,
@@ -149,7 +149,7 @@ def run_short_term_for(
             skipped_sector_count=skipped_count,
         )
         LOGGER.info(
-            "鐭湡杩愯瀹屾垚锛?s level=%s eligible=%s skipped=%s rows=%s",
+            "短期运行完成：%s level=%s eligible=%s skipped=%s rows=%s",
             as_of_date, sector_level, eligible_count, skipped_count, snapshot_rows,
         )
         return ShortTermRunResult(
@@ -162,17 +162,17 @@ def run_short_term_for(
             skipped_sector_count=skipped_count,
             snapshot_rows=snapshot_rows,
         )
-    except Exception as exc:  # noqa: BLE001 - 闇€鎹曡幏骞舵妸瀹¤琛岀疆 failed銆?
+    except Exception as exc:  # noqa: BLE001 - 需捕获并把审计行置 failed。
         mark_short_term_run_failed(run_id, repr(exc))
-        LOGGER.exception("鐭湡杩愯澶辫触锛?s level=%s", as_of_date, sector_level)
+        LOGGER.exception("短期运行失败：%s level=%s", as_of_date, sector_level)
         raise
 
 
-# ---------- CLI 鍐呴儴杈呭姪 --------------------------------------------------------
+# ---------- CLI 内部辅助 --------------------------------------------------------
 
 
 def _build_pipeline(level: int, as_of_date: str, config: ModelConfigShortTerm) -> pd.DataFrame:
-    """澶嶅埢 ``run_short_term_for`` 鐨勬祦姘寸嚎浣嗚烦杩囧啓搴擄紱杩斿洖鏍囪杩囧厓淇℃伅鐨?DataFrame銆?""
+    """复刻 ``run_short_term_for`` 的流水线但跳过写库；返回标记过元信息的 DataFrame。"""
     features = build_short_term_features(level, as_of_date, config)
     if features.empty:
         return pd.DataFrame()
@@ -187,15 +187,15 @@ def _build_pipeline(level: int, as_of_date: str, config: ModelConfigShortTerm) -
 
 
 def _write_csv(frame: pd.DataFrame, output_dir: Path, as_of_date: str) -> Path | None:
-    """鎶婂綋鏃ョ殑鐭湡蹇収鍐欏叆 CSV锛屽垪椤哄簭涓庢枃妗?搂7.1 瀵归綈銆?""
+    """把当日的短期快照写入 CSV，列顺序与文档 §7.1 对齐。"""
     if frame.empty:
-        LOGGER.warning("鏃犲彲鍐欏叆 CSV 鐨勬澘鍧楋細%s", as_of_date)
+        LOGGER.warning("无可写入 CSV 的板块：%s", as_of_date)
         return None
     output_dir.mkdir(parents=True, exist_ok=True)
     csv_path = output_dir / f"short_term_{as_of_date.replace('-', '')}.csv"
     available = [column for column in _CSV_COLUMNS if column in frame.columns]
     frame.loc[:, available].to_csv(csv_path, index=False, encoding="utf-8-sig")
-    LOGGER.info("宸插啓鍏?CSV锛?s锛?s 琛岋級", csv_path, len(frame))
+    LOGGER.info("已写入 CSV：%s（%s 行）", csv_path, len(frame))
     return csv_path
 
 
@@ -206,22 +206,22 @@ def _run_one_date(
     csv_output: Path | None,
     dry_run: bool,
 ) -> ShortTermRunResult | None:
-    """CLI 鍗曟棩鎵ц鍣紱``dry_run=True`` 鏃惰烦杩囦换浣曞啓搴撴搷浣溿€?""
+    """CLI 单日执行器；``dry_run=True`` 时跳过任何写库操作。"""
     if dry_run:
-        LOGGER.info("[dry-run] 寮€濮嬭绠?%s level=%s", as_of_date, level)
+        LOGGER.info("[dry-run] 开始计算 %s level=%s", as_of_date, level)
         frame = _build_pipeline(level, as_of_date, config)
         if csv_output:
             _write_csv(frame, csv_output, as_of_date)
         LOGGER.info(
-            "[dry-run] %s level=%s锛?s 涓澘鍧楋紝score_eligible=%s",
+            "[dry-run] %s level=%s：%s 个板块，score_eligible=%s",
             as_of_date, level,
             len(frame), int(frame["score_eligible"].sum()) if "score_eligible" in frame else 0,
         )
         return None
     result = run_short_term_for(level, as_of_date, config)
     if csv_output and result.snapshot_rows > 0:
-        # 钀藉簱鎴愬姛鍚?CSV 浠呬綔浜鸿倝澶囨煡锛涗粠璇诲簱鍐嶆媺涓€娆★紝閬垮厤浜屾鎵ц娴佹按绾裤€?
-        from .api.repository import ShortTermRepository  # 灞€閮?import锛岄伩鍏?CLI 鍚姩闃舵鍔犺浇 FastAPI 渚濊禆銆?
+        # 落库成功后 CSV 仅作人肉备查；从读库再拉一次，避免二次执行流水线。
+        from .api.repository import ShortTermRepository  # 局部 import，避免 CLI 启动阶段加载 FastAPI 依赖。
         rows = ShortTermRepository().load_snapshot(as_of_date, level, config.model_version)
         if rows:
             _write_csv(pd.DataFrame(rows), csv_output, as_of_date)
@@ -229,7 +229,7 @@ def _run_one_date(
 
 
 def _list_trade_dates(level: int, start_date: str, end_date: str) -> list[str]:
-    """杩斿洖鍥炲～鍖洪棿鍐呭彲鐢ㄧ殑浜ゆ槗鏃ュ垪琛紱涓?v1 ``run_daily.list_trade_dates`` 琛屼负涓€鑷淬€?""
+    """返回回填区间内可用的交易日列表；与 v1 ``run_daily.list_trade_dates`` 行为一致。"""
     from ..data_loader import load_sector_panel
     panel = load_sector_panel(level=level, start_date=start_date, end_date=end_date, min_history_days=1)
     if not panel:
@@ -243,31 +243,31 @@ def _list_trade_dates(level: int, start_date: str, end_date: str) -> list[str]:
     return sorted(all_dates)
 
 
-# ---------- CLI 鍏ュ彛 ------------------------------------------------------------
+# ---------- CLI 入口 ------------------------------------------------------------
 
 
 def main() -> None:
-    """瑙ｆ瀽 CLI 鍙傛暟骞舵墽琛屽崟鏃ユ垨鍖洪棿鍥炲～銆?""
-    parser = argparse.ArgumentParser(description="杩愯 sector_rotation2 v2_short_term 鐭湡寮傚姩娴佹按绾?)
-    parser.add_argument("--level", type=int, required=True, choices=(1, 2), help="鐢充竾琛屼笟灞傜骇")
-    parser.add_argument("--as-of-date", help="鍗曟棩浜ゆ槗鏃ワ紝鏍煎紡 YYYY-MM-DD")
-    parser.add_argument("--backfill-start", help="鍥炲～璧峰浜ゆ槗鏃ワ紝闇€涓?--backfill-end 鍚屾椂鎻愪緵")
-    parser.add_argument("--backfill-end", help="鍥炲～缁撴潫浜ゆ槗鏃ワ紝闇€涓?--backfill-start 鍚屾椂鎻愪緵")
-    parser.add_argument("--model-version", default="v2_short_term", help="鐭湡妯″瀷鐗堟湰锛堥粯璁?v2_short_term锛?)
-    parser.add_argument("--csv-output", help="鍙€夛細鎶婂綋鏃ョ煭鏈熷揩鐓ц惤鐩樺埌璇ョ洰褰曠殑 CSV锛屾枃浠跺悕 short_term_YYYYMMDD.csv")
-    parser.add_argument("--dry-run", action="store_true", help="鍙绠椾笉鍐欏簱锛涘彲涓?--csv-output 鎼厤鐢ㄤ簬鏈湴妫€瑙?)
+    """解析 CLI 参数并执行单日或区间回填。"""
+    parser = argparse.ArgumentParser(description="运行 sector_rotation2 v2_short_term 短期异动流水线")
+    parser.add_argument("--level", type=int, required=True, choices=(1, 2), help="申万行业层级")
+    parser.add_argument("--as-of-date", help="单日交易日，格式 YYYY-MM-DD")
+    parser.add_argument("--backfill-start", help="回填起始交易日，需与 --backfill-end 同时提供")
+    parser.add_argument("--backfill-end", help="回填结束交易日，需与 --backfill-start 同时提供")
+    parser.add_argument("--model-version", default="v2_short_term", help="短期模型版本（默认 v2_short_term）")
+    parser.add_argument("--csv-output", help="可选：把当日短期快照落盘到该目录的 CSV，文件名 short_term_YYYYMMDD.csv")
+    parser.add_argument("--dry-run", action="store_true", help="只计算不写库；可与 --csv-output 搭配用于本地检视")
     parser.add_argument(
         "--log-level",
         default="INFO",
         choices=("DEBUG", "INFO", "WARNING", "ERROR"),
-        help="缁堢鏃ュ織绾у埆",
+        help="终端日志级别",
     )
     args = parser.parse_args()
 
     if bool(args.backfill_start) ^ bool(args.backfill_end):
-        parser.error("--backfill-start 涓?--backfill-end 蹇呴』鍚屾椂鎻愪緵")
+        parser.error("--backfill-start 与 --backfill-end 必须同时提供")
     if not args.as_of_date and not (args.backfill_start and args.backfill_end):
-        parser.error("蹇呴』鎻愪緵 --as-of-date 鎴栧畬鏁寸殑 --backfill-start/--backfill-end 鍖洪棿")
+        parser.error("必须提供 --as-of-date 或完整的 --backfill-start/--backfill-end 区间")
 
     logging.basicConfig(
         level=getattr(logging, args.log_level),
@@ -280,10 +280,10 @@ def main() -> None:
     if args.backfill_start and args.backfill_end:
         trade_dates = _list_trade_dates(args.level, args.backfill_start, args.backfill_end)
         if not trade_dates:
-            LOGGER.warning("鍥炲～鍖洪棿 [%s, %s] 鍦?level=%s 涓嬫病鏈夊彲鐢ㄤ氦鏄撴棩", args.backfill_start, args.backfill_end, args.level)
+            LOGGER.warning("回填区间 [%s, %s] 在 level=%s 下没有可用交易日", args.backfill_start, args.backfill_end, args.level)
             return
         LOGGER.info(
-            "寮€濮嬪洖濉細level=%s model=%s dates=%s config_hash=%s dry_run=%s",
+            "开始回填：level=%s model=%s dates=%s config_hash=%s dry_run=%s",
             args.level, config.model_version, trade_dates, short_term_config_hash(config), args.dry_run,
         )
         success = 0
@@ -293,10 +293,10 @@ def main() -> None:
                 if result is not None or args.dry_run:
                     success += 1
             except Exception:
-                LOGGER.exception("鍥炲～鏃ユ湡澶辫触锛?s", trade_date)
+                LOGGER.exception("回填日期失败：%s", trade_date)
                 if not args.dry_run:
                     raise
-        LOGGER.info("鍥炲～瀹屾垚锛氭垚鍔?%s / 鍏?%s", success, len(trade_dates))
+        LOGGER.info("回填完成：成功 %s / 共 %s", success, len(trade_dates))
     else:
         _run_one_date(args.level, args.as_of_date, config, csv_dir, args.dry_run)
 

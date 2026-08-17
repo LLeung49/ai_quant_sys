@@ -51,11 +51,11 @@ class ModelConfigShortTerm:
             # volume_spike：当日成交显著放大。
             "volume_rvol_min": 1.80,               # rvol_1_20 阈值
             "volume_share_impulse_min": 1.30,      # share_impulse_1d 阈值
-            # limit_cluster / limit_panic：涨跌停集群。
-            "limit_up_cluster_min": 3,             # 至少 3 家涨停
-            "limit_down_cluster_max": 1,           # 跌停不超过 1 家
-            "limit_down_panic_min": 3,
-            "limit_up_panic_max": 1,
+            # limit_cluster / limit_panic: 用涨跌停家数占比 (ratio) 作为阈值，避免数少板块便于命中。
+            "limit_up_cluster_min": 0.05,         # 板块内涨停占比 ≥ 5%
+            "limit_down_cluster_max": 0.01,       # 板块内跌停占比 ≤ 1%
+            "limit_down_panic_min": 0.05,         # 板块内跌停占比 ≥ 5%
+            "limit_up_panic_max": 0.01,           # 板块内涨停占比 ≤ 1%
             # extreme_up / extreme_down：单日极端涨幅。
             "extreme_move_min": 0.03,              # ±3%
             # 短期反弹/走弱候选：与 5 日方向反转。

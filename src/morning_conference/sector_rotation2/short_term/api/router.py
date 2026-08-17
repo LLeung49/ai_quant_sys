@@ -39,21 +39,48 @@ def _parse_date(raw: str) -> date:
 
 
 def _split_run_metadata(rows: list[dict]) -> tuple[ShortTermResponseMeta, list[dict]]:
-    """从快照行中提取运行元信息并清理内部辅助列。"""
+    """从快照行中提取运行元信息并清理内部辅助列。
+
+    同时返回每个 KPI 标签命中的板块名称列表，按 short_term_composite_rank 升序排列，供前端悬停展示使用。
+    """
     latest_row = max(rows, key=lambda row: str(row.get("as_of_date", "")))
     source_dates = [str(row["_source_max_trade_date"]) for row in rows if row.get("_source_max_trade_date") is not None]
 
-    def _count(label: str) -> int:
-        return sum(1 for row in rows if label in (row.get("short_term_labels") or "").split(","))
+    # 按 short_term_composite_rank 升序：rank 缺失的板块排到末尾。快照表查询顺序本身已按 rank 升序返回，这里只需过滤与重复。
+    def _rank_key(row: dict) -> tuple[int, str]:
+        rank = row.get("short_term_composite_rank")
+        rank_key = int(rank) if isinstance(rank, int) or (rank is not None and str(rank).isdigit()) else 10 ** 6
+        return (rank_key, str(row.get("sector_name") or ""))
+
+    sorted_rows = sorted(rows, key=_rank_key)
+
+    def _sectors_with_label(label: str) -> list[str]:
+        names: list[str] = []
+        for row in sorted_rows:
+            labels = (row.get("short_term_labels") or "").split(",")
+            if label in labels:
+                name = row.get("sector_name")
+                if name and name not in names:
+                    names.append(str(name))
+        return names
+
+    pulse_up_names = _sectors_with_label("pulse_up")
+    volume_spike_names = _sectors_with_label("volume_spike")
+    limit_cluster_names = _sectors_with_label("limit_cluster")
+    limit_panic_names = _sectors_with_label("limit_panic")
 
     meta = ShortTermResponseMeta(
         source_max_trade_date=max(source_dates) if source_dates else None,
         eligible_sector_count=latest_row.get("_eligible_sector_count"),
         skipped_sector_count=latest_row.get("_skipped_sector_count"),
-        pulse_up_count=_count("pulse_up"),
-        volume_spike_count=_count("volume_spike"),
-        limit_cluster_count=_count("limit_cluster"),
-        limit_panic_count=_count("limit_panic"),
+        pulse_up_count=len(pulse_up_names),
+        volume_spike_count=len(volume_spike_names),
+        limit_cluster_count=len(limit_cluster_names),
+        limit_panic_count=len(limit_panic_names),
+        pulse_up_sectors=pulse_up_names,
+        volume_spike_sectors=volume_spike_names,
+        limit_cluster_sectors=limit_cluster_names,
+        limit_panic_sectors=limit_panic_names,
     )
     business = [{key: value for key, value in row.items() if not key.startswith("_")} for row in rows]
     return meta, business

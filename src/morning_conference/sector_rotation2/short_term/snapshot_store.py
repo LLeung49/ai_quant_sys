@@ -153,8 +153,16 @@ def create_short_term_run(
         connection.close()
 
 
-def mark_short_term_run_succeeded(run_id: str, snapshot_rows: int) -> int:
-    """把审计行标记为 ``succeeded`` 并记录落盘行数。"""
+def mark_short_term_run_succeeded(
+    run_id: str,
+    eligible_sector_count: int,
+    skipped_sector_count: int,
+) -> int:
+    """把审计行标记为 ``succeeded`` 并写入有效 / 跳过的板块计数。
+
+    与 v1 ``mark_run_succeeded`` 共用同一份 ``sector_rotation_run_log`` 表；
+    仅通过 ``model_version LIKE 'v2_%'`` 限定短期运行行，避免误更新 v1 审计行。
+    """
     connection = get_connection()
     cursor = connection.cursor()
     try:
@@ -163,11 +171,12 @@ def mark_short_term_run_succeeded(run_id: str, snapshot_rows: int) -> int:
             UPDATE sector_rotation_run_log
                SET status = 'succeeded',
                    finished_at = %s,
-                   snapshot_rows = %s
+                   eligible_sector_count = %s,
+                   skipped_sector_count = %s
              WHERE run_id = %s
                AND model_version LIKE %s
             """,
-            (datetime.now(), snapshot_rows, run_id, 'v2_%'),
+            (datetime.now(), eligible_sector_count, skipped_sector_count, run_id, 'v2_%'),
         )
         connection.commit()
         return cursor.rowcount
@@ -180,7 +189,11 @@ def mark_short_term_run_succeeded(run_id: str, snapshot_rows: int) -> int:
 
 
 def mark_short_term_run_failed(run_id: str, reason: str) -> int:
-    """把审计行标记为 ``failed`` 并记录失败原因。"""
+    """把审计行标记为 ``failed`` 并写入 ``error_summary``（与 v1 共用列名）。
+
+    ``error_summary`` 是 ``sector_rotation_run_log`` 表里既有的 TEXT 列；
+    不存在 ``error_message`` 列，使用旧名会导致 ``Unknown column`` 报错。
+    """
     connection = get_connection()
     cursor = connection.cursor()
     try:
@@ -189,7 +202,7 @@ def mark_short_term_run_failed(run_id: str, reason: str) -> int:
             UPDATE sector_rotation_run_log
                SET status = 'failed',
                    finished_at = %s,
-                   error_message = %s
+                   error_summary = %s
              WHERE run_id = %s
                AND model_version LIKE %s
             """,
@@ -203,3 +216,5 @@ def mark_short_term_run_failed(run_id: str, reason: str) -> int:
     finally:
         cursor.close()
         connection.close()
+
+
