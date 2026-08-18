@@ -549,6 +549,28 @@ def test_ensure_mapping_schema_adds_missing_columns_safely() -> None:
     assert any("ADD COLUMN membership_as_of_date" in sql for sql in updates)
 
 
+def test_ensure_mapping_schema_accepts_mysql_information_schema_uppercase_keys() -> None:
+    updates: list[str] = []
+
+    def query(sql: str, _params: tuple[object, ...]) -> list[dict[str, object]]:
+        if "information_schema.columns" in sql:
+            return [{"COLUMN_NAME": "id", "IS_NULLABLE": "NO"}]
+        return [
+            {"INDEX_NAME": "uk_sector_etf_map", "COLUMN_NAME": "sector_level"},
+            {"INDEX_NAME": "uk_sector_etf_map", "COLUMN_NAME": "sector_name"},
+            {"INDEX_NAME": "uk_sector_etf_map", "COLUMN_NAME": "etf_code"},
+            {"INDEX_NAME": "uk_sector_etf_map", "COLUMN_NAME": "effective_from"},
+        ]
+
+    mapping.ensure_mapping_schema(
+        query=query,
+        execute_update=lambda sql, _params=(): updates.append(sql) or 1,
+    )
+
+    assert any("ADD COLUMN quality_status" in sql for sql in updates)
+    assert any("DROP INDEX uk_sector_etf_map" in sql for sql in updates)
+
+
 def test_schema_migration_keeps_manual_and_derived_same_day_as_distinct_rows() -> None:
     updates: list[str] = []
 

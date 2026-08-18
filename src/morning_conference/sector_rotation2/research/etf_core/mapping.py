@@ -206,10 +206,10 @@ def ensure_mapping_schema(
              WHERE table_schema=DATABASE() AND table_name=%s""",
         ("trade_sector_etf_map",),
     )
-    existing = {str(row["column_name"]) for row in rows}
+    existing = {str(_metadata_value(row, "column_name")) for row in rows}
     nullability = {
-        str(row["column_name"]): str(row["is_nullable"])
-        for row in rows if row.get("is_nullable") is not None
+        str(_metadata_value(row, "column_name")): str(_metadata_value(row, "is_nullable"))
+        for row in rows if _metadata_value(row, "is_nullable") is not None
     }
     for name, definition in _MIGRATION_COLUMNS.items():
         if name not in existing:
@@ -225,7 +225,9 @@ def ensure_mapping_schema(
     )
     index_columns: dict[str, list[str]] = {}
     for row in index_rows:
-        index_columns.setdefault(str(row["index_name"]), []).append(str(row["column_name"]))
+        index_columns.setdefault(str(_metadata_value(row, "index_name")), []).append(
+            str(_metadata_value(row, "column_name")),
+        )
     desired_unique_columns = ["sector_level", "sector_name", "etf_code", "mapping_type", "effective_from"]
     old_unique_columns = index_columns.get("uk_sector_etf_map")
     if old_unique_columns != desired_unique_columns:
@@ -243,6 +245,15 @@ def ensure_mapping_schema(
                    (sector_level, sector_name, etf_code, mapping_type, effective_from)""",
                 (),
             )
+
+
+def _metadata_value(row: dict[str, Any], name: str) -> object | None:
+    """Read MySQL information_schema fields regardless of driver key casing."""
+
+    for key, value in row.items():
+        if key.casefold() == name:
+            return value
+    return None
 
 
 def load_sector_member_codes(
