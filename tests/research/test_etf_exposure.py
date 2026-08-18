@@ -2,6 +2,7 @@ import pytest
 
 from morning_conference.sector_rotation2.research.etf_core.exposure import (
     aggregate_constituents,
+    assess_sector_etfs,
     normalize_stock_code,
     rank_sector_etfs,
 )
@@ -85,6 +86,20 @@ def test_rank_sector_etfs_filters_small_percent_basket_below_coverage():
     )
 
     assert result == []
+
+
+def test_assessment_keeps_undercoverage_observation_for_mapping_quality_audit():
+    assessment = assess_sector_etfs(
+        {"600000"},
+        {"510300": [{"stock_code": "600000.SH", "weight": 0.7}]},
+        min_coverage=0.9,
+        weight_unit="decimal",
+    )
+
+    assert assessment.eligible == []
+    assert assessment.rejected[0].etf_code == "510300"
+    assert assessment.rejected[0].coverage_ratio == pytest.approx(0.7)
+    assert assessment.rejected[0].failure_reason == "coverage_below_minimum"
 
 
 def test_rank_sector_etfs_blocks_baskets_below_minimum_weight_coverage():

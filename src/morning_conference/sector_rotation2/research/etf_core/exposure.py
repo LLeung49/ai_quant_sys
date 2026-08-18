@@ -25,6 +25,24 @@ class ExposureResult:
     coverage_ratio: float
 
 
+@dataclass(frozen=True)
+class RejectedExposure:
+    """An assessed ETF that was excluded from the eligible candidate maps."""
+
+    etf_code: str
+    exposure_weight: float
+    coverage_ratio: float
+    failure_reason: str
+
+
+@dataclass(frozen=True)
+class ExposureAssessment:
+    """Complete constituent assessment, retaining both eligible and rejected ETFs."""
+
+    eligible: list[ExposureResult]
+    rejected: list[RejectedExposure]
+
+
 def normalize_stock_code(code: str) -> str:
     """Return a six-digit, market-neutral stock code.
 
@@ -84,6 +102,20 @@ def rank_sector_etfs(
 ) -> list[ExposureResult]:
     """Return the quality-passing Top3 ETFs ranked by actual SW2 exposure."""
 
+    return assess_sector_etfs(
+        sw2_codes, baskets, min_coverage, weight_unit=weight_unit,
+    ).eligible
+
+
+def assess_sector_etfs(
+    sw2_codes: Iterable[str],
+    baskets: Mapping[str, Iterable[Mapping[str, object]] | Mapping[str, object]],
+    min_coverage: float,
+    *,
+    weight_unit: Literal["decimal", "percent"],
+) -> ExposureAssessment:
+    """Assess all ETF baskets so rejected coverage remains auditable downstream."""
+
     if not 0 <= min_coverage <= 1:
         raise ValueError("min_coverage must be between zero and one")
     if weight_unit not in {"decimal", "percent"}:
@@ -91,9 +123,10 @@ def rank_sector_etfs(
 
     normalized_sw2_codes = {normalize_stock_code(code) for code in sw2_codes}
     if not normalized_sw2_codes or not baskets:
-        return []
+        return ExposureAssessment(eligible=[], rejected=[])
 
     ranked: list[ExposureResult] = []
+    rejected: list[RejectedExposure] = []
     for etf_code, basket in baskets.items():
         if not basket:
             continue
@@ -103,25 +136,37 @@ def rank_sector_etfs(
 
         normalized_weights = _normalize_weights(aggregated, weight_unit)
         coverage_ratio = sum(normalized_weights.values())
+        exposure_weight = sum(
+            weight for stock_code, weight in normalized_weights.items()
+            if stock_code in normalized_sw2_codes
+        )
         if coverage_ratio < min_coverage:
+            rejected.append(RejectedExposure(
+                str(etf_code), exposure_weight, coverage_ratio, "coverage_below_minimum",
+            ))
+            continue
+        if exposure_weight <= 0:
+            rejected.append(RejectedExposure(
+                str(etf_code), exposure_weight, coverage_ratio, "no_sector_exposure",
+            ))
             continue
 
         ranked.append(
             ExposureResult(
                 etf_code=str(etf_code),
-                exposure_weight=sum(
-                    weight
-                    for stock_code, weight in normalized_weights.items()
-                    if stock_code in normalized_sw2_codes
-                ),
+                exposure_weight=exposure_weight,
                 coverage_ratio=coverage_ratio,
             )
         )
 
-    return sorted(
-        ranked,
-        key=lambda item: (-item.exposure_weight, -item.coverage_ratio, item.etf_code),
-    )[:3]
+    return ExposureAssessment(
+        eligible=sorted(
+            ranked, key=lambda item: (-item.exposure_weight, -item.coverage_ratio, item.etf_code),
+        )[:3],
+        rejected=sorted(
+            rejected, key=lambda item: (-item.exposure_weight, -item.coverage_ratio, item.etf_code),
+        ),
+    )
 
 
 def _aggregate_basket(
