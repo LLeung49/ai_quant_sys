@@ -314,7 +314,7 @@ def test_run_refresh_reports_provider_and_sector_progress() -> None:
         "[refresh] mapping schema ready",
         "[refresh] loaded 1 SW2 sectors",
         "[refresh] loading MiniQMT ETF baskets",
-        "[refresh] MiniQMT: available; etfs=1; reported_date=2026-08-18",
+        "[refresh] MiniQMT: available; eligible_etfs=1/1; undercovered=0; reported_date=2026-08-18",
         "[refresh] selected MiniQMT ETF baskets; etfs=1; reported_date=2026-08-18",
         "[refresh] sector 1/1: Bank",
         "[refresh] sector 1/1: persisted 1 rows",

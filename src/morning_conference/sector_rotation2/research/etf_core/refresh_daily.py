@@ -23,6 +23,7 @@ from .providers import (
     MembershipProvider,
     MiniQMTETFProvider,
     ProviderQualityIssue,
+    basket_coverage_summary,
     refresh_sector_etf_mapping,
     select_freshest_basket,
 )
@@ -187,10 +188,10 @@ def run_refresh(
     elif provider_name == "auto":
         report("[refresh] loading MiniQMT ETF baskets")
         miniqmt_input = (miniqmt_provider or MiniQMTETFProvider()).load(target_date)
-        report(_basket_progress("MiniQMT", miniqmt_input))
+        report(_basket_progress("MiniQMT", miniqmt_input, min_coverage=min_coverage))
         report("[refresh] loading AKShare ETF baskets")
         akshare_input = (akshare_provider or AKShareETFProvider(progress=report)).load(target_date)
-        report(_basket_progress("AKShare", akshare_input))
+        report(_basket_progress("AKShare", akshare_input, min_coverage=min_coverage))
         basket_input = select_freshest_basket(
             miniqmt_input,
             akshare_input,
@@ -207,7 +208,11 @@ def run_refresh(
         report(f"[refresh] loading {_provider_label(provider_name)} ETF baskets")
         basket_input = _configured_basket_provider(provider_name).load(target_date)
     if provider_name != "auto":
-        report(_basket_progress(basket_input.source_provider or provider_name, basket_input))
+        report(_basket_progress(
+            basket_input.source_provider or provider_name,
+            basket_input,
+            min_coverage=min_coverage,
+        ))
     report(_selected_basket_progress(basket_input))
 
     count = 0
@@ -277,11 +282,15 @@ def _is_quality_failure(result: object) -> bool:
     return assessment is not None and not bool(getattr(assessment, "eligible", ()))
 
 
-def _basket_progress(label: str, basket: ETFBasketInput) -> str:
+def _basket_progress(label: str, basket: ETFBasketInput, *, min_coverage: float) -> str:
     label = _provider_label(label)
     if basket.available:
         reported_date = basket.as_of_date.isoformat() if basket.as_of_date is not None else "unknown"
-        return f"[refresh] {label}: available; etfs={len(basket.baskets)}; reported_date={reported_date}"
+        eligible, undercovered = basket_coverage_summary(basket, min_coverage=min_coverage)
+        return (
+            f"[refresh] {label}: available; eligible_etfs={eligible}/{len(basket.baskets)}; "
+            f"undercovered={undercovered}; reported_date={reported_date}"
+        )
     reason = basket.quality_issue.code if basket.quality_issue is not None else "unavailable"
     return f"[refresh] {label}: unavailable; reason={reason}"
 

@@ -94,7 +94,7 @@ def test_newer_partial_source_cannot_displace_older_complete_source() -> None:
     assert result.as_of_date == date(2026, 3, 31)
 
 
-def test_source_with_any_undercovered_etf_basket_is_not_complete() -> None:
+def test_source_retains_complete_etfs_when_some_baskets_are_undercovered() -> None:
     partial_miniqmt = ETFBasketInput(
         baskets={
             "510300.SH": ({"stock_code": "600000", "weight": 100.0},),
@@ -106,10 +106,7 @@ def test_source_with_any_undercovered_etf_basket_is_not_complete() -> None:
         source_reference="miniqmt:2026Q2",
         basket_source_priority="miniqmt_exact",
     )
-    complete_akshare = _basket(
-        provider="akshare",
-        reported_date=date(2026, 3, 31),
-    )
+    complete_akshare = _basket(provider="akshare", reported_date=date(2026, 3, 31))
 
     result = select_freshest_basket(
         partial_miniqmt,
@@ -118,7 +115,9 @@ def test_source_with_any_undercovered_etf_basket_is_not_complete() -> None:
         min_coverage=0.8,
     )
 
-    assert result.source_provider == "akshare"
+    assert result.source_provider == "miniqmt"
+    assert tuple(result.baskets) == ("510300.SH",)
+    assert result.etf_codes == ("510300.SH",)
 
 
 def test_cross_check_compares_miniqmt_with_akshare_when_miniqmt_is_selected() -> None:

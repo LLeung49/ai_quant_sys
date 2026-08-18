@@ -368,12 +368,13 @@ def select_freshest_basket(
     if not 0 <= min_coverage <= 1:
         raise ValueError("min_coverage must be between zero and one")
     candidates = [
-        basket for basket in (miniqmt, akshare)
+        _retain_complete_baskets(basket, min_coverage=min_coverage)
+        for basket in (miniqmt, akshare)
         if (
             basket.available
             and basket.as_of_date is not None
             and basket.as_of_date <= target_date
-            and _basket_is_complete(basket, min_coverage=min_coverage)
+            and _complete_basket_codes(basket, min_coverage=min_coverage)
         )
     ]
     cross_check_status, cross_check_detail = _cross_check_miniqmt_codes(
@@ -777,24 +778,55 @@ def _reported_quarter_end(value: object) -> date | None:
     return date(year, month, day)
 
 
-def _basket_is_complete(
+def basket_coverage_summary(
     basket: ETFBasketInput,
     *,
     min_coverage: float,
-) -> bool:
-    """Return whether every ETF basket has valid normalized weight coverage."""
+) -> tuple[int, int]:
+    """Return usable and undercovered ETF basket counts for operator reporting."""
+
+    eligible = _complete_basket_codes(basket, min_coverage=min_coverage)
+    return len(eligible), max(0, len(basket.baskets) - len(eligible))
+
+
+def _complete_basket_codes(
+    basket: ETFBasketInput,
+    *,
+    min_coverage: float,
+) -> tuple[str, ...]:
+    """Return ETF codes with valid normalized coverage for one source."""
 
     if basket.weight_unit not in {"decimal", "percent"} or not basket.baskets:
-        return False
+        return ()
     scale = 100.0 if basket.weight_unit == "percent" else 1.0
-    for rows in basket.baskets.values():
+    eligible: list[str] = []
+    for etf_code, rows in basket.baskets.items():
         try:
             coverage = sum(aggregate_constituents(rows).values()) / scale
         except (TypeError, ValueError):
-            return False
-        if coverage < min_coverage or coverage > 1.0 + 1e-9:
-            return False
-    return True
+            continue
+        if min_coverage <= coverage <= 1.0 + 1e-9:
+            eligible.append(etf_code)
+    return tuple(eligible)
+
+
+def _retain_complete_baskets(
+    basket: ETFBasketInput,
+    *,
+    min_coverage: float,
+) -> ETFBasketInput:
+    """Remove undercovered ETFs without fabricating missing constituent weight."""
+
+    eligible_codes = _complete_basket_codes(basket, min_coverage=min_coverage)
+    return replace(
+        basket,
+        baskets={code: basket.baskets[code] for code in eligible_codes},
+        etf_codes=eligible_codes,
+        constituent_codes={
+            code: basket.constituent_codes[code]
+            for code in eligible_codes if code in basket.constituent_codes
+        },
+    )
 
 
 def _cross_check_miniqmt_codes(
