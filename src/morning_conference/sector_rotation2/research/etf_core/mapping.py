@@ -215,7 +215,7 @@ ON DUPLICATE KEY UPDATE
 _LOCK_RETURN_SECTOR_SQL = """
 SELECT id FROM trade_sector_etf_map
 WHERE sector_level=%s AND sector_name=%s
-  AND mapping_type='return_exposure_derived'
+  AND mapping_type IN ('return_exposure_derived', 'return_mapping_quality_failure')
 FOR UPDATE
 """
 
@@ -223,6 +223,12 @@ _DELETE_SAME_DAY_RETURN_SQL = """
 DELETE FROM trade_sector_etf_map
 WHERE sector_level=%s AND sector_name=%s AND effective_from=%s
   AND mapping_type='return_exposure_derived'
+"""
+
+_DELETE_SAME_DAY_RETURN_FAILURE_SQL = """
+DELETE FROM trade_sector_etf_map
+WHERE sector_level=%s AND sector_name=%s AND effective_from=%s
+  AND mapping_type='return_mapping_quality_failure'
 """
 
 _REBUILD_RETURN_EFFECTIVE_INTERVALS_SQL = """
@@ -543,6 +549,7 @@ def persist_return_exposure_mapping(
     with transaction() as db:
         db.execute(_LOCK_RETURN_SECTOR_SQL, (sector_level, sector_name))
         db.execute(_DELETE_SAME_DAY_RETURN_SQL, (sector_level, sector_name, as_of_date))
+        db.execute(_DELETE_SAME_DAY_RETURN_FAILURE_SQL, (sector_level, sector_name, as_of_date))
         db.execute_many(_INSERT_RETURN_MAPPING_SQL, rows)
         db.execute(
             _REBUILD_RETURN_EFFECTIVE_INTERVALS_SQL,
@@ -574,11 +581,10 @@ def load_effective_return_etfs(
                AND (effective_to IS NULL OR effective_to >= %s)
                AND mapping_type='return_exposure_derived'
                AND mapping_method='sw2_return_regression_v1'
-               AND quality_status='qualified' AND price_as_of_date=%s
-               AND window_end_date=%s
+               AND quality_status='qualified'
              ORDER BY rank_no ASC, etf_code ASC
              LIMIT 3""",
-        (sector_name, sector_level, as_of_date, as_of_date, as_of_date, as_of_date),
+        (sector_name, sector_level, as_of_date, as_of_date),
     )
     return sorted(
         (
@@ -768,8 +774,10 @@ def _validate_return_mapping_provenance(
         raise ValueError("return mapping dates must be dates")
     if window_start_date > window_end_date:
         raise ValueError("window_start_date must not be after window_end_date")
-    if window_end_date != as_of_date or price_as_of_date != as_of_date:
-        raise ValueError("window_end_date and price_as_of_date must equal as_of_date")
+    if window_end_date != price_as_of_date:
+        raise ValueError("window_end_date and price_as_of_date must match")
+    if price_as_of_date > as_of_date:
+        raise ValueError("price_as_of_date must not be later than as_of_date")
     if isinstance(lookback_trading_days, bool) or lookback_trading_days < 1:
         raise ValueError("lookback_trading_days must be positive")
     for field, value in (
@@ -783,13 +791,39 @@ def _validate_return_mapping_provenance(
 
 
 def _has_return_mapping_provenance(row: dict[str, Any], as_of_date: date) -> bool:
-    if row.get("price_as_of_date") != as_of_date or row.get("window_end_date") != as_of_date:
+    effective_from = row.get("effective_from")
+    effective_to = row.get("effective_to")
+    source_as_of_date = row.get("source_as_of_date")
+    window_start_date = row.get("window_start_date")
+    window_end_date = row.get("window_end_date")
+    price_as_of_date = row.get("price_as_of_date")
+    if any(
+        type(value) is not date
+        for value in (
+            effective_from,
+            source_as_of_date,
+            window_start_date,
+            window_end_date,
+            price_as_of_date,
+        )
+    ):
         return False
-    if type(row.get("window_start_date")) is not date:
+    if effective_to is not None and type(effective_to) is not date:
         return False
-    if not str(row.get("price_source") or "").strip():
+    if not (
+        window_start_date <= window_end_date
+        and window_end_date == price_as_of_date == source_as_of_date
+        and price_as_of_date <= effective_from <= as_of_date
+    ):
+        return False
+    if effective_to is not None and not (effective_from <= effective_to and as_of_date <= effective_to):
+        return False
+    price_source = str(row.get("price_source") or "").strip()
+    if not price_source or str(row.get("source_provider") or "").strip() != price_source:
         return False
     if not str(row.get("universe_source") or "").strip():
+        return False
+    if not str(row.get("mapping_version") or "").strip() or not str(row.get("config_hash") or "").strip():
         return False
     if row.get("confidence_status") not in {"qualified", "low_confidence"}:
         return False

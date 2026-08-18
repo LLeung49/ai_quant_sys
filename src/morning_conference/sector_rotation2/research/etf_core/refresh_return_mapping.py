@@ -100,7 +100,7 @@ def run_refresh(
             window_start_date=window_start,
             window_end_date=window_end,
             lookback_trading_days=window,
-            price_as_of_date=loaded.as_of_date,
+            price_as_of_date=window_end,
             price_source=loaded.price_source,
             universe_source=RETURN_UNIVERSE_SOURCE,
             mapping_version=RETURN_MAPPING_VERSION,
