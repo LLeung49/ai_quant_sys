@@ -520,7 +520,8 @@ def test_akshare_lazily_loads_etf_universe_and_preserves_latest_disclosed_quarte
             ]
 
     client = Client()
-    provider = AKShareETFProvider(client=client)
+    progress: list[str] = []
+    provider = AKShareETFProvider(client=client, progress=progress.append)
     assert client.universe_calls == 0
 
     result = provider.load(TARGET)
@@ -535,6 +536,10 @@ def test_akshare_lazily_loads_etf_universe_and_preserves_latest_disclosed_quarte
         {"stock_code": "600000", "weight": 45.0},
         {"stock_code": "000001", "weight": 40.0},
     )
+    assert progress == [
+        "[akshare] ETF universe loaded: 2; retrieving disclosed holdings",
+        "[akshare] holdings progress: 2/2",
+    ]
 
 
 @pytest.mark.parametrize(

@@ -139,6 +139,7 @@ def run_refresh(
     akshare_provider: BasketProvider | None = None,
     ensure_schema: Callable[[], None] | None = None,
     refresh: Callable[..., object] = refresh_sector_etf_mapping,
+    progress: Callable[[str], None] | None = None,
 ) -> int:
     """Refresh every locally configured sector for one exact target date."""
 
@@ -157,7 +158,9 @@ def run_refresh(
         from .mapping import ensure_mapping_schema
 
         ensure_schema = ensure_mapping_schema
+    report = progress or (lambda _message: None)
     ensure_schema()
+    report("[refresh] mapping schema ready")
 
     rows = query(
         f"""SELECT DISTINCT status.sector_{sector_level} AS sector_name
@@ -171,16 +174,23 @@ def run_refresh(
         str(row["sector_name"]) for row in rows
         if row.get("sector_name") is not None and str(row["sector_name"]).strip()
     )
+    report(f"[refresh] loaded {len(sector_names)} SW{sector_level} sectors")
     membership = membership_provider or LocalSWMembershipProvider(query=query)
     if basket_provider is not None and basket_json_path is not None:
         raise ValueError("basket_provider and basket_json_path are mutually exclusive")
     if basket_provider is not None:
+        report(f"[refresh] loading {_provider_label(provider_name)} ETF baskets")
         basket_input = basket_provider.load(target_date)
     elif basket_json_path is not None:
+        report("[refresh] loading audited JSON ETF baskets")
         basket_input = AuditedJSONBasketProvider(basket_json_path).load(target_date)
     elif provider_name == "auto":
+        report("[refresh] loading MiniQMT ETF baskets")
         miniqmt_input = (miniqmt_provider or MiniQMTETFProvider()).load(target_date)
-        akshare_input = (akshare_provider or AKShareETFProvider()).load(target_date)
+        report(_basket_progress("MiniQMT", miniqmt_input))
+        report("[refresh] loading AKShare ETF baskets")
+        akshare_input = (akshare_provider or AKShareETFProvider(progress=report)).load(target_date)
+        report(_basket_progress("AKShare", akshare_input))
         basket_input = select_freshest_basket(
             miniqmt_input,
             akshare_input,
@@ -188,16 +198,23 @@ def run_refresh(
             min_coverage=min_coverage,
         )
     elif provider_name == "miniqmt" and miniqmt_provider is not None:
+        report("[refresh] loading MiniQMT ETF baskets")
         basket_input = miniqmt_provider.load(target_date)
     elif provider_name == "akshare" and akshare_provider is not None:
+        report("[refresh] loading AKShare ETF baskets")
         basket_input = akshare_provider.load(target_date)
     else:
+        report(f"[refresh] loading {_provider_label(provider_name)} ETF baskets")
         basket_input = _configured_basket_provider(provider_name).load(target_date)
+    if provider_name != "auto":
+        report(_basket_progress(basket_input.source_provider or provider_name, basket_input))
+    report(_selected_basket_progress(basket_input))
 
     count = 0
     freshness_counts = {"fresh": 0, "aging": 0, "stale": 0}
     quality_failure_count = 0
-    for sector_name in sector_names:
+    for index, sector_name in enumerate(sector_names, start=1):
+        report(f"[refresh] sector {index}/{len(sector_names)}: {sector_name}")
         result = refresh(
             sector_name=sector_name,
             sector_level=sector_level,
@@ -210,6 +227,7 @@ def run_refresh(
         )
         persisted_rows = int(getattr(result, "persisted_rows"))
         count += persisted_rows
+        report(f"[refresh] sector {index}/{len(sector_names)}: persisted {persisted_rows} rows")
         if _is_quality_failure(result):
             quality_failure_count += persisted_rows
         elif basket_input.as_of_date is not None:
@@ -240,7 +258,7 @@ def main(
     )
     if args.basket_json is not None:
         refresh_kwargs["basket_json_path"] = args.basket_json
-    run_refresh_fn(**refresh_kwargs)
+    run_refresh_fn(**refresh_kwargs, progress=print)
     return 0
 
 
@@ -257,6 +275,29 @@ def _is_quality_failure(result: object) -> bool:
         return True
     assessment = getattr(result, "assessment", None)
     return assessment is not None and not bool(getattr(assessment, "eligible", ()))
+
+
+def _basket_progress(label: str, basket: ETFBasketInput) -> str:
+    label = _provider_label(label)
+    if basket.available:
+        reported_date = basket.as_of_date.isoformat() if basket.as_of_date is not None else "unknown"
+        return f"[refresh] {label}: available; etfs={len(basket.baskets)}; reported_date={reported_date}"
+    reason = basket.quality_issue.code if basket.quality_issue is not None else "unavailable"
+    return f"[refresh] {label}: unavailable; reason={reason}"
+
+
+def _selected_basket_progress(basket: ETFBasketInput) -> str:
+    label = _provider_label(str(basket.source_provider or "auto"))
+    if not basket.available:
+        return f"[refresh] no complete ETF basket selected; reason={basket.quality_issue.code if basket.quality_issue else 'unavailable'}"
+    reported_date = basket.as_of_date.isoformat() if basket.as_of_date is not None else "unknown"
+    return f"[refresh] selected {label} ETF baskets; etfs={len(basket.baskets)}; reported_date={reported_date}"
+
+
+def _provider_label(value: str) -> str:
+    """Format known provider identifiers consistently in operator output."""
+
+    return {"miniqmt": "MiniQMT", "akshare": "AKShare"}.get(value.casefold(), value)
 
 
 def _strict_iso_date(value: object) -> date:

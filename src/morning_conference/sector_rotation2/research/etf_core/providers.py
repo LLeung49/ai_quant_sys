@@ -263,10 +263,12 @@ class AKShareETFProvider:
         dataframe: object | None = None,
         client: object | None = None,
         provenance: ProviderProvenance | None = None,
+        progress: Callable[[str], None] | None = None,
     ) -> None:
         self._dataframe = dataframe
         self._client = client
         self._provenance = provenance
+        self._progress = progress
 
     def load(self, target_date: date) -> ETFBasketInput:
         try:
@@ -278,7 +280,7 @@ class AKShareETFProvider:
                 client = self._client
                 if client is None:
                     import akshare as client
-                data = _load_akshare_disclosed_holdings(client, target_date)
+                data = _load_akshare_disclosed_holdings(client, target_date, progress=self._progress)
             rows = _records(data)
         except Exception as exc:
             return ETFBasketInput.unavailable(
@@ -684,7 +686,12 @@ def _records(data: object) -> list[Mapping[str, object]]:
 _AKSHARE_QUARTER_PATTERN = re.compile(r"(?P<year>\d{4})\s*年\s*(?P<quarter>[1-4])\s*季度")
 
 
-def _load_akshare_disclosed_holdings(client: object, target_date: date) -> list[dict[str, object]]:
+def _load_akshare_disclosed_holdings(
+    client: object,
+    target_date: date,
+    *,
+    progress: Callable[[str], None] | None = None,
+) -> list[dict[str, object]]:
     universe_loader = getattr(client, "fund_etf_spot_em", None)
     holdings_loader = getattr(client, "fund_portfolio_hold_em", None)
     if not callable(universe_loader) or not callable(holdings_loader):
@@ -700,9 +707,11 @@ def _load_akshare_disclosed_holdings(client: object, target_date: date) -> list[
     )
     if not etf_codes:
         raise ValueError("fund_etf_spot_em returned no ETF codes")
+    if progress is not None:
+        progress(f"[akshare] ETF universe loaded: {len(etf_codes)}; retrieving disclosed holdings")
 
     disclosed: list[tuple[str, date, Mapping[str, object]]] = []
-    for etf_code in etf_codes:
+    for index, etf_code in enumerate(etf_codes, start=1):
         eligible = _akshare_rows_for_year(
             holdings_loader, etf_code=etf_code, year=target_date.year, target_date=target_date,
         )
@@ -719,6 +728,8 @@ def _load_akshare_disclosed_holdings(client: object, target_date: date) -> list[
             for reported_date, row in eligible
             if reported_date == latest_for_etf
         )
+        if progress is not None and (index % 50 == 0 or index == len(etf_codes)):
+            progress(f"[akshare] holdings progress: {index}/{len(etf_codes)}")
     if not disclosed:
         raise ValueError("fund_portfolio_hold_em returned no disclosed holdings on or before target date")
 

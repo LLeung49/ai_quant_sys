@@ -44,6 +44,7 @@ def test_refresh_cli_main_explicitly_invokes_mapping_refresh_runner() -> None:
         "--basket-json", "audited-baskets.json",
     ], run_refresh_fn=run_refresh_fn) == 0
 
+    assert captured.pop("progress") is print
     assert captured == {
         "target_date": TARGET,
         "sector_level": 2,
@@ -266,3 +267,55 @@ def test_run_refresh_enumerates_local_sectors_and_refreshes_each_with_one_basket
     assert all(call["membership_provider"] is membership_provider for call in refreshed)
     assert all(call["basket_provider"](TARGET).quality_issue.code == "missing_weight" for call in refreshed)
     assert "SELECT DISTINCT status.sector_2 AS sector_name" in query_calls[0][0]
+
+
+def test_run_refresh_reports_provider_and_sector_progress() -> None:
+    progress: list[str] = []
+
+    class MembershipProvider:
+        def load(self, sector_name: str, sector_level: int, target_date: date) -> SWMembershipInput:
+            return SWMembershipInput(
+                sector_name=sector_name,
+                sector_level=sector_level,
+                member_codes=("600000",),
+                as_of_date=target_date,
+            )
+
+    basket = ETFBasketInput(
+        baskets={"510300": ({"stock_code": "600000", "weight": 100.0},)},
+        as_of_date=TARGET,
+        weight_unit="percent",
+        source_provider="miniqmt",
+        source_reference="miniqmt:fixture",
+        basket_source_priority="miniqmt_exact",
+    )
+
+    class BasketProvider:
+        def load(self, target_date: date) -> ETFBasketInput:
+            assert target_date == TARGET
+            return basket
+
+    refresh_daily.run_refresh(
+        target_date=TARGET,
+        sector_level=2,
+        provider_name="miniqmt",
+        min_coverage=0.8,
+        mapping_version="exposure_v1",
+        config_hash="cfg",
+        query=lambda *_: [{"sector_name": "Bank"}],
+        membership_provider=MembershipProvider(),
+        basket_provider=BasketProvider(),
+        ensure_schema=lambda: None,
+        refresh=lambda **_kwargs: type("R", (), {"persisted_rows": 1})(),
+        progress=progress.append,
+    )
+
+    assert progress == [
+        "[refresh] mapping schema ready",
+        "[refresh] loaded 1 SW2 sectors",
+        "[refresh] loading MiniQMT ETF baskets",
+        "[refresh] MiniQMT: available; etfs=1; reported_date=2026-08-18",
+        "[refresh] selected MiniQMT ETF baskets; etfs=1; reported_date=2026-08-18",
+        "[refresh] sector 1/1: Bank",
+        "[refresh] sector 1/1: persisted 1 rows",
+    ]
