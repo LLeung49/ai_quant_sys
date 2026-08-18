@@ -14,8 +14,8 @@ def test_mapping_is_point_in_time_and_primary_sorted() -> None:
 
     def query(_sql: str, _params: tuple[object, ...]) -> list[dict[str, object]]:
         return [
-            {"etf_code": "512480.SH", "mapping_type": "exposure_derived", "quality_status": "qualified", "exposure_weight": 0.4, "coverage_ratio": 0.9, "rank_no": 2, "source_as_of_date": target, "membership_as_of_date": target, "constituent_as_of_date": target, "source_provider": "provider_x", "source_reference": "provider:daily"},
-            {"etf_code": "159995.SZ", "mapping_type": "exposure_derived", "quality_status": "qualified", "exposure_weight": 0.8, "coverage_ratio": 0.9, "rank_no": 1, "source_as_of_date": target, "membership_as_of_date": target, "constituent_as_of_date": target, "source_provider": "provider_x", "source_reference": "provider:daily"},
+            {"etf_code": "512480.SH", "mapping_type": "exposure_derived", "quality_status": "qualified", "exposure_weight": 0.4, "coverage_ratio": 0.9, "rank_no": 2, "source_as_of_date": target, "membership_as_of_date": target, "constituent_as_of_date": target, "constituent_reported_date": target, "holdings_age_days": 0, "freshness_status": "fresh", "freshness_confidence": 1.0, "basket_source_priority": "miniqmt_exact", "source_provider": "provider_x", "source_reference": "provider:daily"},
+            {"etf_code": "159995.SZ", "mapping_type": "exposure_derived", "quality_status": "qualified", "exposure_weight": 0.8, "coverage_ratio": 0.9, "rank_no": 1, "source_as_of_date": target, "membership_as_of_date": target, "constituent_as_of_date": target, "constituent_reported_date": target, "holdings_age_days": 0, "freshness_status": "fresh", "freshness_confidence": 1.0, "basket_source_priority": "miniqmt_exact", "source_provider": "provider_x", "source_reference": "provider:daily"},
         ]
 
     rows = load_effective_etfs("半导体", 1, target, query)
@@ -66,6 +66,8 @@ def test_exposure_mapping_persists_only_quality_passing_top_three_with_audit_fie
         source_provider="provider_x",
         membership_as_of_date=date(2026, 8, 17),
         constituent_as_of_date=date(2026, 8, 17),
+        constituent_reported_date=date(2026, 8, 17),
+        basket_source_priority="miniqmt_exact",
         mapping_version="exposure_v1",
         config_hash="abc123",
         weight_unit="decimal",
@@ -84,6 +86,194 @@ def test_exposure_mapping_persists_only_quality_passing_top_three_with_audit_fie
     assert all(row[15] == "current_mapping" for row in rows)
     assert all(row[16] == date(2026, 8, 17) and row[17] == date(2026, 8, 17) for row in rows)
     assert all(row[21] == "xtdata.get_etf_info" for row in rows)
+
+
+def test_mapping_persists_and_loads_holdings_disclosure_freshness() -> None:
+    for field in (
+        "constituent_reported_date",
+        "holdings_age_days",
+        "freshness_status",
+        "freshness_confidence",
+        "basket_source_priority",
+    ):
+        assert field in mapping.SECTOR_ETF_MAP_DDL
+
+    commands: list[tuple[str, object]] = []
+
+    class Transaction:
+        def execute(self, sql: str, params: tuple[object, ...]) -> int:
+            commands.append((sql, params))
+            return 1
+
+        def execute_many(self, sql: str, rows: list[tuple[object, ...]]) -> int:
+            commands.append((sql, rows))
+            return len(rows)
+
+    @contextmanager
+    def transaction():
+        yield Transaction()
+
+    refresh_date = date(2026, 8, 18)
+    reported_date = date(2026, 5, 19)
+    assert mapping.persist_exposure_mapping(
+        sector_name="半导体",
+        sector_level=2,
+        as_of_date=refresh_date,
+        ranked=[ExposureResult("510001.SH", exposure_weight=0.8, coverage_ratio=1.0)],
+        source_as_of_date=refresh_date,
+        source_provider="akshare",
+        membership_as_of_date=refresh_date,
+        constituent_as_of_date=refresh_date,
+        constituent_reported_date=reported_date,
+        basket_source_priority="akshare_disclosed",
+        mapping_version="exposure_v1",
+        config_hash="cfg",
+        weight_unit="decimal",
+        source_reference="akshare:fund_portfolio_hold_em",
+        transaction=transaction,
+        ensure_schema=lambda: None,
+    ) == 1
+
+    insert_sql, inserted_rows = commands[2]
+    row = inserted_rows[0]
+    assert "constituent_reported_date" in insert_sql
+    assert "holdings_age_days" in insert_sql
+    assert "freshness_status" in insert_sql
+    assert "freshness_confidence" in insert_sql
+    assert "basket_source_priority" in insert_sql
+    assert row[22] == reported_date
+    assert row[23] == 91
+    assert row[24] == "aging"
+    assert row[25] == pytest.approx(0.5 ** (91 / 90))
+    assert row[26] == "akshare_disclosed"
+
+    captured: dict[str, object] = {}
+
+    def query(sql: str, params: tuple[object, ...]) -> list[dict[str, object]]:
+        captured.update(sql=sql, params=params)
+        return [{
+            "etf_code": "510001.SH",
+            "mapping_type": "exposure_derived",
+            "quality_status": "qualified",
+            "exposure_weight": 0.8,
+            "coverage_ratio": 1.0,
+            "rank_no": 1,
+            "source_as_of_date": refresh_date,
+            "membership_as_of_date": refresh_date,
+            "constituent_as_of_date": refresh_date,
+            "constituent_reported_date": reported_date,
+            "holdings_age_days": 91,
+            "freshness_status": "aging",
+            "freshness_confidence": 0.5 ** (91 / 90),
+            "basket_source_priority": "akshare_disclosed",
+            "source_provider": "akshare",
+            "source_reference": "akshare:fund_portfolio_hold_em",
+        }]
+
+    rows = mapping.load_effective_etfs("半导体", 2, refresh_date, query)
+
+    assert "constituent_reported_date" in captured["sql"]
+    assert "holdings_age_days" in captured["sql"]
+    assert "freshness_status" in captured["sql"]
+    assert "freshness_confidence" in captured["sql"]
+    assert "basket_source_priority" in captured["sql"]
+    assert rows[0]["constituent_reported_date"] == reported_date
+    assert rows[0]["holdings_age_days"] == 91
+    assert rows[0]["freshness_status"] == "aging"
+    assert rows[0]["freshness_confidence"] == pytest.approx(0.5 ** (91 / 90))
+    assert rows[0]["basket_source_priority"] == "akshare_disclosed"
+
+
+@pytest.mark.parametrize(
+    ("constituent_reported_date", "basket_source_priority", "error"),
+    [
+        (None, "akshare_disclosed", "constituent_reported_date"),
+        (date(2026, 8, 18), None, "basket_source_priority"),
+        (date(2026, 8, 18), " ", "basket_source_priority"),
+    ],
+)
+def test_qualified_mapping_requires_explicit_holdings_provenance(
+    constituent_reported_date: date | None,
+    basket_source_priority: str | None,
+    error: str,
+) -> None:
+    with pytest.raises(ValueError, match=error):
+        mapping.persist_exposure_mapping(
+            sector_name="半导体",
+            sector_level=2,
+            as_of_date=date(2026, 8, 18),
+            ranked=[ExposureResult("510001.SH", exposure_weight=0.8, coverage_ratio=1.0)],
+            source_as_of_date=date(2026, 8, 18),
+            source_provider="akshare",
+            membership_as_of_date=date(2026, 8, 18),
+            constituent_as_of_date=date(2026, 8, 18),
+            constituent_reported_date=constituent_reported_date,
+            basket_source_priority=basket_source_priority,
+            mapping_version="exposure_v1",
+            config_hash="cfg",
+            weight_unit="decimal",
+            source_reference="akshare:fund_portfolio_hold_em",
+            transaction=lambda: pytest.fail("invalid mapping must not open a transaction"),
+        )
+
+
+def test_effective_loader_rejects_invalid_holdings_freshness_provenance() -> None:
+    refresh_date = date(2026, 8, 18)
+    reported_date = date(2026, 5, 19)
+    confidence = 0.5 ** (91 / 90)
+    base = {
+        "mapping_type": "exposure_derived",
+        "quality_status": "qualified",
+        "exposure_weight": 0.8,
+        "coverage_ratio": 1.0,
+        "rank_no": 1,
+        "source_as_of_date": refresh_date,
+        "membership_as_of_date": refresh_date,
+        "constituent_as_of_date": refresh_date,
+        "constituent_reported_date": reported_date,
+        "holdings_age_days": 91,
+        "freshness_status": "aging",
+        "freshness_confidence": confidence,
+        "basket_source_priority": "akshare_disclosed",
+        "source_provider": "akshare",
+        "source_reference": "akshare:fund_portfolio_hold_em",
+    }
+    missing_reported_date = {**base, "etf_code": "510001.SH"}
+    missing_reported_date.pop("constituent_reported_date")
+    missing_age = {**base, "etf_code": "510008.SH"}
+    missing_age.pop("holdings_age_days")
+    missing_status = {**base, "etf_code": "510009.SH"}
+    missing_status.pop("freshness_status")
+    missing_confidence = {**base, "etf_code": "510010.SH"}
+    missing_confidence.pop("freshness_confidence")
+    missing_source_priority = {**base, "etf_code": "510011.SH"}
+    missing_source_priority.pop("basket_source_priority")
+    captured: dict[str, object] = {}
+
+    def query(sql: str, params: tuple[object, ...]) -> list[dict[str, object]]:
+        captured.update(sql=sql, params=params)
+        return [
+            missing_reported_date,
+            {**base, "etf_code": "510002.SH", "holdings_age_days": 90},
+            {**base, "etf_code": "510003.SH", "freshness_status": "fresh"},
+            {**base, "etf_code": "510004.SH", "freshness_confidence": 1.0},
+            {**base, "etf_code": "510005.SH", "basket_source_priority": " "},
+            {**base, "etf_code": "510006.SH", "constituent_reported_date": date(2026, 8, 19)},
+            {**base, "etf_code": "510007.SH"},
+            missing_age,
+            missing_status,
+            missing_confidence,
+            missing_source_priority,
+        ]
+
+    rows = mapping.load_effective_etfs("半导体", 2, refresh_date, query)
+
+    assert "constituent_reported_date IS NOT NULL" in captured["sql"]
+    assert "holdings_age_days IS NOT NULL" in captured["sql"]
+    assert "freshness_status IS NOT NULL" in captured["sql"]
+    assert "freshness_confidence IS NOT NULL" in captured["sql"]
+    assert "basket_source_priority IS NOT NULL" in captured["sql"]
+    assert [row["etf_code"] for row in rows] == ["510007.SH"]
 
 
 def test_effective_loader_prefers_exposure_rank_then_legacy_primary_order() -> None:
@@ -159,6 +349,7 @@ def test_persist_uses_one_injected_transaction_and_rebuilds_effective_intervals(
         ],
         source_as_of_date=date(2026, 8, 17), source_provider="provider_x",
         membership_as_of_date=date(2026, 8, 17), constituent_as_of_date=date(2026, 8, 17),
+        constituent_reported_date=date(2026, 8, 17), basket_source_priority="miniqmt_exact",
         mapping_version="exposure_v1", config_hash="abc123", weight_unit="decimal",
         source_reference="provider:daily",
         transaction=transaction, ensure_schema=lambda: None,
@@ -238,6 +429,7 @@ def test_persist_rejects_qualified_mapping_without_source_reference() -> None:
             ranked=[ExposureResult("510001.SH", exposure_weight=0.8, coverage_ratio=1.0)],
             source_as_of_date=date(2026, 8, 17), source_provider="provider_x",
             membership_as_of_date=date(2026, 8, 17), constituent_as_of_date=date(2026, 8, 17),
+            constituent_reported_date=date(2026, 8, 17), basket_source_priority="miniqmt_exact",
             mapping_version="exposure_v1", config_hash="abc123", weight_unit="decimal",
             transaction=lambda: pytest.fail("untraceable input must fail before opening a transaction"),
         )
@@ -265,7 +457,7 @@ def test_effective_loader_never_runs_schema_ddl_and_returns_only_qualified_deriv
             {"etf_code": "510004.SH", "mapping_type": "manual", "quality_status": "qualified", "exposure_weight": 0.9, "coverage_ratio": 1.0, "rank_no": 1},
             {"etf_code": "510003.SH", "mapping_type": "exposure_derived", "quality_status": "failed", "exposure_weight": 0.9, "coverage_ratio": 1.0, "rank_no": 1},
             {"etf_code": "510002.SH", "mapping_type": "exposure_derived", "quality_status": "qualified", "exposure_weight": 0.0, "coverage_ratio": 1.0, "rank_no": 2},
-            {"etf_code": "510001.SH", "mapping_type": "exposure_derived", "quality_status": "qualified", "exposure_weight": 0.8, "coverage_ratio": 0.9, "rank_no": 1, "source_as_of_date": date(2026, 8, 17), "membership_as_of_date": date(2026, 8, 17), "constituent_as_of_date": date(2026, 8, 17), "source_provider": "provider_x", "source_reference": "provider:daily"},
+            {"etf_code": "510001.SH", "mapping_type": "exposure_derived", "quality_status": "qualified", "exposure_weight": 0.8, "coverage_ratio": 0.9, "rank_no": 1, "source_as_of_date": date(2026, 8, 17), "membership_as_of_date": date(2026, 8, 17), "constituent_as_of_date": date(2026, 8, 17), "constituent_reported_date": date(2026, 8, 17), "holdings_age_days": 0, "freshness_status": "fresh", "freshness_confidence": 1.0, "basket_source_priority": "miniqmt_exact", "source_provider": "provider_x", "source_reference": "provider:daily"},
         ]
 
     rows = mapping.load_effective_etfs("半导体", 2, date(2026, 8, 17), query)
@@ -284,7 +476,7 @@ def test_effective_loader_rejects_stale_provenance_even_if_row_is_qualified() ->
         captured.update(sql=sql, params=params)
         return [
             {"etf_code": "510001.SH", "mapping_type": "exposure_derived", "quality_status": "qualified", "exposure_weight": 0.8, "coverage_ratio": 1.0, "rank_no": 1, "source_as_of_date": date(2026, 8, 16), "membership_as_of_date": date(2026, 8, 16), "constituent_as_of_date": date(2026, 8, 16), "source_provider": "provider_x", "source_reference": "provider:stale"},
-            {"etf_code": "510002.SH", "mapping_type": "exposure_derived", "quality_status": "qualified", "exposure_weight": 0.7, "coverage_ratio": 1.0, "rank_no": 2, "source_as_of_date": target, "membership_as_of_date": target, "constituent_as_of_date": target, "source_provider": "provider_x", "source_reference": "provider:daily"},
+            {"etf_code": "510002.SH", "mapping_type": "exposure_derived", "quality_status": "qualified", "exposure_weight": 0.7, "coverage_ratio": 1.0, "rank_no": 2, "source_as_of_date": target, "membership_as_of_date": target, "constituent_as_of_date": target, "constituent_reported_date": target, "holdings_age_days": 0, "freshness_status": "fresh", "freshness_confidence": 1.0, "basket_source_priority": "miniqmt_exact", "source_provider": "provider_x", "source_reference": "provider:daily"},
         ]
 
     rows = mapping.load_effective_etfs("半导体", 2, target, query)
@@ -305,7 +497,10 @@ def test_effective_loader_rejects_qualified_row_with_blank_source_provider() -> 
             "mapping_type": "exposure_derived", "quality_status": "qualified",
             "exposure_weight": 0.8, "coverage_ratio": 1.0,
             "source_as_of_date": target, "membership_as_of_date": target,
-            "constituent_as_of_date": target, "source_reference": "provider:daily",
+            "constituent_as_of_date": target, "constituent_reported_date": target,
+            "holdings_age_days": 0, "freshness_status": "fresh",
+            "freshness_confidence": 1.0, "basket_source_priority": "miniqmt_exact",
+            "source_reference": "provider:daily",
         }
         return [
             {**base, "etf_code": "510001.SH", "rank_no": 1, "source_provider": " "},

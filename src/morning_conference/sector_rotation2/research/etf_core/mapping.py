@@ -5,11 +5,13 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from contextlib import AbstractContextManager, contextmanager
 from datetime import date
+from math import isclose
 from typing import Any, Literal, Protocol
 
 from data_ingestion.db_config import execute_query, execute_update, get_connection
 
 from .exposure import ExposureAssessment, ExposureResult, RejectedExposure
+from .freshness import HoldingsFreshness, assess_holdings_freshness
 
 
 CURRENT_MAPPING_MODE = "current_mapping"
@@ -44,6 +46,11 @@ CREATE TABLE IF NOT EXISTS trade_sector_etf_map (
     failure_reason VARCHAR(255) DEFAULT NULL,
     mapping_note VARCHAR(255) DEFAULT NULL,
     source_reference VARCHAR(255) DEFAULT NULL,
+    constituent_reported_date DATE DEFAULT NULL,
+    holdings_age_days SMALLINT DEFAULT NULL,
+    freshness_status ENUM('fresh', 'aging', 'stale') DEFAULT NULL,
+    freshness_confidence DECIMAL(18,8) DEFAULT NULL,
+    basket_source_priority VARCHAR(64) DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
@@ -72,6 +79,11 @@ _MIGRATION_COLUMNS = {
     "failure_reason": "VARCHAR(255) NULL",
     "mapping_note": "VARCHAR(255) NULL",
     "source_reference": "VARCHAR(255) NULL",
+    "constituent_reported_date": "DATE NULL",
+    "holdings_age_days": "SMALLINT NULL",
+    "freshness_status": "VARCHAR(16) NULL",
+    "freshness_confidence": "DECIMAL(18,8) NULL",
+    "basket_source_priority": "VARCHAR(64) NULL",
     "updated_at": "DATETIME NULL",
 }
 
@@ -89,8 +101,9 @@ INSERT INTO trade_sector_etf_map (
     exposure_weight, coverage_ratio, mapping_version, rank_no, config_hash,
     weight_unit, membership_asof_mode, membership_as_of_date,
     constituent_as_of_date, quality_status, failure_reason, mapping_note,
-    source_reference
-) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    source_reference, constituent_reported_date, holdings_age_days,
+    freshness_status, freshness_confidence, basket_source_priority
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 """
 
 _LOCK_SECTOR_SQL = """
@@ -261,6 +274,8 @@ def persist_exposure_mapping(
     membership_asof_mode: str = CURRENT_MAPPING_MODE,
     quality_failure_reason: str | None = None,
     source_reference: str | None = None,
+    constituent_reported_date: date | None = None,
+    basket_source_priority: str | None = None,
     transaction: Callable[[], AbstractContextManager[MappingTransaction]] = open_mapping_transaction,
     ensure_schema: Callable[[], None] | None = None,
 ) -> int:
@@ -304,6 +319,15 @@ def persist_exposure_mapping(
         raise ValueError("source_reference is required for qualified exposure mappings")
     if qualified and not str(source_provider or "").strip():
         raise ValueError("source_provider is required for qualified exposure mappings")
+    if qualified and type(constituent_reported_date) is not date:
+        raise ValueError("constituent_reported_date is required for qualified exposure mappings")
+    if qualified and not str(basket_source_priority or "").strip():
+        raise ValueError("basket_source_priority is required for qualified exposure mappings")
+    freshness = (
+        assess_holdings_freshness(constituent_reported_date, as_of_date)
+        if type(constituent_reported_date) is date
+        else None
+    )
     rows = _mapping_rows(
         sector_name=sector_name, sector_level=sector_level, as_of_date=as_of_date,
         ranked=qualified, observed=[*ranked_items, *rejected_items], source_as_of_date=source_as_of_date, source_provider=source_provider,
@@ -313,6 +337,8 @@ def persist_exposure_mapping(
         membership_asof_mode=membership_asof_mode,
         quality_failure_reason=quality_failure_reason,
         source_reference=source_reference,
+        freshness=freshness,
+        basket_source_priority=basket_source_priority,
     )
     with transaction() as db:
         db.execute(_LOCK_SECTOR_SQL, (sector_level, sector_name))
@@ -357,7 +383,9 @@ def load_effective_etfs(
                   source_as_of_date, source_provider, exposure_weight, coverage_ratio,
                   mapping_version, config_hash, rank_no, weight_unit,
                   membership_asof_mode, membership_as_of_date, constituent_as_of_date,
-                  quality_status, failure_reason, mapping_note, source_reference
+                  quality_status, failure_reason, mapping_note, source_reference,
+                  constituent_reported_date, holdings_age_days, freshness_status,
+                  freshness_confidence, basket_source_priority
              FROM trade_sector_etf_map
              WHERE sector_name=%s AND sector_level=%s AND effective_from <= %s
                AND (effective_to IS NULL OR effective_to >= %s)
@@ -367,6 +395,11 @@ def load_effective_etfs(
                AND constituent_as_of_date=%s
                AND source_provider IS NOT NULL AND TRIM(source_provider) <> ''
                AND source_reference IS NOT NULL AND TRIM(source_reference) <> ''
+               AND constituent_reported_date IS NOT NULL
+               AND holdings_age_days IS NOT NULL
+               AND freshness_status IS NOT NULL
+               AND freshness_confidence IS NOT NULL
+               AND basket_source_priority IS NOT NULL AND TRIM(basket_source_priority) <> ''
              ORDER BY rank_no ASC, etf_code ASC
              LIMIT 3""",
         (
@@ -385,6 +418,7 @@ def load_effective_etfs(
         and row.get("constituent_as_of_date") == as_of_date
         and bool(str(row.get("source_provider") or "").strip())
         and bool(str(row.get("source_reference") or "").strip())
+        and _has_consistent_holdings_freshness(row, as_of_date)
     ]
     return sorted(qualified, key=_effective_mapping_sort_key)[:3]
 
@@ -395,7 +429,8 @@ def _mapping_rows(
     membership_as_of_date: date | None, constituent_as_of_date: date | None, mapping_version: str,
     config_hash: str, weight_unit: str | None, min_coverage: float,
     membership_asof_mode: str, quality_failure_reason: str | None,
-    source_reference: str | None,
+    source_reference: str | None, freshness: HoldingsFreshness | None,
+    basket_source_priority: str | None,
 ) -> list[tuple[object, ...]]:
     if not ranked:
         observed_item = max(observed, key=lambda item: (item.coverage_ratio, item.exposure_weight, item.etf_code), default=None)
@@ -408,7 +443,7 @@ def _mapping_rows(
             mapping_version, 0, config_hash, weight_unit, membership_asof_mode,
             membership_as_of_date, constituent_as_of_date, QUALITY_STATUS_FAILED,
             quality_failure_reason or _failure_reason(min_coverage, observed_item, observed_code, observed_coverage), None,
-            source_reference,
+            source_reference, *_freshness_row_values(freshness), basket_source_priority,
         )]
     return [
         (
@@ -417,7 +452,7 @@ def _mapping_rows(
             item.exposure_weight, item.coverage_ratio, mapping_version, rank_no, config_hash,
             weight_unit, membership_asof_mode, membership_as_of_date, constituent_as_of_date,
             QUALITY_STATUS_QUALIFIED, None, None,
-            source_reference,
+            source_reference, *_freshness_row_values(freshness), basket_source_priority,
         )
         for rank_no, item in enumerate(ranked, start=1)
     ]
@@ -431,6 +466,35 @@ def _sector_field(sector_level: int) -> str:
 
 def _effective_mapping_sort_key(row: dict[str, Any]) -> tuple[int, str]:
     return (int(row.get("rank_no") or 99), str(row["etf_code"]))
+
+
+def _freshness_row_values(freshness: HoldingsFreshness | None) -> tuple[object, object, object, object]:
+    if freshness is None:
+        return (None, None, None, None)
+    return (
+        freshness.reported_date,
+        freshness.age_days,
+        freshness.status,
+        freshness.confidence,
+    )
+
+
+def _has_consistent_holdings_freshness(row: dict[str, Any], as_of_date: date) -> bool:
+    reported_date = row.get("constituent_reported_date")
+    if type(reported_date) is not date:
+        return False
+    if not str(row.get("basket_source_priority") or "").strip():
+        return False
+    try:
+        freshness = assess_holdings_freshness(reported_date, as_of_date)
+        confidence = float(row.get("freshness_confidence"))
+    except (TypeError, ValueError):
+        return False
+    return (
+        row.get("holdings_age_days") == freshness.age_days
+        and row.get("freshness_status") == freshness.status
+        and isclose(confidence, freshness.confidence, rel_tol=0.0, abs_tol=5e-9)
+    )
 
 
 def _validate_as_of_dates(
