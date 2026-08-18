@@ -6,6 +6,8 @@ from uuid import uuid4
 
 from data_ingestion.db_config import execute_query
 
+from ...snapshot_store import create_run, mark_run_failed, mark_run_succeeded
+from ..config_hash import build_config_hash
 from ..status import SnapshotMode
 from .service import build_sector_opportunity_snapshots
 from .store import MySQLSnapshotStore
@@ -53,10 +55,22 @@ def _backfill_dates(start_date: str, end_date: str, level: int) -> list[str]:
 def run_one_date(as_of_date: str, level: int, mode: SnapshotMode) -> int:
     store = MySQLSnapshotStore()
     store.ensure_schema()
-    snapshots = build_sector_opportunity_snapshots(
-        store, load_v1_rows(as_of_date, level), load_v2_rows(as_of_date, level),
-        date.fromisoformat(as_of_date), level, str(uuid4()), snapshot_mode=mode,
+    run_id = str(uuid4())
+    model_version = "sector_opportunity_v1"
+    create_run(
+        run_id, as_of_date, level, model_version,
+        build_config_hash({"model_version": model_version, "sector_level": level}), as_of_date,
     )
+    try:
+        v1_rows = load_v1_rows(as_of_date, level)
+        snapshots = build_sector_opportunity_snapshots(
+            store, v1_rows, load_v2_rows(as_of_date, level), date.fromisoformat(as_of_date), level, run_id,
+            model_version=model_version, snapshot_mode=mode,
+        )
+    except Exception as exc:
+        mark_run_failed(run_id, str(exc))
+        raise
+    mark_run_succeeded(run_id, len(snapshots), len(v1_rows) - len(snapshots))
     return len(snapshots)
 
 
