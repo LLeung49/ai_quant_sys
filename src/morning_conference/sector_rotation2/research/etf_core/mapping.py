@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS trade_sector_etf_map (
     freshness_status ENUM('fresh', 'aging', 'stale') DEFAULT NULL,
     freshness_confidence DECIMAL(18,8) DEFAULT NULL,
     basket_source_priority VARCHAR(64) DEFAULT NULL,
+    cross_check_status VARCHAR(32) DEFAULT NULL,
+    cross_check_detail VARCHAR(1024) DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
@@ -84,6 +86,8 @@ _MIGRATION_COLUMNS = {
     "freshness_status": "VARCHAR(16) NULL",
     "freshness_confidence": "DECIMAL(18,8) NULL",
     "basket_source_priority": "VARCHAR(64) NULL",
+    "cross_check_status": "VARCHAR(32) NULL",
+    "cross_check_detail": "VARCHAR(1024) NULL",
     "updated_at": "DATETIME NULL",
 }
 
@@ -102,8 +106,9 @@ INSERT INTO trade_sector_etf_map (
     weight_unit, membership_asof_mode, membership_as_of_date,
     constituent_as_of_date, quality_status, failure_reason, mapping_note,
     source_reference, constituent_reported_date, holdings_age_days,
-    freshness_status, freshness_confidence, basket_source_priority
-) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    freshness_status, freshness_confidence, basket_source_priority,
+    cross_check_status, cross_check_detail
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 """
 
 _LOCK_SECTOR_SQL = """
@@ -276,6 +281,8 @@ def persist_exposure_mapping(
     source_reference: str | None = None,
     constituent_reported_date: date | None = None,
     basket_source_priority: str | None = None,
+    cross_check_status: str | None = "not_run",
+    cross_check_detail: str | None = None,
     transaction: Callable[[], AbstractContextManager[MappingTransaction]] = open_mapping_transaction,
     ensure_schema: Callable[[], None] | None = None,
 ) -> int:
@@ -339,6 +346,8 @@ def persist_exposure_mapping(
         source_reference=source_reference,
         freshness=freshness,
         basket_source_priority=basket_source_priority,
+        cross_check_status=cross_check_status,
+        cross_check_detail=cross_check_detail,
     )
     with transaction() as db:
         db.execute(_LOCK_SECTOR_SQL, (sector_level, sector_name))
@@ -385,7 +394,8 @@ def load_effective_etfs(
                   membership_asof_mode, membership_as_of_date, constituent_as_of_date,
                   quality_status, failure_reason, mapping_note, source_reference,
                   constituent_reported_date, holdings_age_days, freshness_status,
-                  freshness_confidence, basket_source_priority
+                  freshness_confidence, basket_source_priority,
+                  cross_check_status, cross_check_detail
              FROM trade_sector_etf_map
              WHERE sector_name=%s AND sector_level=%s AND effective_from <= %s
                AND (effective_to IS NULL OR effective_to >= %s)
@@ -431,6 +441,7 @@ def _mapping_rows(
     membership_asof_mode: str, quality_failure_reason: str | None,
     source_reference: str | None, freshness: HoldingsFreshness | None,
     basket_source_priority: str | None,
+    cross_check_status: str | None, cross_check_detail: str | None,
 ) -> list[tuple[object, ...]]:
     if not ranked:
         observed_item = max(observed, key=lambda item: (item.coverage_ratio, item.exposure_weight, item.etf_code), default=None)
@@ -444,6 +455,7 @@ def _mapping_rows(
             membership_as_of_date, constituent_as_of_date, QUALITY_STATUS_FAILED,
             quality_failure_reason or _failure_reason(min_coverage, observed_item, observed_code, observed_coverage), None,
             source_reference, *_freshness_row_values(freshness), basket_source_priority,
+            cross_check_status, cross_check_detail,
         )]
     return [
         (
@@ -453,6 +465,7 @@ def _mapping_rows(
             weight_unit, membership_asof_mode, membership_as_of_date, constituent_as_of_date,
             QUALITY_STATUS_QUALIFIED, None, None,
             source_reference, *_freshness_row_values(freshness), basket_source_priority,
+            cross_check_status, cross_check_detail,
         )
         for rank_no, item in enumerate(ranked, start=1)
     ]

@@ -25,7 +25,7 @@ def test_refresh_cli_help_is_dedicated_from_candidate_runner() -> None:
     ])
 
     assert args.as_of_date == "2026-08-18"
-    assert args.provider == "miniqmt"
+    assert args.provider == "auto"
 
 
 def test_refresh_cli_main_explicitly_invokes_mapping_refresh_runner() -> None:
@@ -47,7 +47,7 @@ def test_refresh_cli_main_explicitly_invokes_mapping_refresh_runner() -> None:
     assert captured == {
         "target_date": TARGET,
         "sector_level": 2,
-        "provider_name": "miniqmt",
+        "provider_name": "auto",
         "min_coverage": 0.85,
         "mapping_version": "exposure_v2",
         "config_hash": "cfg",
@@ -92,7 +92,78 @@ def test_audited_basket_json_produces_a_qualified_mapping() -> None:
     assert count == 1
     assert persisted[0]["source_provider"] == "custodian_file"
     assert persisted[0]["source_reference"] == "sha256:immutable-report"
+    assert persisted[0]["basket_source_priority"] == "audited_json_override"
+    assert persisted[0]["cross_check_status"] == "not_run"
     assert persisted[0]["assessment"].eligible[0].etf_code == "512480.SH"
+
+
+def test_auto_refresh_selects_newer_akshare_basket_without_network() -> None:
+    class Provider:
+        def __init__(self, basket: ETFBasketInput) -> None:
+            self.basket = basket
+            self.calls = 0
+
+        def load(self, target_date: date) -> ETFBasketInput:
+            self.calls += 1
+            assert target_date == TARGET
+            return self.basket
+
+    miniqmt = Provider(ETFBasketInput(
+        baskets={"510300": ({"stock_code": "600000", "weight": 100.0},)},
+        as_of_date=date(2026, 3, 31),
+        weight_unit="percent",
+        source_provider="miniqmt",
+        source_reference="miniqmt:2026Q1",
+        basket_source_priority="miniqmt_exact",
+        constituent_codes={"510300": ("600000",)},
+    ))
+    akshare = Provider(ETFBasketInput(
+        baskets={"510300": ({"stock_code": "600000", "weight": 100.0},)},
+        as_of_date=date(2026, 6, 30),
+        weight_unit="percent",
+        source_provider="akshare",
+        source_reference="akshare:fund_portfolio_hold_em:2026Q2",
+        basket_source_priority="akshare_disclosed",
+    ))
+    persisted: list[dict[str, object]] = []
+
+    class MembershipProvider:
+        def load(self, sector_name: str, sector_level: int, target_date: date) -> SWMembershipInput:
+            return SWMembershipInput(
+                sector_name=sector_name,
+                sector_level=sector_level,
+                member_codes=("600000",),
+                as_of_date=target_date,
+            )
+
+    def refresh_with_capture(**kwargs):
+        return refresh_sector_etf_mapping(
+            **kwargs,
+            persist=lambda **values: persisted.append(values) or 1,
+        )
+
+    count = refresh_daily.run_refresh(
+        target_date=TARGET,
+        sector_level=2,
+        provider_name="auto",
+        min_coverage=0.8,
+        mapping_version="exposure_v1",
+        config_hash="cfg",
+        query=lambda *_: [{"sector_name": "Bank"}],
+        membership_provider=MembershipProvider(),
+        miniqmt_provider=miniqmt,
+        akshare_provider=akshare,
+        ensure_schema=lambda: None,
+        refresh=refresh_with_capture,
+    )
+
+    assert count == 1
+    assert miniqmt.calls == 1
+    assert akshare.calls == 1
+    assert persisted[0]["source_provider"] == "akshare"
+    assert persisted[0]["constituent_reported_date"] == date(2026, 6, 30)
+    assert persisted[0]["basket_source_priority"] == "akshare_disclosed"
+    assert persisted[0]["cross_check_status"] == "matched"
 
 
 def test_audited_basket_json_rejects_missing_immutable_provenance() -> None:

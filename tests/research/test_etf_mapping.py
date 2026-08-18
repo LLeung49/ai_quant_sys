@@ -95,6 +95,8 @@ def test_mapping_persists_and_loads_holdings_disclosure_freshness() -> None:
         "freshness_status",
         "freshness_confidence",
         "basket_source_priority",
+        "cross_check_status",
+        "cross_check_detail",
     ):
         assert field in mapping.SECTOR_ETF_MAP_DDL
 
@@ -126,6 +128,8 @@ def test_mapping_persists_and_loads_holdings_disclosure_freshness() -> None:
         constituent_as_of_date=refresh_date,
         constituent_reported_date=reported_date,
         basket_source_priority="akshare_disclosed",
+        cross_check_status="mismatch",
+        cross_check_detail="510300.SH: MiniQMT and AKShare constituent codes differ",
         mapping_version="exposure_v1",
         config_hash="cfg",
         weight_unit="decimal",
@@ -141,11 +145,15 @@ def test_mapping_persists_and_loads_holdings_disclosure_freshness() -> None:
     assert "freshness_status" in insert_sql
     assert "freshness_confidence" in insert_sql
     assert "basket_source_priority" in insert_sql
+    assert "cross_check_status" in insert_sql
+    assert "cross_check_detail" in insert_sql
     assert row[22] == reported_date
     assert row[23] == 91
     assert row[24] == "aging"
     assert row[25] == pytest.approx(0.5 ** (91 / 90))
     assert row[26] == "akshare_disclosed"
+    assert row[27] == "mismatch"
+    assert row[28] == "510300.SH: MiniQMT and AKShare constituent codes differ"
 
     captured: dict[str, object] = {}
 
@@ -166,6 +174,8 @@ def test_mapping_persists_and_loads_holdings_disclosure_freshness() -> None:
             "freshness_status": "aging",
             "freshness_confidence": 0.5 ** (91 / 90),
             "basket_source_priority": "akshare_disclosed",
+            "cross_check_status": "mismatch",
+            "cross_check_detail": "510300.SH: MiniQMT and AKShare constituent codes differ",
             "source_provider": "akshare",
             "source_reference": "akshare:fund_portfolio_hold_em",
         }]
@@ -177,11 +187,15 @@ def test_mapping_persists_and_loads_holdings_disclosure_freshness() -> None:
     assert "freshness_status" in captured["sql"]
     assert "freshness_confidence" in captured["sql"]
     assert "basket_source_priority" in captured["sql"]
+    assert "cross_check_status" in captured["sql"]
+    assert "cross_check_detail" in captured["sql"]
     assert rows[0]["constituent_reported_date"] == reported_date
     assert rows[0]["holdings_age_days"] == 91
     assert rows[0]["freshness_status"] == "aging"
     assert rows[0]["freshness_confidence"] == pytest.approx(0.5 ** (91 / 90))
     assert rows[0]["basket_source_priority"] == "akshare_disclosed"
+    assert rows[0]["cross_check_status"] == "mismatch"
+    assert rows[0]["cross_check_detail"] == "510300.SH: MiniQMT and AKShare constituent codes differ"
 
 
 @pytest.mark.parametrize(

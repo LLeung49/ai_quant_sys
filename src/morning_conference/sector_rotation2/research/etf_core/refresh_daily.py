@@ -23,6 +23,7 @@ from .providers import (
     MiniQMTETFProvider,
     ProviderQualityIssue,
     refresh_sector_etf_mapping,
+    select_freshest_basket,
 )
 
 
@@ -89,6 +90,14 @@ class AuditedJSONBasketProvider:
             weight_unit=weight_unit,
             source_provider=source_provider,
             source_reference=source_reference,
+            basket_source_priority="audited_json_override",
+            etf_codes=tuple(sorted(baskets)),
+            constituent_codes={
+                code: tuple(str(item["stock_code"]) for item in items)
+                for code, items in baskets.items()
+            },
+            cross_check_status="not_run",
+            cross_check_detail="audited JSON override bypassed automatic source comparison",
         )
 
 
@@ -98,7 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--as-of-date", required=True)
     parser.add_argument("--level", type=int, choices=(1, 2), required=True)
-    parser.add_argument("--provider", choices=("miniqmt", "akshare"), default="miniqmt")
+    parser.add_argument("--provider", choices=("auto", "miniqmt", "akshare"), default="auto")
     parser.add_argument("--min-coverage", type=float, default=0.80)
     parser.add_argument("--mapping-version", default="exposure_v1")
     parser.add_argument("--config-hash", required=True)
@@ -125,6 +134,8 @@ def run_refresh(
     query: Callable[[str, tuple[object, ...]], list[dict[str, Any]]] | None = None,
     membership_provider: MembershipProvider | None = None,
     basket_provider: BasketProvider | None = None,
+    miniqmt_provider: BasketProvider | None = None,
+    akshare_provider: BasketProvider | None = None,
     ensure_schema: Callable[[], None] | None = None,
     refresh: Callable[..., object] = refresh_sector_etf_mapping,
 ) -> int:
@@ -134,7 +145,7 @@ def run_refresh(
         raise ValueError("min_coverage must be between zero and one")
     if sector_level not in (1, 2):
         raise ValueError("sector_level must be 1 or 2")
-    if provider_name not in {"miniqmt", "akshare"}:
+    if provider_name not in {"auto", "miniqmt", "akshare"}:
         raise ValueError(f"unsupported ETF provider: {provider_name}")
 
     if query is None:
@@ -162,12 +173,20 @@ def run_refresh(
     membership = membership_provider or LocalSWMembershipProvider(query=query)
     if basket_provider is not None and basket_json_path is not None:
         raise ValueError("basket_provider and basket_json_path are mutually exclusive")
-    basket_source = basket_provider or (
-        AuditedJSONBasketProvider(basket_json_path)
-        if basket_json_path is not None
-        else _configured_basket_provider(provider_name)
-    )
-    basket_input = basket_source.load(target_date)
+    if basket_provider is not None:
+        basket_input = basket_provider.load(target_date)
+    elif basket_json_path is not None:
+        basket_input = AuditedJSONBasketProvider(basket_json_path).load(target_date)
+    elif provider_name == "auto":
+        miniqmt_input = (miniqmt_provider or MiniQMTETFProvider()).load(target_date)
+        akshare_input = (akshare_provider or AKShareETFProvider()).load(target_date)
+        basket_input = select_freshest_basket(miniqmt_input, akshare_input, target_date)
+    elif provider_name == "miniqmt" and miniqmt_provider is not None:
+        basket_input = miniqmt_provider.load(target_date)
+    elif provider_name == "akshare" and akshare_provider is not None:
+        basket_input = akshare_provider.load(target_date)
+    else:
+        basket_input = _configured_basket_provider(provider_name).load(target_date)
 
     count = 0
     for sector_name in sector_names:
@@ -209,8 +228,6 @@ def main(
 def _configured_basket_provider(provider_name: str) -> BasketProvider:
     if provider_name == "miniqmt":
         return MiniQMTETFProvider()
-    # AKShare is deliberately not called live.  Without an injected payload
-    # and immutable provenance it produces auditable quality failures only.
     return AKShareETFProvider()
 
 

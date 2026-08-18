@@ -16,10 +16,151 @@ from morning_conference.sector_rotation2.research.etf_core.providers import (
     ProviderQualityIssue,
     SWMembershipInput,
     refresh_sector_etf_mapping,
+    select_freshest_basket,
 )
 
 
 TARGET = date(2026, 8, 18)
+
+
+def _basket(
+    *,
+    provider: str,
+    reported_date: date,
+    stock_code: str = "600000.SH",
+) -> ETFBasketInput:
+    return ETFBasketInput(
+        baskets={"510300.SH": ({"stock_code": stock_code, "weight": 100.0},)},
+        as_of_date=reported_date,
+        weight_unit="percent",
+        source_provider=provider,
+        source_reference=f"{provider}:{reported_date.isoformat()}",
+        basket_source_priority=(
+            "miniqmt_exact" if provider == "miniqmt" else "akshare_disclosed"
+        ),
+    )
+
+
+def test_newer_complete_miniqmt_basket_wins_over_akshare() -> None:
+    result = select_freshest_basket(
+        _basket(provider="miniqmt", reported_date=date(2026, 6, 30)),
+        _basket(provider="akshare", reported_date=date(2026, 3, 31)),
+        TARGET,
+    )
+
+    assert result.source_provider == "miniqmt"
+    assert result.basket_source_priority == "miniqmt_exact"
+
+
+def test_newer_akshare_disclosure_wins_over_older_complete_miniqmt() -> None:
+    result = select_freshest_basket(
+        _basket(provider="miniqmt", reported_date=date(2026, 3, 31)),
+        _basket(provider="akshare", reported_date=date(2026, 6, 30)),
+        TARGET,
+    )
+
+    assert result.source_provider == "akshare"
+    assert result.as_of_date == date(2026, 6, 30)
+
+
+def test_akshare_wins_when_complete_sources_have_the_same_reported_date() -> None:
+    reported_date = date(2026, 6, 30)
+
+    result = select_freshest_basket(
+        _basket(provider="miniqmt", reported_date=reported_date),
+        _basket(provider="akshare", reported_date=reported_date),
+        TARGET,
+    )
+
+    assert result.source_provider == "akshare"
+    assert result.basket_source_priority == "akshare_disclosed"
+
+
+def test_code_only_miniqmt_is_cross_check_not_weight_source() -> None:
+    miniqmt_codes = ETFBasketInput.unavailable(
+        source_provider="miniqmt",
+        issue=ProviderQualityIssue("missing_constituent_weight", "codes only"),
+        etf_codes=("510300.SH",),
+        constituent_codes={"510300.SH": ("600000.SH", "000001.SZ")},
+    )
+    akshare = _basket(
+        provider="akshare", reported_date=date(2026, 6, 30), stock_code="600000"
+    )
+
+    result = select_freshest_basket(miniqmt_codes, akshare, TARGET)
+
+    assert result.source_provider == "akshare"
+    assert result.baskets == akshare.baskets
+    assert result.cross_check_status == "mismatch"
+    assert "510300" in (result.cross_check_detail or "")
+
+
+def test_cross_check_compares_miniqmt_and_akshare_universes_symmetrically() -> None:
+    miniqmt_codes = ETFBasketInput.unavailable(
+        source_provider="miniqmt",
+        issue=ProviderQualityIssue("missing_constituent_weight", "codes only"),
+        etf_codes=("510300", "510500"),
+        constituent_codes={
+            "510300": ("600000",),
+            "510500": ("000001",),
+        },
+    )
+    akshare = ETFBasketInput(
+        baskets={
+            "510300": ({"stock_code": "600000", "weight": 50.0},),
+            "159995": ({"stock_code": "002371", "weight": 50.0},),
+        },
+        as_of_date=date(2026, 6, 30),
+        weight_unit="percent",
+        source_provider="akshare",
+        source_reference="akshare:2026Q2",
+        basket_source_priority="akshare_disclosed",
+    )
+
+    result = select_freshest_basket(miniqmt_codes, akshare, TARGET)
+
+    assert result.cross_check_status == "mismatch"
+    assert "miniqmt_only=1" in (result.cross_check_detail or "")
+    assert "akshare_only=1" in (result.cross_check_detail or "")
+    assert "constituent_mismatch=0" in (result.cross_check_detail or "")
+    assert "miniqmt_only:510500" in (result.cross_check_detail or "")
+    assert "akshare_only:159995" in (result.cross_check_detail or "")
+
+
+def test_cross_check_detail_is_bounded_and_deterministic_for_large_mismatch() -> None:
+    mini_codes = {
+        f"{510000 + index:06d}": ("600000",)
+        for index in range(200)
+    }
+    akshare_baskets = {
+        f"{159000 + index:06d}": ({"stock_code": "000001", "weight": 0.5},)
+        for index in range(200)
+    }
+    miniqmt = ETFBasketInput.unavailable(
+        source_provider="miniqmt",
+        issue=ProviderQualityIssue("missing_constituent_weight", "codes only"),
+        etf_codes=tuple(mini_codes),
+        constituent_codes=mini_codes,
+    )
+    akshare = ETFBasketInput(
+        baskets=akshare_baskets,
+        as_of_date=date(2026, 6, 30),
+        weight_unit="percent",
+        source_provider="akshare",
+        source_reference="akshare:2026Q2",
+        basket_source_priority="akshare_disclosed",
+    )
+
+    first = select_freshest_basket(miniqmt, akshare, TARGET)
+    second = select_freshest_basket(miniqmt, akshare, TARGET)
+
+    assert first.cross_check_detail == second.cross_check_detail
+    assert first.cross_check_detail is not None
+    assert len(first.cross_check_detail) < 1024
+    assert "miniqmt_only=200" in first.cross_check_detail
+    assert "akshare_only=200" in first.cross_check_detail
+    assert "sha256=" in first.cross_check_detail
+    assert "sample=" in first.cross_check_detail
 
 
 def test_local_sw_provider_reads_trade_stock_status_current_mapping() -> None:
@@ -72,6 +213,7 @@ def test_miniqmt_extracts_complete_weighted_baskets_after_downloading_redemption
                 "510300.SH": {
                     "source_as_of_date": "2026-08-18",
                     "weight_unit": "percent",
+                    "source_reference": "miniqmt:weighted-basket:2026-08-18",
                     "成份股信息": [
                         {"成份股代码": "600000.SH", "权重": 60.0},
                         {"成份股代码": "000001.SZ", "权重": 40.0},
@@ -91,7 +233,10 @@ def test_miniqmt_extracts_complete_weighted_baskets_after_downloading_redemption
         as_of_date=TARGET,
         weight_unit="percent",
         source_provider="miniqmt",
-        source_reference="xtdata.get_etf_info",
+        source_reference="miniqmt:weighted-basket:2026-08-18",
+        basket_source_priority="miniqmt_exact",
+        etf_codes=("510300.SH",),
+        constituent_codes={"510300.SH": ("600000.SH", "000001.SZ")},
     )
 
 
@@ -106,6 +251,27 @@ def test_explicit_provider_provenance_is_immutable_and_auditable() -> None:
         provenance.source_reference = "changed"
 
 
+def test_miniqmt_exact_basket_requires_explicit_source_reference() -> None:
+    class Client:
+        def download_etf_info(self) -> None:
+            pass
+
+        def get_etf_info(self):
+            return {
+                "510300.SH": {
+                    "source_as_of_date": "2026-08-18",
+                    "weight_unit": "percent",
+                    "成份股信息": [{"成份股代码": "600000", "权重": 100}],
+                }
+            }
+
+    result = MiniQMTETFProvider(client=Client()).load(TARGET)
+
+    assert not result.available
+    assert result.quality_issue is not None
+    assert result.quality_issue.code == "missing_source_reference"
+
+
 def test_miniqmt_never_manufactures_weight_from_redemption_component_codes() -> None:
     class Client:
         def download_etf_info(self) -> None:
@@ -116,6 +282,7 @@ def test_miniqmt_never_manufactures_weight_from_redemption_component_codes() -> 
                 "510300.SH": {
                     "source_as_of_date": "2026-08-18",
                     "weight_unit": "percent",
+                    "source_reference": "miniqmt:code-only:2026-08-18",
                     "成份股信息": [{"成份股代码": "600000.SH"}],
                 }
             }
@@ -126,6 +293,31 @@ def test_miniqmt_never_manufactures_weight_from_redemption_component_codes() -> 
     assert result.baskets == {}
     assert result.quality_issue is not None
     assert result.quality_issue.code == "missing_constituent_weight"
+
+
+def test_miniqmt_retains_code_only_components_even_without_weight_provenance() -> None:
+    class Client:
+        def download_etf_info(self) -> None:
+            pass
+
+        def get_etf_info(self):
+            return {
+                "510300.SH": {
+                    "成份股信息": [
+                        {"成份股代码": "600000.SH"},
+                        {"成份股代码": "000001.SZ"},
+                    ],
+                }
+            }
+
+    result = MiniQMTETFProvider(client=Client()).load(TARGET)
+
+    assert not result.available
+    assert result.baskets == {}
+    assert result.etf_codes == ("510300.SH",)
+    assert result.constituent_codes == {
+        "510300.SH": ("600000.SH", "000001.SZ"),
+    }
 
 
 @pytest.mark.parametrize(
@@ -139,13 +331,9 @@ def test_miniqmt_never_manufactures_weight_from_redemption_component_codes() -> 
             {"source_as_of_date": "2026-08-18", "成份股信息": [{"成份股代码": "600000", "权重": 100}]},
             "missing_weight_unit",
         ),
-        (
-            {"source_as_of_date": "2026-08-17", "weight_unit": "percent", "成份股信息": [{"成份股代码": "600000", "权重": 100}]},
-            "source_date_mismatch",
-        ),
     ],
 )
-def test_miniqmt_requires_source_date_unit_and_exact_target_date(record, reason) -> None:
+def test_miniqmt_requires_source_date_and_unit(record, reason) -> None:
     class Client:
         def download_etf_info(self) -> None:
             pass
@@ -158,6 +346,27 @@ def test_miniqmt_requires_source_date_unit_and_exact_target_date(record, reason)
     assert not result.available
     assert result.quality_issue is not None
     assert result.quality_issue.code == reason
+
+
+def test_miniqmt_accepts_an_older_explicit_report_date() -> None:
+    class Client:
+        def download_etf_info(self) -> None:
+            pass
+
+        def get_etf_info(self):
+            return {
+                "510300.SH": {
+                    "source_as_of_date": "2026-08-17",
+                    "weight_unit": "percent",
+                    "source_reference": "miniqmt:weighted-basket:2026-08-17",
+                    "成份股信息": [{"成份股代码": "600000", "权重": 100}],
+                }
+            }
+
+    result = MiniQMTETFProvider(client=Client()).load(TARGET)
+
+    assert result.available
+    assert result.as_of_date == date(2026, 8, 17)
 
 
 def test_akshare_parses_injected_dataframe_only_with_auditable_provenance() -> None:
@@ -185,16 +394,51 @@ def test_akshare_parses_injected_dataframe_only_with_auditable_provenance() -> N
     assert result.baskets["510300.SH"][0] == {"stock_code": "600000.SH", "weight": 55.0}
 
 
+def test_akshare_lazily_loads_etf_universe_and_preserves_latest_disclosed_quarter() -> None:
+    class Client:
+        universe_calls = 0
+        holding_calls: list[tuple[str, str]] = []
+
+        def fund_etf_spot_em(self):
+            self.universe_calls += 1
+            return [{"代码": "510300"}, {"代码": "159995"}]
+
+        def fund_portfolio_hold_em(self, *, symbol: str, date: str):
+            self.holding_calls.append((symbol, date))
+            return [
+                {"股票代码": "600000", "占净值比例": 45.0, "季度": "2026年2季度股票投资明细"},
+                {"股票代码": "000001", "占净值比例": 40.0, "季度": "2026年2季度股票投资明细"},
+                {"股票代码": "600519", "占净值比例": 35.0, "季度": "2026年1季度股票投资明细"},
+            ]
+
+    client = Client()
+    provider = AKShareETFProvider(client=client)
+    assert client.universe_calls == 0
+
+    result = provider.load(TARGET)
+
+    assert client.universe_calls == 1
+    assert client.holding_calls == [("510300", "2026"), ("159995", "2026")]
+    assert result.available
+    assert result.as_of_date == date(2026, 6, 30)
+    assert result.basket_source_priority == "akshare_disclosed"
+    assert result.source_reference == "akshare:fund_portfolio_hold_em:2026Q2"
+    assert result.baskets["510300"] == (
+        {"stock_code": "600000", "weight": 45.0},
+        {"stock_code": "000001", "weight": 40.0},
+    )
+
+
 @pytest.mark.parametrize(
     ("source_date", "unit", "reason"),
     [
         (None, "percent", "missing_source_date"),
-        (date(2026, 8, 17), "percent", "source_date_mismatch"),
+        (date(2026, 8, 19), "percent", "future_source_date"),
         (TARGET, None, "missing_weight_unit"),
         (TARGET, "inferred", "invalid_weight_unit"),
     ],
 )
-def test_akshare_blocks_undated_stale_or_unit_inferred_holdings(source_date, unit, reason) -> None:
+def test_akshare_blocks_undated_future_or_unit_inferred_holdings(source_date, unit, reason) -> None:
     result = AKShareETFProvider(
         dataframe=[{"etf_code": "510300", "stock_code": "600000", "weight": 100}],
         provenance=None if source_date is None and unit == "percent" else ProviderProvenance(
@@ -290,6 +534,7 @@ def test_miniqmt_rejects_non_finite_or_negative_component_weights(bad_weight) ->
                 "510300.SH": {
                     "source_as_of_date": "2026-08-18",
                     "weight_unit": "decimal",
+                    "source_reference": "miniqmt:weighted-basket:2026-08-18",
                     "成份股信息": [{"成份股代码": "600000", "权重": bad_weight}],
                 }
             }
@@ -310,6 +555,9 @@ def test_refresh_assesses_complete_inputs_and_persists_assessment() -> None:
         baskets={"510300.SH": ({"stock_code": "600000", "weight": 1.0},)},
         as_of_date=TARGET, weight_unit="decimal", source_provider="miniqmt",
         source_reference="xtdata.get_etf_info",
+        basket_source_priority="miniqmt_exact",
+        cross_check_status="matched",
+        cross_check_detail="1 MiniQMT basket matched the selected weighted source",
     )
     captured: dict[str, object] = {}
 
@@ -329,6 +577,10 @@ def test_refresh_assesses_complete_inputs_and_persists_assessment() -> None:
     assert captured["membership_as_of_date"] == TARGET
     assert captured["constituent_as_of_date"] == TARGET
     assert captured["source_reference"] == "xtdata.get_etf_info"
+    assert captured["constituent_reported_date"] == TARGET
+    assert captured["basket_source_priority"] == "miniqmt_exact"
+    assert captured["cross_check_status"] == "matched"
+    assert captured["cross_check_detail"] == "1 MiniQMT basket matched the selected weighted source"
 
 
 def test_refresh_persists_quality_failure_only_when_provider_is_unavailable() -> None:
@@ -354,6 +606,39 @@ def test_refresh_persists_quality_failure_only_when_provider_is_unavailable() ->
     assert captured["quality_failure_reason"] == "missing_constituent_weight: 510300.SH has no recognized weight"
     assert captured["source_as_of_date"] is None
     assert captured["weight_unit"] is None
+
+
+def test_refresh_never_persists_a_future_reported_date() -> None:
+    issue = ProviderQualityIssue("future_source_date", "reported after target")
+    membership = SWMembershipInput(
+        sector_name="Bank",
+        sector_level=2,
+        member_codes=("600000",),
+        as_of_date=TARGET,
+    )
+    unavailable = ETFBasketInput.unavailable(
+        source_provider="akshare",
+        issue=issue,
+        as_of_date=date(2026, 8, 19),
+        weight_unit="percent",
+        source_reference="akshare:future",
+    )
+    captured: dict[str, object] = {}
+
+    result = refresh_sector_etf_mapping(
+        sector_name="Bank",
+        sector_level=2,
+        target_date=TARGET,
+        membership_provider=lambda *_: membership,
+        basket_provider=lambda *_: unavailable,
+        min_coverage=0.8,
+        mapping_version="exposure_v1",
+        config_hash="cfg",
+        persist=lambda **kwargs: captured.update(kwargs) or 1,
+    )
+
+    assert result.quality_issue == issue
+    assert captured["constituent_reported_date"] is None
 
 
 def test_custom_basket_without_source_reference_never_becomes_qualified() -> None:
