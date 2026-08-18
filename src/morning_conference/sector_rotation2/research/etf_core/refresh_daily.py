@@ -14,6 +14,7 @@ import math
 from pathlib import Path
 from typing import Any
 
+from .freshness import assess_holdings_freshness
 from .providers import (
     AKShareETFProvider,
     BasketProvider,
@@ -189,6 +190,8 @@ def run_refresh(
         basket_input = _configured_basket_provider(provider_name).load(target_date)
 
     count = 0
+    freshness_counts = {"fresh": 0, "aging": 0, "stale": 0}
+    quality_failure_count = 0
     for sector_name in sector_names:
         result = refresh(
             sector_name=sector_name,
@@ -200,8 +203,19 @@ def run_refresh(
             mapping_version=mapping_version,
             config_hash=config_hash,
         )
-        count += int(getattr(result, "persisted_rows"))
-    print(f"{target_date.isoformat()}: refreshed {count} mapping rows across {len(sector_names)} sectors")
+        persisted_rows = int(getattr(result, "persisted_rows"))
+        count += persisted_rows
+        if _is_quality_failure(result):
+            quality_failure_count += persisted_rows
+        elif basket_input.as_of_date is not None:
+            status = assess_holdings_freshness(basket_input.as_of_date, target_date).status
+            freshness_counts[status] += persisted_rows
+    print(
+        f"{target_date.isoformat()}: refreshed {count} mapping rows across {len(sector_names)} sectors; "
+        f"chosen_source={basket_input.source_provider}; "
+        f"fresh={freshness_counts['fresh']} aging={freshness_counts['aging']} "
+        f"stale={freshness_counts['stale']} quality_failure={quality_failure_count}",
+    )
     return count
 
 
@@ -229,6 +243,15 @@ def _configured_basket_provider(provider_name: str) -> BasketProvider:
     if provider_name == "miniqmt":
         return MiniQMTETFProvider()
     return AKShareETFProvider()
+
+
+def _is_quality_failure(result: object) -> bool:
+    """Identify persisted failure events without changing the DB migration boundary."""
+
+    if getattr(result, "quality_issue", None) is not None:
+        return True
+    assessment = getattr(result, "assessment", None)
+    return assessment is not None and not bool(getattr(assessment, "eligible", ()))
 
 
 def _strict_iso_date(value: object) -> date:

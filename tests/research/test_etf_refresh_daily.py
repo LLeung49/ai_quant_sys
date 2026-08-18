@@ -97,7 +97,9 @@ def test_audited_basket_json_produces_a_qualified_mapping() -> None:
     assert persisted[0]["assessment"].eligible[0].etf_code == "512480.SH"
 
 
-def test_auto_refresh_selects_newer_akshare_basket_without_network() -> None:
+def test_auto_refresh_selects_periodic_akshare_aging_mapping_and_reports_summary(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     class Provider:
         def __init__(self, basket: ETFBasketInput) -> None:
             self.basket = basket
@@ -119,10 +121,10 @@ def test_auto_refresh_selects_newer_akshare_basket_without_network() -> None:
     ))
     akshare = Provider(ETFBasketInput(
         baskets={"510300": ({"stock_code": "600000", "weight": 100.0},)},
-        as_of_date=date(2026, 6, 30),
+        as_of_date=date(2026, 5, 19),
         weight_unit="percent",
         source_provider="akshare",
-        source_reference="akshare:fund_portfolio_hold_em:2026Q2",
+        source_reference="akshare:fund_portfolio_hold_em:2026Q1",
         basket_source_priority="akshare_disclosed",
     ))
     persisted: list[dict[str, object]] = []
@@ -161,9 +163,13 @@ def test_auto_refresh_selects_newer_akshare_basket_without_network() -> None:
     assert miniqmt.calls == 1
     assert akshare.calls == 1
     assert persisted[0]["source_provider"] == "akshare"
-    assert persisted[0]["constituent_reported_date"] == date(2026, 6, 30)
+    assert persisted[0]["constituent_reported_date"] == date(2026, 5, 19)
     assert persisted[0]["basket_source_priority"] == "akshare_disclosed"
     assert persisted[0]["cross_check_status"] == "matched"
+    assert capsys.readouterr().out == (
+        "2026-08-18: refreshed 1 mapping rows across 1 sectors; "
+        "chosen_source=akshare; fresh=0 aging=1 stale=0 quality_failure=0\n"
+    )
 
 
 def test_audited_basket_json_rejects_missing_immutable_provenance() -> None:
@@ -171,6 +177,50 @@ def test_audited_basket_json_rejects_missing_immutable_provenance() -> None:
         refresh_daily.AuditedJSONBasketProvider(
             FIXTURES / "invalid-etf-baskets-missing-reference.json",
         ).load(TARGET)
+
+
+def test_refresh_summary_counts_persisted_quality_failures(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    class MembershipProvider:
+        def load(self, sector_name: str, sector_level: int, target_date: date) -> SWMembershipInput:
+            return SWMembershipInput(
+                sector_name=sector_name,
+                sector_level=sector_level,
+                member_codes=("600000",),
+                as_of_date=target_date,
+            )
+
+    class BasketProvider:
+        def load(self, target_date: date) -> ETFBasketInput:
+            assert target_date == TARGET
+            return ETFBasketInput.unavailable(
+                source_provider="miniqmt",
+                issue=refresh_daily.ProviderQualityIssue("missing_weight", "fixture"),
+            )
+
+    count = refresh_daily.run_refresh(
+        target_date=TARGET,
+        sector_level=2,
+        provider_name="miniqmt",
+        min_coverage=0.8,
+        mapping_version="exposure_v1",
+        config_hash="cfg",
+        query=lambda *_: [{"sector_name": "Bank"}],
+        membership_provider=MembershipProvider(),
+        basket_provider=BasketProvider(),
+        ensure_schema=lambda: None,
+        refresh=lambda **kwargs: refresh_sector_etf_mapping(
+            **kwargs,
+            persist=lambda **_values: 1,
+        ),
+    )
+
+    assert count == 1
+    assert capsys.readouterr().out == (
+        "2026-08-18: refreshed 1 mapping rows across 1 sectors; "
+        "chosen_source=miniqmt; fresh=0 aging=0 stale=0 quality_failure=1\n"
+    )
 
 
 def test_run_refresh_enumerates_local_sectors_and_refreshes_each_with_one_basket_load() -> None:
