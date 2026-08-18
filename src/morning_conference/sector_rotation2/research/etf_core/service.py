@@ -34,9 +34,15 @@ def build_etf_candidate(*, as_of_date: date, sector_level: int, sector_name: str
         execution["liquid"] = liquid_value
     if extended_value is not None:
         execution["extended"] = extended_value
+    freshness_status = normalized_mapping.get("freshness_status")
     status = select_candidate_status(sector_allowed=sector_allowed, liquid=liquid_value,
-                                     macd_triggered=bool(evidence.get("macd_triggered")), extended=extended_value)
+                                     macd_triggered=bool(evidence.get("macd_triggered")), extended=extended_value,
+                                     freshness_status=freshness_status if isinstance(freshness_status, str) else None)
     missing_execution = liquid_value is None or extended_value is None
+    risk_flags = (
+        *(("stale_holdings",) if freshness_status == "stale" else ()),
+        *(("missing_execution_evidence",) if missing_execution else ()),
+    )
     return CandidateSnapshot(
         as_of_date=as_of_date, entity_type="etf", entity_code=etf_code, sector_level=sector_level,
         sector_name=sector_name, strategy_type="etf_core", candidate_status=status, candidate_score=None,
@@ -45,7 +51,7 @@ def build_etf_candidate(*, as_of_date: date, sector_level: int, sector_name: str
         snapshot_mode=snapshot_mode,
         feature_json={"sector_allowed": sector_allowed, "mapping": mapping, **execution, **evidence},
         reasons_json=(f"candidate_status={status}",),
-        risk_flags_json=("missing_execution_evidence",) if missing_execution else (),
+        risk_flags_json=risk_flags,
     )
 
 
@@ -77,6 +83,9 @@ def _mapping_provenance(
         "constituent_as_of_date", "exposure_weight", "coverage_ratio",
         "mapping_version", "config_hash", "rank_no", "weight_unit",
         "membership_asof_mode", "mapping_type", "quality_status", "source_reference",
+        "constituent_reported_date", "holdings_age_days", "freshness_status",
+        "freshness_confidence", "basket_source_priority", "cross_check_status",
+        "cross_check_detail",
     )
     provenance = {
         "sector_level": sector_level,

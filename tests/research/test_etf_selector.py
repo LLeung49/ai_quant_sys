@@ -7,3 +7,13 @@ def test_status_priority_is_sector_then_liquidity_then_timing_then_extension() -
     assert select_candidate_status(sector_allowed=True, liquid=True, macd_triggered=False, extended=False) == "wait_timing"
     assert select_candidate_status(sector_allowed=True, liquid=True, macd_triggered=True, extended=True) == "extended"
     assert select_candidate_status(sector_allowed=True, liquid=True, macd_triggered=True, extended=False) == "ready"
+
+
+def test_stale_holdings_blocks_before_execution_gates() -> None:
+    assert select_candidate_status(
+        sector_allowed=True,
+        liquid=True,
+        macd_triggered=True,
+        extended=False,
+        freshness_status="stale",
+    ) == "blocked"

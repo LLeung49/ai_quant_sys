@@ -405,7 +405,11 @@ def refresh_sector_etf_mapping(
     config_hash: str,
     persist: Callable[..., int] | None = None,
 ) -> MappingRefreshResult:
-    """Assess and persist one mapping event without ever using stale inputs."""
+    """Assess and persist one mapping event from a complete, auditable basket.
+
+    Complete periodic baskets remain qualified even when their disclosure is
+    stale; freshness is persisted with the mapping and blocks candidates later.
+    """
 
     membership = _invoke_membership_provider(
         membership_provider, sector_name, sector_level, target_date,

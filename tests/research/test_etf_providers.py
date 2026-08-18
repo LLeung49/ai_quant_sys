@@ -583,6 +583,55 @@ def test_refresh_assesses_complete_inputs_and_persists_assessment() -> None:
     assert captured["cross_check_detail"] == "1 MiniQMT basket matched the selected weighted source"
 
 
+def test_refresh_persists_stale_complete_basket_as_a_qualified_mapping() -> None:
+    reported_date = date(2026, 2, 17)
+    membership = SWMembershipInput(
+        sector_name="閾惰", sector_level=2, member_codes=("600000",),
+        as_of_date=TARGET, asof_mode="current_mapping", source_provider="trade_stock_status",
+    )
+    baskets = ETFBasketInput(
+        baskets={"510300.SH": ({"stock_code": "600000", "weight": 1.0},)},
+        as_of_date=reported_date, weight_unit="decimal", source_provider="akshare",
+        source_reference="akshare:fund_portfolio_hold_em:2026Q1",
+        basket_source_priority="akshare_disclosed",
+    )
+    commands: list[tuple[str, object]] = []
+
+    class Transaction:
+        def execute(self, sql: str, params: tuple[object, ...]) -> int:
+            commands.append((sql, params))
+            return 1
+
+        def execute_many(self, sql: str, rows: list[tuple[object, ...]]) -> int:
+            commands.append((sql, rows))
+            return len(rows)
+
+    @contextmanager
+    def transaction():
+        yield Transaction()
+
+    result = refresh_sector_etf_mapping(
+        sector_name="閾惰", sector_level=2, target_date=TARGET,
+        membership_provider=lambda *_: membership,
+        basket_provider=lambda *_: baskets,
+        min_coverage=0.8, mapping_version="exposure_v1", config_hash="cfg",
+        persist=partial(
+            persist_exposure_assessment,
+            transaction=transaction,
+            ensure_schema=lambda: None,
+        ),
+    )
+
+    assert result.quality_issue is None
+    assert [item.etf_code for item in result.assessment.eligible] == ["510300.SH"]
+    row = commands[2][1][0]
+    assert row[18] == "qualified"
+    assert row[22] == reported_date
+    assert row[23] == (TARGET - reported_date).days
+    assert row[24] == "stale"
+    assert row[26] == "akshare_disclosed"
+
+
 def test_refresh_persists_quality_failure_only_when_provider_is_unavailable() -> None:
     issue = ProviderQualityIssue("missing_constituent_weight", "510300.SH has no recognized weight")
     membership = SWMembershipInput(

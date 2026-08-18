@@ -92,6 +92,46 @@ def test_source_reference_is_part_of_candidate_mapping_identity() -> None:
     assert first.config_hash != changed.config_hash
 
 
+def test_stale_mapping_forces_blocked_candidate_and_preserves_freshness_provenance() -> None:
+    metadata = {
+        "source_as_of_date": "2026-08-18",
+        "source_reference": "akshare:fund_portfolio_hold_em:2026Q1",
+        "constituent_reported_date": "2026-02-17",
+        "holdings_age_days": 182,
+        "freshness_status": "stale",
+        "freshness_confidence": 0.5 ** (182 / 90),
+        "basket_source_priority": "akshare_disclosed",
+        "cross_check_status": "mismatch",
+        "cross_check_detail": "sha256:cross-check",
+    }
+    common = dict(
+        as_of_date=date(2026, 8, 18), sector_level=2, sector_name="Bank", etf_code="512480.SH",
+        sector_allowed=True, liquid=True, macd_evidence={"macd_triggered": True}, extended=False,
+        run_id="run-1",
+    )
+
+    snapshot = build_etf_candidate(**common, mapping_metadata=metadata)
+
+    assert snapshot.candidate_status == "blocked"
+    assert "stale_holdings" in snapshot.risk_flags_json
+    assert snapshot.feature_json["mapping"] == {
+        **metadata, "sector_level": 2, "sector_name": "Bank", "etf_code": "512480.SH",
+    }
+    for field, changed_value in (
+        ("constituent_reported_date", "2026-02-18"),
+        ("holdings_age_days", 181),
+        ("freshness_status", "aging"),
+        ("freshness_confidence", 0.5),
+        ("basket_source_priority", "miniqmt_exact"),
+        ("cross_check_status", "matched"),
+        ("cross_check_detail", "sha256:other"),
+    ):
+        changed = build_etf_candidate(
+            **common, mapping_metadata={**metadata, field: changed_value},
+        )
+        assert changed.config_hash != snapshot.config_hash, field
+
+
 def test_missing_execution_evidence_is_fail_closed_without_fake_features() -> None:
     snapshot = build_etf_candidate(
         as_of_date=date(2026, 8, 17), sector_level=1, sector_name="Bank", etf_code="512480.SH",
