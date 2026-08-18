@@ -40,3 +40,12 @@ def test_run_one_date_marks_run_failed_before_reraising(monkeypatch: pytest.Monk
         run_daily.run_one_date("2026-08-18", 1, run_daily.SnapshotMode.LIVE_SHADOW)
     assert calls[1][0] == "failed"
     assert "broken source" in calls[1][-1]
+
+
+def test_main_reports_snapshot_count(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(run_daily, "run_one_date", lambda *_: 3)
+
+    assert run_daily.main(["--as-of-date", "2026-08-18", "--level", "1"]) == 0
+    output = capsys.readouterr().out
+    assert "2026-08-18" in output
+    assert "3" in output

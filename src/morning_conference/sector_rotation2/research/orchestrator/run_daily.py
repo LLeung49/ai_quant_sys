@@ -77,12 +77,14 @@ def run_one_date(as_of_date: str, level: int, mode: SnapshotMode) -> int:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.as_of_date:
-        run_one_date(args.as_of_date, args.level, SnapshotMode.LIVE_SHADOW)
+        count = run_one_date(args.as_of_date, args.level, SnapshotMode.LIVE_SHADOW)
+        print(f"{args.as_of_date}: persisted {count} LIVE_SHADOW sector opportunities")
         return 0
     if not args.backfill_end:
         raise SystemExit("--backfill-end is required with --backfill-start")
     for as_of_date in _backfill_dates(args.backfill_start, args.backfill_end, args.level):
-        run_one_date(as_of_date, args.level, SnapshotMode.BACKFILL)
+        count = run_one_date(as_of_date, args.level, SnapshotMode.BACKFILL)
+        print(f"{as_of_date}: persisted {count} BACKFILL sector opportunities")
     return 0
 
 

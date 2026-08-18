@@ -100,7 +100,15 @@ class MySQLSnapshotStore:
 
 
 def _identity_values(identity: SnapshotIdentity) -> tuple[object, ...]:
-    return (*identity.__dict__.values()[:-1], identity.snapshot_mode.value)
+    return (
+        identity.as_of_date,
+        identity.entity_type,
+        identity.entity_code,
+        identity.strategy_type,
+        identity.model_version,
+        identity.config_hash,
+        identity.snapshot_mode.value,
+    )
 
 
 def _snapshot_from_row(row: dict[str, Any]) -> CandidateSnapshot:
