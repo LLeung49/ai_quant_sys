@@ -1,0 +1,12 @@
+{
+  "provider_reported_date": "2026-08-18",
+  "weight_unit": "decimal",
+  "source_provider": "custodian_file",
+  "source_reference": "sha256:immutable-report",
+  "baskets": {
+    "512480.SH": [
+      {"stock_code": "600000.SH", "weight": 0.70},
+      {"stock_code": "000001.SZ", "weight": 0.20}
+    ]
+  }
+}
