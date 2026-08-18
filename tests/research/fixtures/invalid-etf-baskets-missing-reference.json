@@ -1,0 +1,10 @@
+{
+  "provider_reported_date": "2026-08-18",
+  "weight_unit": "decimal",
+  "source_provider": "custodian_file",
+  "baskets": {
+    "512480.SH": [
+      {"stock_code": "600000", "weight": 1.0}
+    ]
+  }
+}

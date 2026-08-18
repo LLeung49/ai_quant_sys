@@ -67,3 +67,39 @@ def test_mapping_metadata_is_json_safe_and_effective_to_is_not_in_candidate_iden
     store = InMemorySnapshotStore()
     persist_live_shadow_snapshot(store, snapshot)
     persist_live_shadow_snapshot(store, changed_effective_date)
+
+
+def test_source_reference_is_part_of_candidate_mapping_identity() -> None:
+    common = dict(
+        as_of_date=date(2026, 8, 17), sector_level=2, sector_name="Bank", etf_code="512480.SH",
+        sector_allowed=True, liquid=True, macd_evidence={"macd_triggered": True}, extended=False,
+        run_id="run-1",
+    )
+    metadata = {
+        "source_as_of_date": "2026-08-17",
+        "source_provider": "custodian_file",
+        "source_reference": "sha256:first",
+        "mapping_version": "exposure_v1",
+        "config_hash": "map_cfg",
+    }
+
+    first = build_etf_candidate(**common, mapping_metadata=metadata)
+    changed = build_etf_candidate(
+        **common, mapping_metadata={**metadata, "source_reference": "sha256:second"},
+    )
+
+    assert first.feature_json["mapping"]["source_reference"] == "sha256:first"
+    assert first.config_hash != changed.config_hash
+
+
+def test_missing_execution_evidence_is_fail_closed_without_fake_features() -> None:
+    snapshot = build_etf_candidate(
+        as_of_date=date(2026, 8, 17), sector_level=1, sector_name="Bank", etf_code="512480.SH",
+        sector_allowed=True, liquid=None, macd_evidence={"macd_triggered": True}, extended=None,
+        run_id="run-1",
+    )
+
+    assert snapshot.candidate_status != "ready"
+    assert "liquid" not in snapshot.feature_json
+    assert "extended" not in snapshot.feature_json
+    assert "missing_execution_evidence" in snapshot.risk_flags_json

@@ -8,6 +8,7 @@ from data_ingestion.db_config import execute_query
 
 from ..orchestrator.store import MySQLSnapshotStore
 from ..status import SnapshotMode
+from .execution_evidence import load_etf_execution_evidence
 from .macd_adapter import load_etf_macd_evidence
 from .mapping import load_effective_etfs
 from .service import build_etf_candidate, persist_etf_candidate
@@ -78,10 +79,15 @@ def run_one_date(as_of_date: str, level: int, mode: SnapshotMode = SnapshotMode.
         allowed = sector["candidate_status"] not in {"avoid", "risk_reduce"}
         for mapping in load_effective_etfs(str(sector["sector_name"]), level, target):
             code = str(mapping["etf_code"])
+            execution_evidence = load_etf_execution_evidence(code, target)
             snapshot = build_etf_candidate(
                 as_of_date=target, sector_level=level, sector_name=str(sector["sector_name"]), etf_code=code,
-                sector_allowed=allowed, liquid=True, macd_evidence=load_etf_macd_evidence(code, target),
-                extended=False, run_id=run_id, snapshot_mode=mode,
+                sector_allowed=allowed,
+                liquid=execution_evidence.get("liquid") if execution_evidence else None,
+                macd_evidence=load_etf_macd_evidence(code, target),
+                extended=execution_evidence.get("extended") if execution_evidence else None,
+                execution_evidence=execution_evidence,
+                run_id=run_id, snapshot_mode=mode,
                 mapping_metadata={
                     **mapping,
                     "upstream_sector_snapshot": {

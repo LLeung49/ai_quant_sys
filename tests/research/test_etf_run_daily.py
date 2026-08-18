@@ -52,3 +52,34 @@ def test_runner_does_not_migrate_mapping_schema_on_every_execution(monkeypatch: 
     monkeypatch.setattr(run_daily, "load_sector_rows", lambda *_: [])
 
     assert run_daily.run_one_date(date.today().isoformat(), 2) == 0
+
+
+def test_runner_uses_loaded_execution_evidence_instead_of_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
+    today = date.today()
+    mappings = [
+        {"etf_code": "READY", "source_reference": "ref-ready"},
+        {"etf_code": "EXTENDED", "source_reference": "ref-extended"},
+        {"etf_code": "MISSING", "source_reference": "ref-missing"},
+    ]
+    evidence = {
+        "READY": {"liquid": True, "extended": False, "avg_amount_20": 20_000_000.0},
+        "EXTENDED": {"liquid": True, "extended": True, "avg_amount_20": 20_000_000.0},
+        "MISSING": None,
+    }
+    snapshots = []
+    monkeypatch.setattr(run_daily, "MySQLSnapshotStore", lambda: type("Store", (), {"ensure_schema": lambda self: None})())
+    monkeypatch.setattr(run_daily, "load_sector_rows", lambda *_: [{
+        "sector_name": "Bank", "candidate_status": "ready", "model_version": "sector_v1",
+        "config_hash": "sector-cfg", "snapshot_mode": "live_shadow",
+    }])
+    monkeypatch.setattr(run_daily, "load_effective_etfs", lambda *_: mappings)
+    monkeypatch.setattr(run_daily, "load_etf_macd_evidence", lambda *_: {"macd_triggered": True})
+    monkeypatch.setattr(run_daily, "load_etf_execution_evidence", lambda code, _: evidence[code])
+    monkeypatch.setattr(run_daily, "persist_etf_candidate", lambda _store, snapshot: snapshots.append(snapshot))
+
+    assert run_daily.run_one_date(today.isoformat(), 2) == 3
+    assert [snapshot.candidate_status for snapshot in snapshots] == ["ready", "extended", "blocked"]
+    assert snapshots[0].feature_json["liquid"] is True
+    assert snapshots[0].feature_json["extended"] is False
+    assert "liquid" not in snapshots[2].feature_json
+    assert "extended" not in snapshots[2].feature_json

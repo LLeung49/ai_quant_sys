@@ -9,17 +9,87 @@ from __future__ import annotations
 import argparse
 from collections.abc import Callable
 from datetime import date
+import json
+import math
+from pathlib import Path
 from typing import Any
 
 from .providers import (
     AKShareETFProvider,
     BasketProvider,
+    ETFBasketInput,
     LocalSWMembershipProvider,
     MembershipProvider,
     MiniQMTETFProvider,
     ProviderQualityIssue,
     refresh_sector_etf_mapping,
 )
+
+
+class AuditedJSONBasketProvider:
+    """Load actual constituent weights from a strict, auditable JSON file."""
+
+    _ROOT_FIELDS = {
+        "provider_reported_date", "weight_unit", "source_provider",
+        "source_reference", "baskets",
+    }
+    _CONSTITUENT_FIELDS = {"stock_code", "weight"}
+
+    def __init__(self, path: str | Path) -> None:
+        self._path = Path(path)
+
+    def load(self, target_date: date) -> ETFBasketInput:
+        try:
+            payload = json.loads(self._path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+            raise ValueError(f"invalid basket JSON {self._path}: {exc}") from exc
+        if not isinstance(payload, dict):
+            raise ValueError("basket JSON root must be an object")
+        missing = self._ROOT_FIELDS - payload.keys()
+        extra = payload.keys() - self._ROOT_FIELDS
+        if missing:
+            raise ValueError(f"basket JSON missing required field(s): {', '.join(sorted(missing))}")
+        if extra:
+            raise ValueError(f"basket JSON has unsupported field(s): {', '.join(sorted(extra))}")
+
+        reported_date = _strict_iso_date(payload["provider_reported_date"])
+        weight_unit = payload["weight_unit"]
+        if weight_unit not in {"decimal", "percent"}:
+            raise ValueError("weight_unit must be 'decimal' or 'percent'")
+        source_provider = _nonblank_string(payload["source_provider"], "source_provider")
+        source_reference = _nonblank_string(payload["source_reference"], "source_reference")
+        raw_baskets = payload["baskets"]
+        if not isinstance(raw_baskets, dict) or not raw_baskets:
+            raise ValueError("baskets must be a non-empty object")
+
+        baskets: dict[str, tuple[dict[str, object], ...]] = {}
+        for raw_etf_code, raw_rows in raw_baskets.items():
+            etf_code = _nonblank_string(raw_etf_code, "ETF code")
+            if not isinstance(raw_rows, list) or not raw_rows:
+                raise ValueError(f"baskets[{etf_code!r}] must be a non-empty array")
+            rows: list[dict[str, object]] = []
+            for index, raw_row in enumerate(raw_rows):
+                if not isinstance(raw_row, dict) or set(raw_row) != self._CONSTITUENT_FIELDS:
+                    raise ValueError(
+                        f"baskets[{etf_code!r}][{index}] must contain only stock_code and weight",
+                    )
+                stock_code = _nonblank_string(raw_row["stock_code"], "stock_code")
+                weight = raw_row["weight"]
+                if isinstance(weight, bool) or not isinstance(weight, (int, float)):
+                    raise ValueError(f"baskets[{etf_code!r}][{index}].weight must be numeric")
+                numeric_weight = float(weight)
+                if not math.isfinite(numeric_weight) or numeric_weight < 0:
+                    raise ValueError(f"baskets[{etf_code!r}][{index}].weight must be finite and non-negative")
+                rows.append({"stock_code": stock_code, "weight": numeric_weight})
+            baskets[etf_code] = tuple(rows)
+
+        return ETFBasketInput(
+            baskets=baskets,
+            as_of_date=reported_date,
+            weight_unit=weight_unit,
+            source_provider=source_provider,
+            source_reference=source_reference,
+        )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -32,6 +102,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--min-coverage", type=float, default=0.80)
     parser.add_argument("--mapping-version", default="exposure_v1")
     parser.add_argument("--config-hash", required=True)
+    parser.add_argument(
+        "--basket-json",
+        type=Path,
+        help=(
+            "Audited ETF basket JSON containing provider_reported_date, weight_unit, "
+            "source_provider, source_reference and per-ETF constituent weights"
+        ),
+    )
     return parser
 
 
@@ -43,6 +121,7 @@ def run_refresh(
     min_coverage: float,
     mapping_version: str,
     config_hash: str,
+    basket_json_path: Path | None = None,
     query: Callable[[str, tuple[object, ...]], list[dict[str, Any]]] | None = None,
     membership_provider: MembershipProvider | None = None,
     basket_provider: BasketProvider | None = None,
@@ -81,7 +160,13 @@ def run_refresh(
         if row.get("sector_name") is not None and str(row["sector_name"]).strip()
     )
     membership = membership_provider or LocalSWMembershipProvider(query=query)
-    basket_source = basket_provider or _configured_basket_provider(provider_name)
+    if basket_provider is not None and basket_json_path is not None:
+        raise ValueError("basket_provider and basket_json_path are mutually exclusive")
+    basket_source = basket_provider or (
+        AuditedJSONBasketProvider(basket_json_path)
+        if basket_json_path is not None
+        else _configured_basket_provider(provider_name)
+    )
     basket_input = basket_source.load(target_date)
 
     count = 0
@@ -107,7 +192,7 @@ def main(
     run_refresh_fn: Callable[..., int] = run_refresh,
 ) -> int:
     args = build_parser().parse_args(argv)
-    run_refresh_fn(
+    refresh_kwargs = dict(
         target_date=date.fromisoformat(args.as_of_date),
         sector_level=args.level,
         provider_name=args.provider,
@@ -115,6 +200,9 @@ def main(
         mapping_version=args.mapping_version,
         config_hash=args.config_hash,
     )
+    if args.basket_json is not None:
+        refresh_kwargs["basket_json_path"] = args.basket_json
+    run_refresh_fn(**refresh_kwargs)
     return 0
 
 
@@ -126,6 +214,23 @@ def _configured_basket_provider(provider_name: str) -> BasketProvider:
     return AKShareETFProvider()
 
 
+def _strict_iso_date(value: object) -> date:
+    if not isinstance(value, str):
+        raise ValueError("provider_reported_date must be an ISO date string")
+    try:
+        parsed = date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError("provider_reported_date must be an ISO date string") from exc
+    if parsed.isoformat() != value:
+        raise ValueError("provider_reported_date must use YYYY-MM-DD")
+    return parsed
+
+
+def _nonblank_string(value: object, field: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field} must be a non-empty string")
+    return value.strip()
+
+
 if __name__ == "__main__":
     raise SystemExit(main())
-

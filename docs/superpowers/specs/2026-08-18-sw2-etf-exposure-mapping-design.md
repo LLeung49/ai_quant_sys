@@ -21,6 +21,29 @@
 
 `trade_sector_etf_map` becomes a derived output owned by the exposure service. The ETF candidate runner reads only effective-dated rows from this table. Existing MACD, liquidity, and tracking-fit calculations remain independent evidence and do not alter exposure.
 
+The mapping refresh CLI accepts an audited offline basket file through
+`--basket-json PATH`. This path is the executable route when MiniQMT or an
+injected AKShare payload cannot supply audited weights. The JSON contract is:
+
+```json
+{
+  "provider_reported_date": "2026-08-18",
+  "weight_unit": "decimal",
+  "source_provider": "custodian_file",
+  "source_reference": "sha256:immutable-report",
+  "baskets": {
+    "512480.SH": [{"stock_code": "600000.SH", "weight": 0.10}]
+  }
+}
+```
+
+All five top-level fields are required and no additional fields are accepted.
+Each basket must contain explicit, finite, non-negative constituent weights.
+The reported date must equal the refresh date before a qualified mapping can
+be persisted. Without `--basket-json`, the MiniQMT and AKShare adapters retain
+their fail-closed quality behavior when their payload lacks suitable weights
+or immutable provenance.
+
 ## Testing
 
 Tests cover code normalization, weighted overlap, Top3 tie ordering, missing/insufficient coverage blocks, effective-date lookup, and immutable candidate persistence.
