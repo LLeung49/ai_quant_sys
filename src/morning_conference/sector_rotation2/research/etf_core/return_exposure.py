@@ -37,10 +37,13 @@ def assess_return_exposure(
 
     if window < 1 or min_samples < 1:
         raise ValueError("window and min_samples must be positive")
+    effective_min_samples = max(50, min_samples)
 
     sector = _recent_close(sector_close, window)
     sector_reason = _close_failure(sector)
     sector_returns = None if sector_reason else sector.pct_change().iloc[1:]
+    if sector_returns is not None and _return_failure(sector_returns):
+        sector_reason = "nonfinite_return_data"
     results: list[ReturnExposureResult] = []
     failures: list[ReturnExposureFailure] = []
 
@@ -52,16 +55,21 @@ def assess_return_exposure(
             failures.append(ReturnExposureFailure(code, reason))
             continue
         if sector_reason:
-            failures.append(ReturnExposureFailure(code, "sector_nonfinite_close_data"))
+            failures.append(ReturnExposureFailure(code, sector_reason))
+            continue
+
+        etf_returns = etf.pct_change().iloc[1:]
+        if _return_failure(etf_returns):
+            failures.append(ReturnExposureFailure(code, "nonfinite_return_data"))
             continue
 
         aligned = pd.concat(
-            [etf.pct_change().rename("etf"), sector_returns.rename("sector")],
+            [etf_returns.rename("etf"), sector_returns.rename("sector")],
             axis=1,
             join="inner",
         ).dropna()
         sample_count = len(aligned)
-        if sample_count < min_samples:
+        if sample_count < effective_min_samples:
             failures.append(ReturnExposureFailure(code, "insufficient_common_returns"))
             continue
 
@@ -114,3 +122,7 @@ def _close_failure(close: pd.Series) -> str | None:
     if close.empty or close.isna().any() or not close.map(math.isfinite).all():
         return "nonfinite_close_data"
     return None
+
+
+def _return_failure(returns: pd.Series) -> bool:
+    return bool(returns.isna().any() or not returns.map(math.isfinite).all())

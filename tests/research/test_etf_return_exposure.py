@@ -79,3 +79,23 @@ def test_assess_return_exposure_rejects_nonfinite_data_and_zero_sector_variance(
 
     assert invalid_failures[0].failure_reason == "nonfinite_close_data"
     assert variance_failures[0].failure_reason == "zero_sector_return_variance"
+
+
+def test_assess_return_exposure_enforces_hard_minimum_even_when_caller_lowers_minimum():
+    closes = _close_from_returns([0.01 if i % 2 else -0.005 for i in range(10)])
+    results, failures = assess_return_exposure(
+        {"SHORT_MIN": closes}, closes, min_samples=2
+    )
+
+    assert results == []
+    assert failures[0].failure_reason == "insufficient_common_returns"
+
+
+def test_assess_return_exposure_rejects_infinite_return_from_zero_close():
+    sector = _close_from_returns([0.01] * 60)
+    etf = pd.Series([100.0] * 30 + [0.0] + [100.0] * 30)
+
+    results, failures = assess_return_exposure({"ZERO": etf}, sector)
+
+    assert results == []
+    assert failures[0].failure_reason == "nonfinite_return_data"
