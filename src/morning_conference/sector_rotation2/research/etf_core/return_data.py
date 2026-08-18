@@ -22,6 +22,14 @@ _NON_DOMESTIC_NAME_KEYWORDS = (
     "commodity", "gold", "crude", "oil", "soybean meal", "nasdaq", "s&p", "nikkei",
     "hang seng", "hong kong", "cross-border", "cross border", "overseas", "global",
 )
+_ETF_EXCHANGE_BY_PREFIX = {
+    "15": "SZ",
+    "16": "SZ",
+    "50": "SH",
+    "51": "SH",
+    "56": "SH",
+    "58": "SH",
+}
 
 
 @dataclass(frozen=True)
@@ -37,13 +45,37 @@ def is_domestic_equity_etf(code: str, name: str | None) -> bool:
     """Return whether a recognized ETF is a domestic-equity product."""
 
     try:
-        normalized_code = normalize_stock_code(code)
+        normalized_code = normalize_etf_code(code)
     except ValueError:
         return False
-    if not normalized_code.startswith(ETF_PREFIXES) or is_excluded_bond_etf(code, name):
-        return False
     normalized_name = str(name or "").strip().lower()
+    if not normalized_name:
+        return False
+    if not normalized_code.startswith(ETF_PREFIXES) or is_excluded_bond_etf(normalized_code, name):
+        return False
     return not any(keyword in normalized_name for keyword in _NON_DOMESTIC_NAME_KEYWORDS)
+
+
+def normalize_etf_code(code: str) -> str:
+    """Return the canonical exchange-suffixed identifier used by price consumers."""
+
+    digits = normalize_stock_code(code)
+    exchange = next(
+        (market for prefix, market in _ETF_EXCHANGE_BY_PREFIX.items() if digits.startswith(prefix)),
+        None,
+    )
+    if exchange is None:
+        raise ValueError(f"unrecognized ETF code: {code!r}")
+
+    raw = str(code).strip().upper().replace(" ", "")
+    explicit_exchange = None
+    for market in ("SH", "SZ", "BJ"):
+        if raw.startswith((market, f"{market}.")) or raw.endswith(f".{market}"):
+            explicit_exchange = market
+            break
+    if explicit_exchange is not None and explicit_exchange != exchange:
+        raise ValueError(f"ETF code exchange does not match its prefix: {code!r}")
+    return f"{digits}.{exchange}"
 
 
 def load_return_mapping_input(
@@ -130,7 +162,7 @@ def _eligible_etf_rows(rows: list[dict[str, Any]], selected_dates: set[date]) ->
             continue
         try:
             trade_date = _coerce_date(row.get("trade_date"))
-            code = normalize_stock_code(str(raw_code))
+            code = normalize_etf_code(str(raw_code))
         except ValueError:
             continue
         if trade_date in selected_dates:

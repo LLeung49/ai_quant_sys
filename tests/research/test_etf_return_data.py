@@ -49,6 +49,7 @@ def _fake_local_query(calls):
         if "FROM trade_stock_daily" in sql:
             return [
                 *_price_rows("510300.SH", "沪深300ETF", [3.0 + index / 100 for index in range(61)]),
+                *_price_rows("513100.SH", None, [4.0 + index / 100 for index in range(61)]),
                 *_price_rows("511010.SH", "国债ETF", [100.0 + index for index in range(61)]),
                 *_price_rows("159999.SZ", "黄金ETF", [100.0 + index for index in range(61)]),
                 *_price_rows("159998.SZ", "科技ETF", [math.nan] + [0.0] + [10.0 + index for index in range(49)] + [math.inf] + [math.nan] * 9),
@@ -66,12 +67,12 @@ def test_load_return_mapping_input_reads_only_local_prices_for_the_requested_61_
 
     assert result.as_of_date == AS_OF_DATE
     assert result.price_source == "local_trade_daily"
-    assert result.universe_codes == ("510300",)
+    assert result.universe_codes == ("510300.SH",)
     assert list(result.sector_closes) == ["电子"]
     assert list(result.sector_closes["电子"].index) == _trade_dates()
     assert result.sector_closes["电子"].iloc[-1] == 1060.0
-    assert list(result.etf_closes["510300"].index) == _trade_dates()
-    assert result.etf_closes["510300"].iloc[0] == 3.0
+    assert list(result.etf_closes["510300.SH"].index) == _trade_dates()
+    assert result.etf_closes["510300.SH"].iloc[0] == 3.0
     allowed_tables = ("trade_sector_daily", "trade_stock_daily", "trade_stock_status")
     assert all(any(table in sql for table in allowed_tables) for sql, _ in calls)
     assert any(params == (2, AS_OF_DATE, 61) for _, params in calls)
@@ -107,3 +108,8 @@ def test_is_domestic_equity_etf_excludes_non_domestic_products(code, name):
 def test_is_domestic_equity_etf_accepts_recognized_domestic_equity_etf():
     assert is_domestic_equity_etf("510300.SH", "沪深300ETF")
     assert not is_domestic_equity_etf("600000.SH", "浦发银行")
+
+
+@pytest.mark.parametrize("missing_name", [None, "", "   "])
+def test_is_domestic_equity_etf_fails_closed_without_product_name(missing_name):
+    assert not is_domestic_equity_etf("513100.SH", missing_name)

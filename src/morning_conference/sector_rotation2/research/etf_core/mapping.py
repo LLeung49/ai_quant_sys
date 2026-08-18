@@ -240,12 +240,12 @@ LEFT JOIN (
         SELECT DISTINCT effective_from
         FROM trade_sector_etf_map
         WHERE sector_level=%s AND sector_name=%s
-          AND mapping_type='return_exposure_derived'
+          AND mapping_type IN ('return_exposure_derived', 'return_mapping_quality_failure')
     ) AS current_event
     LEFT JOIN trade_sector_etf_map AS next_event
       ON next_event.sector_level=%s AND next_event.sector_name=%s
      AND next_event.effective_from > current_event.effective_from
-     AND next_event.mapping_type='return_exposure_derived'
+     AND next_event.mapping_type IN ('return_exposure_derived', 'return_mapping_quality_failure')
     GROUP BY current_event.effective_from
 ) AS intervals ON intervals.effective_from=target.effective_from
 SET target.effective_to=CASE
@@ -253,7 +253,7 @@ SET target.effective_to=CASE
     ELSE DATE_SUB(intervals.next_effective_from, INTERVAL 1 DAY)
 END
 WHERE target.sector_level=%s AND target.sector_name=%s
-  AND target.mapping_type='return_exposure_derived'
+  AND target.mapping_type IN ('return_exposure_derived', 'return_mapping_quality_failure')
 """
 
 
@@ -576,15 +576,23 @@ def load_effective_return_etfs(
                   window_start_date, window_end_date, sample_count, corr, beta,
                   r_squared, residual_vol, sector_fit_score, confidence_status,
                   price_source, price_as_of_date, universe_source
-             FROM trade_sector_etf_map
+             FROM trade_sector_etf_map AS mapping_event
              WHERE sector_name=%s AND sector_level=%s AND effective_from <= %s
                AND (effective_to IS NULL OR effective_to >= %s)
                AND mapping_type='return_exposure_derived'
                AND mapping_method='sw2_return_regression_v1'
                AND quality_status='qualified'
+               AND NOT EXISTS (
+                   SELECT 1 FROM trade_sector_etf_map AS failure_event
+                    WHERE failure_event.sector_name=mapping_event.sector_name
+                      AND failure_event.sector_level=mapping_event.sector_level
+                      AND failure_event.mapping_type='return_mapping_quality_failure'
+                      AND failure_event.effective_from > mapping_event.effective_from
+                      AND failure_event.effective_from <= %s
+               )
              ORDER BY rank_no ASC, etf_code ASC
              LIMIT 3""",
-        (sector_name, sector_level, as_of_date, as_of_date),
+        (sector_name, sector_level, as_of_date, as_of_date, as_of_date),
     )
     return sorted(
         (
@@ -740,19 +748,45 @@ def _return_mapping_rows(
             None, None, None, None, None, None, None,
             common[15], common[16], common[17],
         )]
-    return [
-        (
+    rows: list[tuple[object, ...]] = []
+    for rank_no, item in enumerate(ranked, start=1):
+        item_window_start, item_window_end, item_price_as_of = _return_result_price_window(
+            item,
+            fallback_start=window_start_date,
+            fallback_end=window_end_date,
+            fallback_price_as_of=price_as_of_date,
+            event_date=as_of_date,
+        )
+        rows.append((
             common[0], common[1], item.etf_code,
             MAPPING_TYPE_RETURN_EXPOSURE_DERIVED, common[2], int(rank_no == 1),
-            common[3], common[4], common[5], common[6], common[7], common[8],
+            common[3], common[4], item_price_as_of, common[6], common[7], common[8],
             common[9], common[10], rank_no, common[11], QUALITY_STATUS_QUALIFIED,
-            None, common[12], common[13], common[14], item.sample_count,
+            None, common[12], item_window_start, item_window_end, item.sample_count,
             item.corr, item.beta, item.r_squared, item.residual_vol,
             item.sector_fit_score, item.confidence_status,
-            common[15], common[16], common[17],
-        )
-        for rank_no, item in enumerate(ranked, start=1)
-    ]
+            common[15], item_price_as_of, common[17],
+        ))
+    return rows
+
+
+def _return_result_price_window(
+    item: ReturnExposureResult,
+    *,
+    fallback_start: date,
+    fallback_end: date,
+    fallback_price_as_of: date,
+    event_date: date,
+) -> tuple[date, date, date]:
+    provided = (item.window_start_date, item.window_end_date, item.price_as_of_date)
+    if all(value is None for value in provided):
+        return fallback_start, fallback_end, fallback_price_as_of
+    if any(type(value) is not date for value in provided):
+        raise ValueError("return result price-window dates must be all present dates")
+    start, end, price_as_of = provided
+    if not (start <= end == price_as_of <= event_date):
+        raise ValueError("return result price-window provenance is incoherent")
+    return start, end, price_as_of
 
 
 def _validate_return_mapping_provenance(

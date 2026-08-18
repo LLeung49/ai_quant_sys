@@ -21,6 +21,12 @@ from morning_conference.sector_rotation2.research.etf_core.return_exposure impor
     ReturnExposureResult,
 )
 from morning_conference.sector_rotation2.research.etf_core import run_daily
+from morning_conference.sector_rotation2.research.etf_core.execution_evidence import (
+    load_etf_execution_evidence,
+)
+from morning_conference.sector_rotation2.research.etf_core.macd_adapter import (
+    load_etf_macd_evidence,
+)
 
 
 AS_OF_DATE = date(2026, 8, 19)
@@ -115,18 +121,21 @@ class StatefulMappingDatabase:
                     return
                 if compact.startswith("UPDATE trade_sector_etf_map"):
                     level, sector = params[0], params[1]
+                    return_event_types = {"return_exposure_derived"}
+                    if "return_mapping_quality_failure" in sql:
+                        return_event_types.add("return_mapping_quality_failure")
                     dated = sorted({
                         row["effective_from"]
                         for row in pending
                         if row["sector_level"] == level
                         and row["sector_name"] == sector
-                        and row["mapping_type"] == "return_exposure_derived"
+                        and row["mapping_type"] in return_event_types
                     })
                     for row in pending:
                         if (
                             row["sector_level"] == level
                             and row["sector_name"] == sector
-                            and row["mapping_type"] == "return_exposure_derived"
+                            and row["mapping_type"] in return_event_types
                         ):
                             later = [value for value in dated if value > row["effective_from"]]
                             row["effective_to"] = min(later) - timedelta(days=1) if later else None
@@ -314,11 +323,14 @@ def test_return_mapping_persists_sorted_top3_statistics_and_replaces_only_return
         if sql.lstrip().startswith("DELETE") and "return_mapping_quality_failure" in sql
     )
     rebuild_sql = next(sql for sql, _ in commands if sql.lstrip().startswith("UPDATE"))
-    for sql in (delete_sql, rebuild_sql):
+    for sql in (delete_sql,):
         assert "mapping_type='return_exposure_derived'" in sql.replace(" ", "")
         assert "mapping_type IN" not in sql
         assert "exposure_quality_failure" not in sql
         assert "return_mapping_quality_failure" not in sql
+    assert "return_exposure_derived" in rebuild_sql
+    assert "return_mapping_quality_failure" in rebuild_sql
+    assert "exposure_quality_failure" not in rebuild_sql
     assert "mapping_type='return_mapping_quality_failure'" in failure_delete_sql.replace(" ", "")
 
 
@@ -388,6 +400,30 @@ def test_stateful_failure_and_success_transitions_leave_one_event_kind() -> None
     assert len(database.rows) == 1
 
 
+def test_quality_failure_closes_prior_success_and_loader_does_not_reuse_it() -> None:
+    database = StatefulMappingDatabase()
+    earlier = AS_OF_DATE - timedelta(days=4)
+    holdings = {
+        "sector_level": 2,
+        "sector_name": "Semiconductors",
+        "etf_code": "512480.SH",
+        "mapping_type": "exposure_derived",
+        "effective_from": earlier,
+        "effective_to": None,
+    }
+    database.rows.append(copy.deepcopy(holdings))
+
+    _persist_state(database, earlier, [_result("510001.SH", 0.8, 0.7)])
+    _persist_state(database, AS_OF_DATE, [])
+
+    success = next(row for row in database.rows if row["mapping_type"] == "return_exposure_derived")
+    assert success["effective_to"] == AS_OF_DATE - timedelta(days=1)
+    assert load_effective_return_etfs(
+        "Semiconductors", 2, AS_OF_DATE, database.effective_query,
+    ) == []
+    assert next(row for row in database.rows if row["mapping_type"] == "exposure_derived") == holdings
+
+
 def test_stateful_out_of_order_events_rebuild_intervals_and_load_inside_interval() -> None:
     database = StatefulMappingDatabase()
     earlier = AS_OF_DATE - timedelta(days=4)
@@ -436,6 +472,49 @@ def test_weekend_event_accepts_last_trade_date_as_coherent_price_window_provenan
     assert database.rows[0]["window_end_date"] == friday
     assert database.rows[0]["price_as_of_date"] == friday
     assert database.rows[0]["source_as_of_date"] == friday
+
+
+def test_return_mapping_persists_each_etfs_actual_price_window_provenance() -> None:
+    commands: list[tuple[str, object]] = []
+    actual_start = WINDOW_START + timedelta(days=14)
+    result = ReturnExposureResult(
+        etf_code="159995.SZ",
+        corr=0.8,
+        beta=1.1,
+        r_squared=0.64,
+        residual_vol=0.12,
+        sector_fit_score=0.5,
+        sample_count=50,
+        confidence_status="qualified",
+        window_start_date=actual_start,
+        window_end_date=AS_OF_DATE,
+        price_as_of_date=AS_OF_DATE,
+    )
+
+    persist_return_exposure_mapping(
+        "Semiconductors",
+        2,
+        AS_OF_DATE,
+        [result],
+        window_start_date=WINDOW_START,
+        window_end_date=AS_OF_DATE,
+        lookback_trading_days=60,
+        price_as_of_date=AS_OF_DATE,
+        price_source="local_trade_daily",
+        universe_source="local_domestic_equity_etf",
+        mapping_version="return_v1",
+        config_hash="cfg",
+        transaction=_recording_transaction(commands),
+    )
+
+    record = _inserted_records(
+        next(command for command in commands if command[0].lstrip().startswith("INSERT"))
+    )[0]
+    assert record["etf_code"] == "159995.SZ"
+    assert record["window_start_date"] == actual_start
+    assert record["window_end_date"] == AS_OF_DATE
+    assert record["price_as_of_date"] == AS_OF_DATE
+    assert record["source_as_of_date"] == AS_OF_DATE
 
 
 def test_effective_return_loader_keeps_low_confidence_and_reads_full_provenance() -> None:
@@ -630,7 +709,7 @@ def test_local_return_refresh_runs_real_loader_assessor_and_runner_for_low_confi
         if "FROM trade_stock_daily" in sql:
             return [
                 *price_rows("510001.SH", "Qualified Equity ETF", [2.0 * value for value in sector_returns]),
-                *price_rows("510002.SH", "Low Confidence Equity ETF", [0.001 if index % 3 == 0 else -0.001 for index in range(60)]),
+                *price_rows("159995.SZ", "Low Confidence Equity ETF", [0.001 if index % 3 == 0 else -0.001 for index in range(60)]),
             ]
         raise AssertionError(f"unexpected SQL: {sql}")
 
@@ -680,12 +759,12 @@ def test_local_return_refresh_runs_real_loader_assessor_and_runner_for_low_confi
         database.effective_query,
     )
     assert [(row["etf_code"], row["confidence_status"]) for row in effective] == [
-        ("510001", "qualified"),
-        ("510002", "low_confidence"),
+        ("510001.SH", "qualified"),
+        ("159995.SZ", "low_confidence"),
     ]
     assert {(row["mapping_type"], row["etf_code"]) for row in database.rows} == {
-        ("return_exposure_derived", "510001"),
-        ("return_exposure_derived", "510002"),
+        ("return_exposure_derived", "510001.SH"),
+        ("return_exposure_derived", "159995.SZ"),
     }
 
     snapshots = []
@@ -704,14 +783,42 @@ def test_local_return_refresh_runs_real_loader_assessor_and_runner_for_low_confi
             database.effective_query,
         ),
     )
-    monkeypatch.setattr(run_daily, "load_etf_macd_evidence", lambda *_: {"macd_triggered": True})
-    monkeypatch.setattr(run_daily, "load_etf_execution_evidence", lambda *_: {"liquid": True, "extended": False})
+    macd_lookup_codes: list[str] = []
+    execution_lookup_codes: list[str] = []
+
+    def macd_evidence(code: str, target: date):
+        def query(_sql, params):
+            assert params == (target, code)
+            macd_lookup_codes.append(code)
+            return [{"macd_triggered": True}]
+
+        return load_etf_macd_evidence(code, target, query=query)
+
+    def execution_evidence(code: str, target: date):
+        def query(_sql, params):
+            assert params == (code, target)
+            execution_lookup_codes.append(code)
+            return [
+                {
+                    "trade_date": target - timedelta(days=offset),
+                    "close_price": 100.0,
+                    "amount": 20_000_000.0,
+                }
+                for offset in range(20)
+            ]
+
+        return load_etf_execution_evidence(code, target, query=query)
+
+    monkeypatch.setattr(run_daily, "load_etf_macd_evidence", macd_evidence)
+    monkeypatch.setattr(run_daily, "load_etf_execution_evidence", execution_evidence)
     monkeypatch.setattr(run_daily, "persist_etf_candidate", lambda _store, snapshot: snapshots.append(snapshot))
 
     assert run_daily.run_one_date(requested_date.isoformat(), 2) == 2
-    low_confidence = next(snapshot for snapshot in snapshots if snapshot.entity_code == "510002")
+    low_confidence = next(snapshot for snapshot in snapshots if snapshot.entity_code == "159995.SZ")
     assert low_confidence.candidate_status == "blocked"
     assert "low_return_exposure_confidence" in low_confidence.risk_flags_json
+    assert macd_lookup_codes == ["510001.SH", "159995.SZ"]
+    assert execution_lookup_codes == ["510001.SH", "159995.SZ"]
     assert "persisted_rows=2" in capsys.readouterr().out
     assert all(
         any(table in sql for table in ("trade_sector_daily", "trade_stock_daily", "trade_stock_status"))

@@ -1,4 +1,5 @@
 import math
+from datetime import date
 
 import pandas as pd
 import pytest
@@ -20,11 +21,11 @@ def test_assess_return_exposure_returns_qualified_regression_result():
     sector = _close_from_returns(sector_returns)
     etf = _close_from_returns([2.0 * value for value in sector_returns])
 
-    results, failures = assess_return_exposure({"510300": etf}, sector)
+    results, failures = assess_return_exposure({"510300.SH": etf}, sector)
 
     assert failures == []
     result = results[0]
-    assert result.etf_code == "510300"
+    assert result.etf_code == "510300.SH"
     assert result.beta == pytest.approx(2.0)
     assert result.corr == pytest.approx(1.0)
     assert result.r_squared == pytest.approx(1.0)
@@ -99,3 +100,51 @@ def test_assess_return_exposure_rejects_infinite_return_from_zero_close():
 
     assert results == []
     assert failures[0].failure_reason == "nonfinite_return_data"
+
+
+def test_assess_return_exposure_rejects_missing_date_instead_of_mixing_return_intervals():
+    dates = pd.bdate_range("2026-05-25", periods=61)
+    sector_returns = [0.01 if index % 2 == 0 else -0.005 for index in range(60)]
+    sector = pd.Series(_close_from_returns(sector_returns).to_numpy(), index=dates)
+    etf = pd.Series(
+        _close_from_returns([2.0 * value for value in sector_returns]).to_numpy(),
+        index=dates,
+    ).drop(dates[30])
+
+    results, failures = assess_return_exposure({"510300.SH": etf}, sector)
+
+    assert results == []
+    assert len(failures) == 1
+    assert failures[0].etf_code == "510300.SH"
+    assert failures[0].failure_reason == "insufficient_consecutive_common_returns"
+
+
+def test_assess_return_exposure_rejects_stale_etf_with_auditable_failure():
+    dates = pd.bdate_range("2026-05-25", periods=61)
+    returns = [0.01 if index % 2 == 0 else -0.005 for index in range(60)]
+    sector = pd.Series(_close_from_returns(returns).to_numpy(), index=dates)
+    stale_etf = pd.Series(_close_from_returns(returns).to_numpy()[:-1], index=dates[:-1])
+
+    results, failures = assess_return_exposure({"510300.SH": stale_etf}, sector)
+
+    assert results == []
+    assert failures[0].etf_code == "510300.SH"
+    assert failures[0].failure_reason == "stale_price_data"
+
+
+def test_assess_return_exposure_records_each_etfs_actual_aligned_price_window():
+    dates = pd.bdate_range("2026-05-25", periods=61)
+    returns = [0.01 if index % 2 == 0 else -0.005 for index in range(60)]
+    sector = pd.Series(_close_from_returns(returns).to_numpy(), index=dates)
+    etf = pd.Series(
+        _close_from_returns(returns[10:]).to_numpy(),
+        index=dates[10:],
+    )
+
+    results, failures = assess_return_exposure({"159995.SZ": etf}, sector)
+
+    assert failures == []
+    assert results[0].sample_count == 50
+    assert results[0].window_start_date == date(2026, 6, 8)
+    assert results[0].window_end_date == dates[-1].date()
+    assert results[0].price_as_of_date == dates[-1].date()

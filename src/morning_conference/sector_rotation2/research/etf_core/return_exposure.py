@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from collections.abc import Mapping
 from dataclasses import dataclass
+from datetime import date, datetime
 
 import pandas as pd
 
@@ -19,6 +20,9 @@ class ReturnExposureResult:
     sector_fit_score: float
     sample_count: int
     confidence_status: str
+    window_start_date: date | None = None
+    window_end_date: date | None = None
+    price_as_of_date: date | None = None
 
 
 @dataclass(frozen=True)
@@ -41,9 +45,6 @@ def assess_return_exposure(
 
     sector = _recent_close(sector_close, window)
     sector_reason = _close_failure(sector)
-    sector_returns = None if sector_reason else sector.pct_change().iloc[1:]
-    if sector_returns is not None and _return_failure(sector_returns):
-        sector_reason = "nonfinite_return_data"
     results: list[ReturnExposureResult] = []
     failures: list[ReturnExposureFailure] = []
 
@@ -57,20 +58,34 @@ def assess_return_exposure(
         if sector_reason:
             failures.append(ReturnExposureFailure(code, sector_reason))
             continue
+        if sector.index[-1] not in etf.index:
+            failures.append(ReturnExposureFailure(code, "stale_price_data"))
+            continue
 
-        etf_returns = etf.pct_change().iloc[1:]
-        if _return_failure(etf_returns):
+        aligned_closes = pd.concat(
+            [etf.rename("etf"), sector.rename("sector")],
+            axis=1,
+            join="outer",
+            sort=False,
+        ).reindex(sector.index)
+        common = aligned_closes.notna().all(axis=1)
+        trailing_start = len(common) - 1
+        while trailing_start >= 0 and bool(common.iloc[trailing_start]):
+            trailing_start -= 1
+        consecutive_closes = aligned_closes.iloc[trailing_start + 1:]
+        aligned = consecutive_closes.pct_change(fill_method=None).iloc[1:].dropna()
+        if any(_return_failure(aligned[column]) for column in ("etf", "sector")):
             failures.append(ReturnExposureFailure(code, "nonfinite_return_data"))
             continue
 
-        aligned = pd.concat(
-            [etf_returns.rename("etf"), sector_returns.rename("sector")],
-            axis=1,
-            join="inner",
-        ).dropna()
         sample_count = len(aligned)
         if sample_count < effective_min_samples:
-            failures.append(ReturnExposureFailure(code, "insufficient_common_returns"))
+            reason = (
+                "insufficient_consecutive_common_returns"
+                if int(common.sum()) >= effective_min_samples + 1
+                else "insufficient_common_returns"
+            )
+            failures.append(ReturnExposureFailure(code, reason))
             continue
 
         x = aligned["sector"]
@@ -105,6 +120,9 @@ def assess_return_exposure(
                 "qualified" if beta > 0 and corr > 0 and r_squared >= 0.25
                 else "low_confidence"
             ),
+            window_start_date=_index_date(consecutive_closes.index[0]),
+            window_end_date=_index_date(consecutive_closes.index[-1]),
+            price_as_of_date=_index_date(consecutive_closes.index[-1]),
         ))
 
     results.sort(key=lambda item: (-item.sector_fit_score, -item.r_squared, item.etf_code))
@@ -115,7 +133,7 @@ def assess_return_exposure(
 def _recent_close(close: pd.Series, window: int) -> pd.Series:
     if not isinstance(close, pd.Series):
         return pd.Series(dtype=float)
-    return pd.to_numeric(close.tail(window + 1), errors="coerce")
+    return pd.to_numeric(close.sort_index().tail(window + 1), errors="coerce")
 
 
 def _close_failure(close: pd.Series) -> str | None:
@@ -126,3 +144,13 @@ def _close_failure(close: pd.Series) -> str | None:
 
 def _return_failure(returns: pd.Series) -> bool:
     return bool(returns.isna().any() or not returns.map(math.isfinite).all())
+
+
+def _index_date(value: object) -> date | None:
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, pd.Timestamp):
+        return value.date()
+    return None
