@@ -29,20 +29,21 @@ CREATE TABLE IF NOT EXISTS trade_sector_etf_map (
     is_primary TINYINT NOT NULL DEFAULT 0,
     effective_from DATE NOT NULL,
     effective_to DATE DEFAULT NULL,
-    source_as_of_date DATE NOT NULL,
+    source_as_of_date DATE DEFAULT NULL,
     source_provider VARCHAR(64) NOT NULL,
     exposure_weight DECIMAL(18,8) NOT NULL,
     coverage_ratio DECIMAL(18,8) NOT NULL,
     mapping_version VARCHAR(64) NOT NULL,
     config_hash VARCHAR(128) NOT NULL,
     rank_no TINYINT NOT NULL,
-    weight_unit ENUM('decimal', 'percent') NOT NULL,
+    weight_unit ENUM('decimal', 'percent') DEFAULT NULL,
     membership_asof_mode VARCHAR(32) NOT NULL,
-    membership_as_of_date DATE NOT NULL,
-    constituent_as_of_date DATE NOT NULL,
+    membership_as_of_date DATE DEFAULT NULL,
+    constituent_as_of_date DATE DEFAULT NULL,
     quality_status ENUM('qualified', 'failed') NOT NULL,
     failure_reason VARCHAR(255) DEFAULT NULL,
     mapping_note VARCHAR(255) DEFAULT NULL,
+    source_reference VARCHAR(255) DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
@@ -53,7 +54,8 @@ CREATE TABLE IF NOT EXISTS trade_sector_etf_map (
 
 # Existing deployments can contain manually curated rows.  Added fields stay
 # nullable during migration so those legacy rows remain readable/auditable;
-# all newly derived rows use the NOT NULL contract from the create DDL above.
+# qualified rows enforce complete provenance in Python; failure rows may keep
+# unavailable provenance fields null so the quality event remains auditable.
 _MIGRATION_COLUMNS = {
     "source_as_of_date": "DATE NULL",
     "source_provider": "VARCHAR(64) NULL",
@@ -69,7 +71,15 @@ _MIGRATION_COLUMNS = {
     "quality_status": "VARCHAR(16) NULL",
     "failure_reason": "VARCHAR(255) NULL",
     "mapping_note": "VARCHAR(255) NULL",
+    "source_reference": "VARCHAR(255) NULL",
     "updated_at": "DATETIME NULL",
+}
+
+_NULLABLE_FAILURE_PROVENANCE = {
+    "source_as_of_date": "DATE NULL",
+    "weight_unit": "ENUM('decimal', 'percent') NULL",
+    "membership_as_of_date": "DATE NULL",
+    "constituent_as_of_date": "DATE NULL",
 }
 
 _INSERT_EXPOSURE_MAPPING_SQL = """
@@ -78,8 +88,9 @@ INSERT INTO trade_sector_etf_map (
     effective_from, effective_to, source_as_of_date, source_provider,
     exposure_weight, coverage_ratio, mapping_version, rank_no, config_hash,
     weight_unit, membership_asof_mode, membership_as_of_date,
-    constituent_as_of_date, quality_status, failure_reason, mapping_note
-) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    constituent_as_of_date, quality_status, failure_reason, mapping_note,
+    source_reference
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 """
 
 _LOCK_SECTOR_SQL = """
@@ -173,14 +184,21 @@ def ensure_mapping_schema(
 
     execute_update(SECTOR_ETF_MAP_DDL, ())
     rows = query(
-        """SELECT column_name FROM information_schema.columns
+        """SELECT column_name, is_nullable FROM information_schema.columns
              WHERE table_schema=DATABASE() AND table_name=%s""",
         ("trade_sector_etf_map",),
     )
     existing = {str(row["column_name"]) for row in rows}
+    nullability = {
+        str(row["column_name"]): str(row["is_nullable"])
+        for row in rows if row.get("is_nullable") is not None
+    }
     for name, definition in _MIGRATION_COLUMNS.items():
         if name not in existing:
             execute_update(f"ALTER TABLE trade_sector_etf_map ADD COLUMN {name} {definition}", ())
+    for name, definition in _NULLABLE_FAILURE_PROVENANCE.items():
+        if nullability.get(name) == "NO":
+            execute_update(f"ALTER TABLE trade_sector_etf_map MODIFY COLUMN {name} {definition}", ())
     index_rows = query(
         """SELECT index_name, column_name FROM information_schema.statistics
              WHERE table_schema=DATABASE() AND table_name=%s
@@ -231,15 +249,18 @@ def persist_exposure_mapping(
     sector_level: int,
     as_of_date: date,
     ranked: Iterable[ExposureResult],
-    source_as_of_date: date,
+    source_as_of_date: date | None,
     source_provider: str,
-    membership_as_of_date: date,
-    constituent_as_of_date: date,
+    membership_as_of_date: date | None,
+    constituent_as_of_date: date | None,
     mapping_version: str,
     config_hash: str,
-    weight_unit: Literal["decimal", "percent"],
+    weight_unit: Literal["decimal", "percent"] | None,
     min_coverage: float = 0.80,
     rejected: Iterable[RejectedExposure] = (),
+    membership_asof_mode: str = CURRENT_MAPPING_MODE,
+    quality_failure_reason: str | None = None,
+    source_reference: str | None = None,
     transaction: Callable[[], AbstractContextManager[MappingTransaction]] = open_mapping_transaction,
     ensure_schema: Callable[[], None] | None = None,
 ) -> int:
@@ -254,14 +275,24 @@ def persist_exposure_mapping(
     _sector_field(sector_level)
     if not 0 <= min_coverage <= 1:
         raise ValueError("min_coverage must be between zero and one")
-    if weight_unit not in {"decimal", "percent"}:
-        raise ValueError(f"invalid weight unit: {weight_unit!r}")
-    _validate_as_of_dates(source_as_of_date, membership_as_of_date, constituent_as_of_date)
+    ranked_items = list(ranked)
+    rejected_items = list(rejected)
+    if quality_failure_reason is None:
+        if weight_unit not in {"decimal", "percent"}:
+            raise ValueError(f"invalid weight unit: {weight_unit!r}")
+        _validate_as_of_dates(
+            as_of_date,
+            source_as_of_date,
+            membership_as_of_date,
+            constituent_as_of_date,
+        )
+    elif ranked_items:
+        raise ValueError("quality_failure_reason cannot accompany ranked mappings")
+    if not membership_asof_mode:
+        raise ValueError("membership_asof_mode is required")
 
     if ensure_schema is not None:
         ensure_schema()
-    ranked_items = list(ranked)
-    rejected_items = list(rejected)
     qualified = sorted(
         (
             item for item in ranked_items
@@ -269,12 +300,19 @@ def persist_exposure_mapping(
         ),
         key=lambda item: (-item.exposure_weight, -item.coverage_ratio, item.etf_code),
     )[:3]
+    if qualified and not str(source_reference or "").strip():
+        raise ValueError("source_reference is required for qualified exposure mappings")
+    if qualified and not str(source_provider or "").strip():
+        raise ValueError("source_provider is required for qualified exposure mappings")
     rows = _mapping_rows(
         sector_name=sector_name, sector_level=sector_level, as_of_date=as_of_date,
         ranked=qualified, observed=[*ranked_items, *rejected_items], source_as_of_date=source_as_of_date, source_provider=source_provider,
         membership_as_of_date=membership_as_of_date,
         constituent_as_of_date=constituent_as_of_date, mapping_version=mapping_version,
         config_hash=config_hash, weight_unit=weight_unit, min_coverage=min_coverage,
+        membership_asof_mode=membership_asof_mode,
+        quality_failure_reason=quality_failure_reason,
+        source_reference=source_reference,
     )
     with transaction() as db:
         db.execute(_LOCK_SECTOR_SQL, (sector_level, sector_name))
@@ -319,15 +357,22 @@ def load_effective_etfs(
                   source_as_of_date, source_provider, exposure_weight, coverage_ratio,
                   mapping_version, config_hash, rank_no, weight_unit,
                   membership_asof_mode, membership_as_of_date, constituent_as_of_date,
-                  quality_status, failure_reason, mapping_note
+                  quality_status, failure_reason, mapping_note, source_reference
              FROM trade_sector_etf_map
              WHERE sector_name=%s AND sector_level=%s AND effective_from <= %s
                AND (effective_to IS NULL OR effective_to >= %s)
                AND mapping_type='exposure_derived' AND quality_status='qualified'
                AND exposure_weight > 0 AND coverage_ratio >= %s
+               AND source_as_of_date=%s AND membership_as_of_date=%s
+               AND constituent_as_of_date=%s
+               AND source_provider IS NOT NULL AND TRIM(source_provider) <> ''
+               AND source_reference IS NOT NULL AND TRIM(source_reference) <> ''
              ORDER BY rank_no ASC, etf_code ASC
              LIMIT 3""",
-        (sector_name, sector_level, as_of_date, as_of_date, min_coverage),
+        (
+            sector_name, sector_level, as_of_date, as_of_date, min_coverage,
+            as_of_date, as_of_date, as_of_date,
+        ),
     )
     qualified = [
         row for row in rows
@@ -335,15 +380,22 @@ def load_effective_etfs(
         and row.get("quality_status") == QUALITY_STATUS_QUALIFIED
         and float(row.get("exposure_weight") or 0) > 0
         and float(row.get("coverage_ratio") or 0) >= min_coverage
+        and row.get("source_as_of_date") == as_of_date
+        and row.get("membership_as_of_date") == as_of_date
+        and row.get("constituent_as_of_date") == as_of_date
+        and bool(str(row.get("source_provider") or "").strip())
+        and bool(str(row.get("source_reference") or "").strip())
     ]
     return sorted(qualified, key=_effective_mapping_sort_key)[:3]
 
 
 def _mapping_rows(
     *, sector_name: str, sector_level: int, as_of_date: date,
-    ranked: list[ExposureResult], observed: list[ExposureResult | RejectedExposure], source_as_of_date: date, source_provider: str,
-    membership_as_of_date: date, constituent_as_of_date: date, mapping_version: str,
-    config_hash: str, weight_unit: str, min_coverage: float,
+    ranked: list[ExposureResult], observed: list[ExposureResult | RejectedExposure], source_as_of_date: date | None, source_provider: str,
+    membership_as_of_date: date | None, constituent_as_of_date: date | None, mapping_version: str,
+    config_hash: str, weight_unit: str | None, min_coverage: float,
+    membership_asof_mode: str, quality_failure_reason: str | None,
+    source_reference: str | None,
 ) -> list[tuple[object, ...]]:
     if not ranked:
         observed_item = max(observed, key=lambda item: (item.coverage_ratio, item.exposure_weight, item.etf_code), default=None)
@@ -353,17 +405,19 @@ def _mapping_rows(
         return [(
             sector_level, sector_name, observed_code, MAPPING_TYPE_QUALITY_FAILURE, 0,
             as_of_date, None, source_as_of_date, source_provider, observed_exposure, observed_coverage,
-            mapping_version, 0, config_hash, weight_unit, CURRENT_MAPPING_MODE,
+            mapping_version, 0, config_hash, weight_unit, membership_asof_mode,
             membership_as_of_date, constituent_as_of_date, QUALITY_STATUS_FAILED,
-            _failure_reason(min_coverage, observed_item, observed_code, observed_coverage), None,
+            quality_failure_reason or _failure_reason(min_coverage, observed_item, observed_code, observed_coverage), None,
+            source_reference,
         )]
     return [
         (
             sector_level, sector_name, item.etf_code, MAPPING_TYPE_EXPOSURE_DERIVED,
             int(rank_no == 1), as_of_date, None, source_as_of_date, source_provider,
             item.exposure_weight, item.coverage_ratio, mapping_version, rank_no, config_hash,
-            weight_unit, CURRENT_MAPPING_MODE, membership_as_of_date, constituent_as_of_date,
+            weight_unit, membership_asof_mode, membership_as_of_date, constituent_as_of_date,
             QUALITY_STATUS_QUALIFIED, None, None,
+            source_reference,
         )
         for rank_no, item in enumerate(ranked, start=1)
     ]
@@ -380,6 +434,7 @@ def _effective_mapping_sort_key(row: dict[str, Any]) -> tuple[int, str]:
 
 
 def _validate_as_of_dates(
+    as_of_date: date,
     source_as_of_date: date | None,
     membership_as_of_date: date | None,
     constituent_as_of_date: date | None,
@@ -388,6 +443,10 @@ def _validate_as_of_dates(
     if any(type(value) is not date for value in dates) or len(set(dates)) != 1:
         raise ValueError(
             "source_as_of_date, membership_as_of_date, and constituent_as_of_date must be non-null dates and must match"
+        )
+    if dates[0] != as_of_date:
+        raise ValueError(
+            "source_as_of_date, membership_as_of_date, and constituent_as_of_date must equal as_of_date"
         )
 
 
