@@ -16,7 +16,12 @@ import math
 import re
 from typing import Any, Literal, Protocol
 
-from .exposure import ExposureAssessment, assess_sector_etfs, normalize_stock_code
+from .exposure import (
+    ExposureAssessment,
+    aggregate_constituents,
+    assess_sector_etfs,
+    normalize_stock_code,
+)
 
 
 WeightUnit = Literal["decimal", "percent"]
@@ -230,12 +235,12 @@ class MiniQMTETFProvider:
         self._provenance = provenance
 
     def load(self, target_date: date) -> ETFBasketInput:
-        client = self._client
-        if client is None:
-            from xtquant import xtdata
-
-            client = xtdata
         try:
+            client = self._client
+            if client is None:
+                from xtquant import xtdata
+
+                client = xtdata
             client.download_etf_info()
             raw = client.get_etf_info()
         except Exception as exc:
@@ -347,22 +352,36 @@ def select_freshest_basket(
     miniqmt: ETFBasketInput,
     akshare: ETFBasketInput,
     target_date: date,
+    *,
+    min_coverage: float = 0.8,
 ) -> ETFBasketInput:
     """Choose the newest complete, non-future weighted basket.
 
-    MiniQMT wins only when its reported date is strictly newer.  A code-only
-    MiniQMT payload is retained solely as a component cross-check on the
-    selected weighted source.
+    Every ETF in a source must meet the configured normalized weight coverage.
+    Recency is compared only between complete sources, with MiniQMT exact
+    preferred on equal reported dates.  MiniQMT and AKShare are always
+    cross-checked against each other, regardless of which source is selected.
     """
 
+    if not 0 <= min_coverage <= 1:
+        raise ValueError("min_coverage must be between zero and one")
     candidates = [
         basket for basket in (miniqmt, akshare)
-        if basket.available and basket.as_of_date is not None and basket.as_of_date <= target_date
+        if (
+            basket.available
+            and basket.as_of_date is not None
+            and basket.as_of_date <= target_date
+            and _basket_is_complete(basket, min_coverage=min_coverage)
+        )
     ]
+    cross_check_status, cross_check_detail = _cross_check_miniqmt_codes(
+        miniqmt,
+        akshare,
+    )
     if not candidates:
         details = "; ".join(
             f"{basket.source_provider}: "
-            f"{basket.quality_issue.code if basket.quality_issue else 'unavailable'}"
+            f"{basket.quality_issue.code if basket.quality_issue else 'incomplete_weight_coverage'}"
             for basket in (miniqmt, akshare)
         )
         return ETFBasketInput.unavailable(
@@ -371,25 +390,24 @@ def select_freshest_basket(
                 "missing_complete_weighted_basket",
                 details or "no complete weighted basket is available",
             ),
-            cross_check_status="not_available",
-            cross_check_detail="MiniQMT component codes were not available for comparison",
+            cross_check_status=cross_check_status,
+            cross_check_detail=cross_check_detail,
         )
     chosen = max(
         candidates,
         key=lambda basket: (
             basket.as_of_date,
-            basket.source_provider == "akshare",
+            basket.basket_source_priority == "miniqmt_exact",
         ),
     )
     priority = chosen.basket_source_priority or (
         "miniqmt_exact" if chosen.source_provider == "miniqmt" else "akshare_disclosed"
     )
-    status, detail = _cross_check_miniqmt_codes(miniqmt, chosen)
     return replace(
         chosen,
         basket_source_priority=priority,
-        cross_check_status=status,
-        cross_check_detail=detail,
+        cross_check_status=cross_check_status,
+        cross_check_detail=cross_check_detail,
     )
 
 
@@ -748,25 +766,47 @@ def _reported_quarter_end(value: object) -> date | None:
     return date(year, month, day)
 
 
+def _basket_is_complete(
+    basket: ETFBasketInput,
+    *,
+    min_coverage: float,
+) -> bool:
+    """Return whether every ETF basket has valid normalized weight coverage."""
+
+    if basket.weight_unit not in {"decimal", "percent"} or not basket.baskets:
+        return False
+    scale = 100.0 if basket.weight_unit == "percent" else 1.0
+    for rows in basket.baskets.values():
+        try:
+            coverage = sum(aggregate_constituents(rows).values()) / scale
+        except (TypeError, ValueError):
+            return False
+        if coverage < min_coverage or coverage > 1.0 + 1e-9:
+            return False
+    return True
+
+
 def _cross_check_miniqmt_codes(
     miniqmt: ETFBasketInput,
-    chosen: ETFBasketInput,
+    akshare: ETFBasketInput,
 ) -> tuple[str, str]:
     mini_codes = _normalized_constituent_codes(miniqmt)
     if not mini_codes:
         return "not_available", "MiniQMT component codes were not available for comparison"
-    selected_codes = _normalized_constituent_codes(chosen)
-    miniqmt_only = sorted(mini_codes.keys() - selected_codes.keys())
-    akshare_only = sorted(selected_codes.keys() - mini_codes.keys())
+    akshare_codes = _normalized_constituent_codes(akshare)
+    if not akshare_codes:
+        return "not_available", "AKShare component codes were not available for comparison"
+    miniqmt_only = sorted(mini_codes.keys() - akshare_codes.keys())
+    akshare_only = sorted(akshare_codes.keys() - mini_codes.keys())
     constituent_mismatch = sorted(
-        etf_code for etf_code in mini_codes.keys() & selected_codes.keys()
-        if mini_codes[etf_code] != selected_codes[etf_code]
+        etf_code for etf_code in mini_codes.keys() & akshare_codes.keys()
+        if mini_codes[etf_code] != akshare_codes[etf_code]
     )
     discrepancy = {
         "akshare_only": akshare_only,
         "constituent_mismatch": [
             {
-                "akshare": sorted(selected_codes[etf_code]),
+                "akshare": sorted(akshare_codes[etf_code]),
                 "etf_code": etf_code,
                 "miniqmt": sorted(mini_codes[etf_code]),
             }

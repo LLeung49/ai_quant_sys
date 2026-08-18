@@ -2,6 +2,7 @@ from dataclasses import FrozenInstanceError
 from datetime import date
 from contextlib import contextmanager
 from functools import partial
+import builtins
 
 import pytest
 
@@ -28,9 +29,10 @@ def _basket(
     provider: str,
     reported_date: date,
     stock_code: str = "600000.SH",
+    weight: float = 100.0,
 ) -> ETFBasketInput:
     return ETFBasketInput(
-        baskets={"510300.SH": ({"stock_code": stock_code, "weight": 100.0},)},
+        baskets={"510300.SH": ({"stock_code": stock_code, "weight": weight},)},
         as_of_date=reported_date,
         weight_unit="percent",
         source_provider=provider,
@@ -63,7 +65,7 @@ def test_newer_akshare_disclosure_wins_over_older_complete_miniqmt() -> None:
     assert result.as_of_date == date(2026, 6, 30)
 
 
-def test_akshare_wins_when_complete_sources_have_the_same_reported_date() -> None:
+def test_miniqmt_exact_wins_when_complete_sources_have_the_same_reported_date() -> None:
     reported_date = date(2026, 6, 30)
 
     result = select_freshest_basket(
@@ -72,8 +74,71 @@ def test_akshare_wins_when_complete_sources_have_the_same_reported_date() -> Non
         TARGET,
     )
 
+    assert result.source_provider == "miniqmt"
+    assert result.basket_source_priority == "miniqmt_exact"
+
+
+def test_newer_partial_source_cannot_displace_older_complete_source() -> None:
+    result = select_freshest_basket(
+        _basket(
+            provider="miniqmt",
+            reported_date=date(2026, 6, 30),
+            weight=79.0,
+        ),
+        _basket(provider="akshare", reported_date=date(2026, 3, 31)),
+        TARGET,
+        min_coverage=0.8,
+    )
+
     assert result.source_provider == "akshare"
-    assert result.basket_source_priority == "akshare_disclosed"
+    assert result.as_of_date == date(2026, 3, 31)
+
+
+def test_source_with_any_undercovered_etf_basket_is_not_complete() -> None:
+    partial_miniqmt = ETFBasketInput(
+        baskets={
+            "510300.SH": ({"stock_code": "600000", "weight": 100.0},),
+            "510500.SH": ({"stock_code": "000001", "weight": 79.0},),
+        },
+        as_of_date=date(2026, 6, 30),
+        weight_unit="percent",
+        source_provider="miniqmt",
+        source_reference="miniqmt:2026Q2",
+        basket_source_priority="miniqmt_exact",
+    )
+    complete_akshare = _basket(
+        provider="akshare",
+        reported_date=date(2026, 3, 31),
+    )
+
+    result = select_freshest_basket(
+        partial_miniqmt,
+        complete_akshare,
+        TARGET,
+        min_coverage=0.8,
+    )
+
+    assert result.source_provider == "akshare"
+
+
+def test_cross_check_compares_miniqmt_with_akshare_when_miniqmt_is_selected() -> None:
+    result = select_freshest_basket(
+        _basket(
+            provider="miniqmt",
+            reported_date=date(2026, 6, 30),
+            stock_code="600000",
+        ),
+        _basket(
+            provider="akshare",
+            reported_date=date(2026, 3, 31),
+            stock_code="000001",
+        ),
+        TARGET,
+    )
+
+    assert result.source_provider == "miniqmt"
+    assert result.cross_check_status == "mismatch"
+    assert "constituent_mismatch=1" in (result.cross_check_detail or "")
 
 
 def test_code_only_miniqmt_is_cross_check_not_weight_source() -> None:
@@ -198,6 +263,49 @@ def test_local_sw_provider_rejects_historical_target_for_current_mapping() -> No
         code="membership_date_mismatch",
         detail="trade_stock_status current_mapping is dated 2026-08-18, target is 2026-08-17",
     )
+
+
+def test_miniqmt_import_error_becomes_unavailable_and_auto_falls_back_to_akshare(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    real_import = builtins.__import__
+
+    def fail_xtquant_import(name, *args, **kwargs):
+        if name == "xtquant":
+            raise ModuleNotFoundError("No module named 'xtquant'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", fail_xtquant_import)
+
+    miniqmt = MiniQMTETFProvider().load(TARGET)
+    result = select_freshest_basket(
+        miniqmt,
+        _basket(provider="akshare", reported_date=date(2026, 6, 30)),
+        TARGET,
+    )
+
+    assert miniqmt.quality_issue is not None
+    assert miniqmt.quality_issue.code == "provider_error"
+    assert result.source_provider == "akshare"
+
+
+def test_miniqmt_provider_call_error_becomes_unavailable_and_auto_falls_back() -> None:
+    class Client:
+        def download_etf_info(self) -> None:
+            raise RuntimeError("MiniQMT terminal is offline")
+
+    miniqmt = MiniQMTETFProvider(client=Client()).load(TARGET)
+    result = select_freshest_basket(
+        miniqmt,
+        _basket(provider="akshare", reported_date=date(2026, 6, 30)),
+        TARGET,
+    )
+
+    assert miniqmt.quality_issue == ProviderQualityIssue(
+        "provider_error",
+        "MiniQMT terminal is offline",
+    )
+    assert result.source_provider == "akshare"
 
 
 def test_miniqmt_extracts_complete_weighted_baskets_after_downloading_redemption_list() -> None:

@@ -111,8 +111,8 @@ def test_auto_refresh_selects_periodic_akshare_aging_mapping_and_reports_summary
             return self.basket
 
     miniqmt = Provider(ETFBasketInput(
-        baskets={"510300": ({"stock_code": "600000", "weight": 100.0},)},
-        as_of_date=date(2026, 3, 31),
+        baskets={"510300": ({"stock_code": "600000", "weight": 85.0},)},
+        as_of_date=date(2026, 6, 30),
         weight_unit="percent",
         source_provider="miniqmt",
         source_reference="miniqmt:2026Q1",
@@ -148,7 +148,7 @@ def test_auto_refresh_selects_periodic_akshare_aging_mapping_and_reports_summary
         target_date=TARGET,
         sector_level=2,
         provider_name="auto",
-        min_coverage=0.8,
+        min_coverage=0.9,
         mapping_version="exposure_v1",
         config_hash="cfg",
         query=lambda *_: [{"sector_name": "Bank"}],

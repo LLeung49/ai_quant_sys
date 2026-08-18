@@ -181,7 +181,12 @@ def run_refresh(
     elif provider_name == "auto":
         miniqmt_input = (miniqmt_provider or MiniQMTETFProvider()).load(target_date)
         akshare_input = (akshare_provider or AKShareETFProvider()).load(target_date)
-        basket_input = select_freshest_basket(miniqmt_input, akshare_input, target_date)
+        basket_input = select_freshest_basket(
+            miniqmt_input,
+            akshare_input,
+            target_date,
+            min_coverage=min_coverage,
+        )
     elif provider_name == "miniqmt" and miniqmt_provider is not None:
         basket_input = miniqmt_provider.load(target_date)
     elif provider_name == "akshare" and akshare_provider is not None:
