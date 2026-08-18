@@ -4,7 +4,10 @@
 def select_candidate_status(
     *, sector_allowed: bool, liquid: bool | None, macd_triggered: bool, extended: bool | None,
     freshness_status: str | None = None,
+    confidence_status: str | None = None,
 ) -> str:
+    if confidence_status == "low_confidence":
+        return "blocked"
     if freshness_status == "stale":
         return "blocked"
     if liquid is None or extended is None:

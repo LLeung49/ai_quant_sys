@@ -143,3 +143,45 @@ def test_missing_execution_evidence_is_fail_closed_without_fake_features() -> No
     assert "liquid" not in snapshot.feature_json
     assert "extended" not in snapshot.feature_json
     assert "missing_execution_evidence" in snapshot.risk_flags_json
+
+
+def test_low_confidence_return_mapping_blocks_candidate_and_binds_metrics_to_identity() -> None:
+    metadata = {
+        "mapping_method": "sw2_return_regression_v1",
+        "window_start_date": "2026-05-20",
+        "window_end_date": "2026-08-17",
+        "lookback_trading_days": 60,
+        "sample_count": 60,
+        "corr": 0.8,
+        "beta": 1.1,
+        "r_squared": 0.64,
+        "residual_vol": 0.12,
+        "sector_fit_score": 0.9,
+        "confidence_status": "low_confidence",
+        "price_source": "local_trade_daily",
+        "price_as_of_date": "2026-08-17",
+        "universe_source": "local_domestic_equity_etf",
+    }
+    common = dict(
+        as_of_date=date(2026, 8, 17), sector_level=2, sector_name="Bank", etf_code="512480.SH",
+        sector_allowed=True, liquid=True, macd_evidence={"macd_triggered": True}, extended=False,
+        run_id="run-1",
+    )
+
+    snapshot = build_etf_candidate(**common, mapping_metadata=metadata)
+
+    assert snapshot.candidate_status == "blocked"
+    assert "low_return_exposure_confidence" in snapshot.risk_flags_json
+    for field, value in metadata.items():
+        assert snapshot.feature_json["mapping"][field] == value
+    for field, changed_value in (
+        ("corr", 0.7),
+        ("beta", 1.2),
+        ("r_squared", 0.63),
+        ("residual_vol", 0.13),
+        ("sector_fit_score", 0.8),
+    ):
+        changed = build_etf_candidate(
+            **common, mapping_metadata={**metadata, field: changed_value},
+        )
+        assert changed.config_hash != snapshot.config_hash, field

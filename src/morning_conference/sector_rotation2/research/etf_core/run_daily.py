@@ -1,4 +1,4 @@
-"""Daily/backfill runner consuming only effective exposure-derived ETF maps."""
+"""Daily/backfill runner consuming only effective return-derived ETF maps."""
 
 import argparse
 from datetime import date
@@ -10,7 +10,7 @@ from ..orchestrator.store import MySQLSnapshotStore
 from ..status import SnapshotMode
 from .execution_evidence import load_etf_execution_evidence
 from .macd_adapter import load_etf_macd_evidence
-from .mapping import load_effective_etfs
+from .mapping import load_effective_return_etfs
 from .service import build_etf_candidate, persist_etf_candidate
 
 
@@ -77,7 +77,7 @@ def run_one_date(as_of_date: str, level: int, mode: SnapshotMode = SnapshotMode.
     count = 0
     for sector in sectors:
         allowed = sector["candidate_status"] not in {"avoid", "risk_reduce"}
-        for mapping in load_effective_etfs(str(sector["sector_name"]), level, target):
+        for mapping in load_effective_return_etfs(str(sector["sector_name"]), level, target):
             code = str(mapping["etf_code"])
             execution_evidence = load_etf_execution_evidence(code, target)
             snapshot = build_etf_candidate(

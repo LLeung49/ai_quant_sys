@@ -35,12 +35,15 @@ def build_etf_candidate(*, as_of_date: date, sector_level: int, sector_name: str
     if extended_value is not None:
         execution["extended"] = extended_value
     freshness_status = normalized_mapping.get("freshness_status")
+    confidence_status = normalized_mapping.get("confidence_status")
     status = select_candidate_status(sector_allowed=sector_allowed, liquid=liquid_value,
                                      macd_triggered=bool(evidence.get("macd_triggered")), extended=extended_value,
-                                     freshness_status=freshness_status if isinstance(freshness_status, str) else None)
+                                     freshness_status=freshness_status if isinstance(freshness_status, str) else None,
+                                     confidence_status=confidence_status if isinstance(confidence_status, str) else None)
     missing_execution = liquid_value is None or extended_value is None
     risk_flags = (
         *(("stale_holdings",) if freshness_status == "stale" else ()),
+        *(("low_return_exposure_confidence",) if confidence_status == "low_confidence" else ()),
         *(("missing_execution_evidence",) if missing_execution else ()),
     )
     return CandidateSnapshot(
@@ -86,6 +89,10 @@ def _mapping_provenance(
         "constituent_reported_date", "holdings_age_days", "freshness_status",
         "freshness_confidence", "basket_source_priority", "cross_check_status",
         "cross_check_detail",
+        "mapping_method", "window_start_date", "window_end_date",
+        "lookback_trading_days", "sample_count", "corr", "beta", "r_squared",
+        "residual_vol", "sector_fit_score", "confidence_status", "price_source",
+        "price_as_of_date", "universe_source",
     )
     provenance = {
         "sector_level": sector_level,

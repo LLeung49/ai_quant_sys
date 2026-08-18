@@ -72,7 +72,7 @@ def test_runner_uses_loaded_execution_evidence_instead_of_defaults(monkeypatch: 
         "sector_name": "Bank", "candidate_status": "ready", "model_version": "sector_v1",
         "config_hash": "sector-cfg", "snapshot_mode": "live_shadow",
     }])
-    monkeypatch.setattr(run_daily, "load_effective_etfs", lambda *_: mappings)
+    monkeypatch.setattr(run_daily, "load_effective_return_etfs", lambda *_: mappings)
     monkeypatch.setattr(run_daily, "load_etf_macd_evidence", lambda *_: {"macd_triggered": True})
     monkeypatch.setattr(run_daily, "load_etf_execution_evidence", lambda code, _: evidence[code])
     monkeypatch.setattr(run_daily, "persist_etf_candidate", lambda _store, snapshot: snapshots.append(snapshot))
@@ -85,31 +85,36 @@ def test_runner_uses_loaded_execution_evidence_instead_of_defaults(monkeypatch: 
     assert "extended" not in snapshots[2].feature_json
 
 
-def test_runner_blocks_stale_mapping_before_ready_execution_gates(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_runner_uses_return_mappings_without_holdings_loader(monkeypatch: pytest.MonkeyPatch) -> None:
     today = date.today()
     mapping = {
-        "etf_code": "STALE",
-        "source_reference": "akshare:fund_portfolio_hold_em:2026Q1",
-        "constituent_reported_date": date(2026, 2, 17),
-        "holdings_age_days": 182,
-        "freshness_status": "stale",
-        "freshness_confidence": 0.5 ** (182 / 90),
-        "basket_source_priority": "akshare_disclosed",
-        "cross_check_status": "mismatch",
-        "cross_check_detail": "sha256:cross-check",
+        "etf_code": "LOW_CONFIDENCE",
+        "mapping_method": "sw2_return_regression_v1",
+        "confidence_status": "low_confidence",
     }
     snapshots = []
+    return_loader_calls: list[tuple[object, ...]] = []
     monkeypatch.setattr(run_daily, "MySQLSnapshotStore", lambda: type("Store", (), {"ensure_schema": lambda self: None})())
     monkeypatch.setattr(run_daily, "load_sector_rows", lambda *_: [{
         "sector_name": "Bank", "candidate_status": "ready", "model_version": "sector_v1",
         "config_hash": "sector-cfg", "snapshot_mode": "live_shadow",
     }])
-    monkeypatch.setattr(run_daily, "load_effective_etfs", lambda *_: [mapping])
+    def load_return_mappings(*args: object) -> list[dict[str, object]]:
+        return_loader_calls.append(args)
+        return [mapping]
+
+    monkeypatch.setattr(run_daily, "load_effective_return_etfs", load_return_mappings)
+    monkeypatch.setattr(
+        run_daily,
+        "load_effective_etfs",
+        lambda *_: (_ for _ in ()).throw(AssertionError("holdings loader must not run")),
+        raising=False,
+    )
     monkeypatch.setattr(run_daily, "load_etf_macd_evidence", lambda *_: {"macd_triggered": True})
     monkeypatch.setattr(run_daily, "load_etf_execution_evidence", lambda *_: {"liquid": True, "extended": False})
     monkeypatch.setattr(run_daily, "persist_etf_candidate", lambda _store, snapshot: snapshots.append(snapshot))
 
     assert run_daily.run_one_date(today.isoformat(), 2) == 1
     assert snapshots[0].candidate_status == "blocked"
-    assert "stale_holdings" in snapshots[0].risk_flags_json
-    assert snapshots[0].feature_json["mapping"]["cross_check_detail"] == "sha256:cross-check"
+    assert "low_return_exposure_confidence" in snapshots[0].risk_flags_json
+    assert return_loader_calls == [("Bank", 2, today)]
