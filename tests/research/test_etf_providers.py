@@ -537,8 +537,39 @@ def test_akshare_lazily_loads_etf_universe_and_preserves_latest_disclosed_quarte
     )
     assert progress == [
         "[akshare] ETF universe loaded: 2; retrieving disclosed holdings",
-        "[akshare] holdings progress: 2/2",
+        "[akshare] holdings progress: 2/2; loaded=2; skipped=0; retries=0",
     ]
+
+
+def test_akshare_skips_one_etf_after_retries_and_retains_other_disclosed_baskets() -> None:
+    class Client:
+        calls: list[str] = []
+
+        def fund_etf_spot_em(self):
+            return [{"代码": "510300"}, {"代码": "159995"}]
+
+        def fund_portfolio_hold_em(self, *, symbol: str, date: str):
+            self.calls.append(symbol)
+            if symbol == "159995":
+                raise ConnectionError("temporary upstream failure")
+            return [
+                {"股票代码": "600000", "占净值比例": 100.0, "季度": "2026年2季度股票投资明细"},
+            ]
+
+    progress: list[str] = []
+    client = Client()
+    result = AKShareETFProvider(
+        client=client,
+        progress=progress.append,
+        retry_delay_seconds=0,
+    ).load(TARGET)
+
+    assert result.available
+    assert tuple(result.baskets) == ("510300",)
+    assert client.calls.count("159995") == 3
+    assert any("retry 1/2 ETF 159995" in message for message in progress)
+    assert any("skipping ETF 159995 after 3 attempts" in message for message in progress)
+    assert progress[-1] == "[akshare] holdings progress: 2/2; loaded=1; skipped=1; retries=2"
 
 
 @pytest.mark.parametrize(

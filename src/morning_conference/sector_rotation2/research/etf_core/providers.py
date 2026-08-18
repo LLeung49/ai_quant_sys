@@ -14,6 +14,7 @@ import hashlib
 import json
 import math
 import re
+import time
 from typing import Any, Literal, Protocol
 
 from .exposure import (
@@ -264,11 +265,13 @@ class AKShareETFProvider:
         client: object | None = None,
         provenance: ProviderProvenance | None = None,
         progress: Callable[[str], None] | None = None,
+        retry_delay_seconds: float = 0.5,
     ) -> None:
         self._dataframe = dataframe
         self._client = client
         self._provenance = provenance
         self._progress = progress
+        self._retry_delay_seconds = retry_delay_seconds
 
     def load(self, target_date: date) -> ETFBasketInput:
         try:
@@ -280,7 +283,12 @@ class AKShareETFProvider:
                 client = self._client
                 if client is None:
                     import akshare as client
-                data = _load_akshare_disclosed_holdings(client, target_date, progress=self._progress)
+                data = _load_akshare_disclosed_holdings(
+                    client,
+                    target_date,
+                    progress=self._progress,
+                    retry_delay_seconds=self._retry_delay_seconds,
+                )
             rows = _records(data)
         except Exception as exc:
             return ETFBasketInput.unavailable(
@@ -692,6 +700,7 @@ def _load_akshare_disclosed_holdings(
     target_date: date,
     *,
     progress: Callable[[str], None] | None = None,
+    retry_delay_seconds: float = 0.5,
 ) -> list[dict[str, object]]:
     universe_loader = getattr(client, "fund_etf_spot_em", None)
     holdings_loader = getattr(client, "fund_portfolio_hold_em", None)
@@ -712,25 +721,40 @@ def _load_akshare_disclosed_holdings(
         progress(f"[akshare] ETF universe loaded: {len(etf_codes)}; retrieving disclosed holdings")
 
     disclosed: list[tuple[str, date, Mapping[str, object]]] = []
+    skipped = 0
+    retries = 0
     for index, etf_code in enumerate(etf_codes, start=1):
-        eligible = _akshare_rows_for_year(
-            holdings_loader, etf_code=etf_code, year=target_date.year, target_date=target_date,
-        )
-        if not eligible:
-            eligible = _akshare_rows_for_year(
-                holdings_loader, etf_code=etf_code, year=target_date.year - 1,
+        try:
+            eligible, retry_count = _load_akshare_etf_with_retry(
+                holdings_loader,
+                etf_code=etf_code,
                 target_date=target_date,
+                retry_delay_seconds=retry_delay_seconds,
+                progress=progress,
             )
+            retries += retry_count
+        except Exception as exc:
+            skipped += 1
+            retries += 2
+            if progress is not None:
+                progress(
+                    f"[akshare] skipping ETF {etf_code} after 3 attempts: {type(exc).__name__}",
+                )
+            eligible = []
         if not eligible:
-            continue
-        latest_for_etf = max(item[0] for item in eligible)
-        disclosed.extend(
-            (etf_code, reported_date, row)
-            for reported_date, row in eligible
-            if reported_date == latest_for_etf
-        )
+            pass
+        else:
+            latest_for_etf = max(item[0] for item in eligible)
+            disclosed.extend(
+                (etf_code, reported_date, row)
+                for reported_date, row in eligible
+                if reported_date == latest_for_etf
+            )
         if progress is not None and (index % 50 == 0 or index == len(etf_codes)):
-            progress(f"[akshare] holdings progress: {index}/{len(etf_codes)}")
+            progress(
+                f"[akshare] holdings progress: {index}/{len(etf_codes)}; "
+                f"loaded={len({item[0] for item in disclosed})}; skipped={skipped}; retries={retries}",
+            )
     if not disclosed:
         raise ValueError("fund_portfolio_hold_em returned no disclosed holdings on or before target date")
 
@@ -748,6 +772,38 @@ def _load_akshare_disclosed_holdings(
         for etf_code, reported_date, row in disclosed
         if reported_date == latest_reported_date
     ]
+
+
+def _load_akshare_etf_with_retry(
+    holdings_loader: Callable[..., object],
+    *,
+    etf_code: str,
+    target_date: date,
+    retry_delay_seconds: float,
+    progress: Callable[[str], None] | None,
+) -> tuple[list[tuple[date, Mapping[str, object]]], int]:
+    """Load one ETF's disclosed holdings without discarding other ETF baskets."""
+
+    retries = 0
+    for attempt in range(3):
+        try:
+            eligible = _akshare_rows_for_year(
+                holdings_loader, etf_code=etf_code, year=target_date.year, target_date=target_date,
+            )
+            if not eligible:
+                eligible = _akshare_rows_for_year(
+                    holdings_loader, etf_code=etf_code, year=target_date.year - 1, target_date=target_date,
+                )
+            return eligible, retries
+        except Exception as exc:
+            if attempt == 2:
+                raise
+            retries += 1
+            if progress is not None:
+                progress(f"[akshare] retry {attempt + 1}/2 ETF {etf_code} after {type(exc).__name__}")
+            if retry_delay_seconds > 0:
+                time.sleep(retry_delay_seconds * (attempt + 1))
+    raise RuntimeError("unreachable")
 
 
 def _akshare_rows_for_year(
