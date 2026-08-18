@@ -1,7 +1,9 @@
 from datetime import date
+from decimal import Decimal
 
 import pytest
 
+from morning_conference.sector_rotation2.research.config_hash import build_config_hash
 from morning_conference.sector_rotation2.research.etf_core import run_daily
 from morning_conference.sector_rotation2.research.status import SnapshotMode
 
@@ -89,8 +91,31 @@ def test_runner_uses_return_mappings_without_holdings_loader(monkeypatch: pytest
     today = date.today()
     mapping = {
         "etf_code": "LOW_CONFIDENCE",
+        "mapping_type": "return_exposure_derived",
         "mapping_method": "sw2_return_regression_v1",
+        "is_primary": 0,
+        "effective_from": today,
+        "effective_to": None,
+        "source_as_of_date": today,
+        "source_provider": "local_trade_daily",
+        "mapping_version": "return_v1",
+        "config_hash": "return-cfg",
+        "rank_no": 2,
+        "quality_status": "qualified",
+        "failure_reason": None,
+        "lookback_trading_days": 60,
+        "window_start_date": date(2026, 5, 29),
+        "window_end_date": today,
+        "sample_count": 60,
+        "corr": Decimal("0.80"),
+        "beta": Decimal("1.10"),
+        "r_squared": Decimal("0.64"),
+        "residual_vol": Decimal("0.12"),
+        "sector_fit_score": Decimal("0.90"),
         "confidence_status": "low_confidence",
+        "price_source": "local_trade_daily",
+        "price_as_of_date": today,
+        "universe_source": "local_domestic_equity_etf",
     }
     snapshots = []
     return_loader_calls: list[tuple[object, ...]] = []
@@ -118,3 +143,42 @@ def test_runner_uses_return_mappings_without_holdings_loader(monkeypatch: pytest
     assert snapshots[0].candidate_status == "blocked"
     assert "low_return_exposure_confidence" in snapshots[0].risk_flags_json
     assert return_loader_calls == [("Bank", 2, today)]
+    expected_mapping = {
+        "sector_level": 2,
+        "sector_name": "Bank",
+        "etf_code": "LOW_CONFIDENCE",
+        "source_as_of_date": today.isoformat(),
+        "source_provider": "local_trade_daily",
+        "mapping_version": "return_v1",
+        "config_hash": "return-cfg",
+        "rank_no": 2,
+        "mapping_type": "return_exposure_derived",
+        "quality_status": "qualified",
+        "mapping_method": "sw2_return_regression_v1",
+        "window_start_date": "2026-05-29",
+        "window_end_date": today.isoformat(),
+        "lookback_trading_days": 60,
+        "sample_count": 60,
+        "corr": "0.80",
+        "beta": "1.10",
+        "r_squared": "0.64",
+        "residual_vol": "0.12",
+        "sector_fit_score": "0.90",
+        "confidence_status": "low_confidence",
+        "price_source": "local_trade_daily",
+        "price_as_of_date": today.isoformat(),
+        "universe_source": "local_domestic_equity_etf",
+        "upstream_sector_snapshot": {
+            "as_of_date": today.isoformat(),
+            "entity_type": "sector",
+            "entity_code": "Bank",
+            "strategy_type": "sector_opportunity",
+            "model_version": "sector_v1",
+            "config_hash": "sector-cfg",
+            "snapshot_mode": "live_shadow",
+        },
+    }
+    assert snapshots[0].feature_json["mapping"] == expected_mapping
+    assert snapshots[0].config_hash == build_config_hash(
+        {"model_version": "etf_core_v1", "mapping": expected_mapping},
+    )

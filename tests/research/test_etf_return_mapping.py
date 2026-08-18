@@ -19,6 +19,7 @@ from morning_conference.sector_rotation2.research.etf_core.return_exposure impor
     ReturnExposureFailure,
     ReturnExposureResult,
 )
+from morning_conference.sector_rotation2.research.etf_core.service import build_etf_candidate
 
 
 AS_OF_DATE = date(2026, 8, 19)
@@ -576,6 +577,101 @@ def test_return_refresh_cli_uses_injected_local_pipeline_without_external_import
     assert "qualified=1" in output
     assert "low_confidence=1" in output
     assert "quality_failures=1" in output
+    assert not any(
+        any(token in name.lower() for token in ("akshare", "miniqmt", "xtquant"))
+        or name.lower() == "providers"
+        or name.lower().endswith(".providers")
+        for name in attempted_imports
+    )
+
+
+def test_local_return_refresh_persists_both_confidence_events_and_blocks_low_confidence_candidate(
+    monkeypatch,
+    capsys,
+) -> None:
+    requested_date = date(2026, 8, 22)
+    observed_date = date(2026, 8, 21)
+    index = pd.bdate_range(end=observed_date, periods=61)
+    loaded = ReturnMappingInput(
+        as_of_date=requested_date,
+        sector_closes={"Sector A": pd.Series(range(61), index=index)},
+        etf_closes={"510001": pd.Series(range(61), index=index), "510002": pd.Series(range(61), index=index)},
+        universe_codes=("510001", "510002"),
+    )
+    database = StatefulMappingDatabase()
+
+    def loader(target_date: date, sector_level: int, window: int) -> ReturnMappingInput:
+        assert (target_date, sector_level, window) == (requested_date, 2, 60)
+        return loaded
+
+    def assessor(_etfs, _sector, window: int, min_samples: int):
+        assert (window, min_samples) == (60, 50)
+        return [
+            _result("510001", 0.9, 0.8),
+            _result("510002", 0.8, 0.7, "low_confidence"),
+        ], []
+
+    real_import = builtins.__import__
+    attempted_imports: list[str] = []
+
+    def guarded_import(name, *args, **kwargs):
+        attempted_imports.append(name)
+        normalized = name.lower()
+        if (
+            any(token in normalized for token in ("akshare", "miniqmt", "xtquant"))
+            or normalized == "providers"
+            or normalized.endswith(".providers")
+        ):
+            raise AssertionError(f"external provider import attempted: {name}")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", guarded_import)
+    module_name = "morning_conference.sector_rotation2.research.etf_core.refresh_return_mapping"
+    sys.modules.pop(module_name, None)
+    refresh_module = importlib.import_module(module_name)
+    original_connection = mapping.get_connection
+    mapping.get_connection = database.connect
+    try:
+        assert refresh_module.main(
+            ["--as-of-date", "2026-08-22", "--level", "2", "--config-hash", "cfg"],
+            load_input=loader,
+            assessor=assessor,
+            persist=persist_return_exposure_mapping,
+            ensure_schema=lambda: None,
+        ) == 0
+    finally:
+        mapping.get_connection = original_connection
+
+    effective = load_effective_return_etfs(
+        "Sector A",
+        2,
+        requested_date,
+        database.effective_query,
+    )
+    assert [(row["etf_code"], row["confidence_status"]) for row in effective] == [
+        ("510001", "qualified"),
+        ("510002", "low_confidence"),
+    ]
+    assert {(row["mapping_type"], row["etf_code"]) for row in database.rows} == {
+        ("return_exposure_derived", "510001"),
+        ("return_exposure_derived", "510002"),
+    }
+
+    low_confidence = build_etf_candidate(
+        as_of_date=requested_date,
+        sector_level=2,
+        sector_name="Sector A",
+        etf_code="510002",
+        sector_allowed=True,
+        liquid=True,
+        macd_evidence={"macd_triggered": True},
+        extended=False,
+        run_id="acceptance-run",
+        mapping_metadata=effective[1],
+    )
+    assert low_confidence.candidate_status == "blocked"
+    assert "low_return_exposure_confidence" in low_confidence.risk_flags_json
+    assert "persisted_rows=2" in capsys.readouterr().out
     assert not any(
         any(token in name.lower() for token in ("akshare", "miniqmt", "xtquant"))
         or name.lower() == "providers"
