@@ -35,6 +35,18 @@ def test_changed_payload_cannot_overwrite_same_live_shadow_identity() -> None:
         persist_live_shadow_snapshot(store, replace(snapshot, candidate_score=0.99))
 
 
+def test_same_snapshot_with_a_new_run_id_is_idempotent() -> None:
+    store, snapshot = InMemorySnapshotStore(), make_snapshot()
+    persist_live_shadow_snapshot(store, snapshot)
+    persist_live_shadow_snapshot(store, replace(snapshot, run_id="run-2"))
+    assert store.count(snapshot.identity) == 1
+
+    backfill_store = InMemorySnapshotStore()
+    persist_backfill_snapshot(backfill_store, snapshot)
+    persist_backfill_snapshot(backfill_store, replace(snapshot, run_id="run-2"))
+    assert backfill_store.count() == 1
+
+
 def test_backfill_can_coexist_with_live_shadow() -> None:
     store, snapshot = InMemorySnapshotStore(), make_snapshot()
     persist_live_shadow_snapshot(store, snapshot)

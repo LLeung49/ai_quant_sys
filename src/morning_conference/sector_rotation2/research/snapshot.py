@@ -34,7 +34,9 @@ class InMemorySnapshotStore:
 
 
 def assert_snapshot_compatible(existing: CandidateSnapshot, incoming: CandidateSnapshot) -> None:
-    if existing != incoming:
+    # ``run_id`` identifies an execution audit record, not the model output.
+    # Re-running identical inputs must remain an idempotent no-op.
+    if replace(existing, run_id=incoming.run_id) != incoming:
         raise SnapshotConflictError(f"immutable snapshot conflict for {incoming.identity}")
 
 
