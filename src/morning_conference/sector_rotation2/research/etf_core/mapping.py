@@ -5,21 +5,26 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from contextlib import AbstractContextManager, contextmanager
 from datetime import date
-from math import isclose
+from math import isclose, isfinite
 from typing import Any, Literal, Protocol
 
 from data_ingestion.db_config import execute_query, execute_update, get_connection
 
 from .exposure import ExposureAssessment, ExposureResult, RejectedExposure
 from .freshness import HoldingsFreshness, assess_holdings_freshness
+from .return_exposure import ReturnExposureResult
 
 
 CURRENT_MAPPING_MODE = "current_mapping"
 MAPPING_TYPE_EXPOSURE_DERIVED = "exposure_derived"
 MAPPING_TYPE_QUALITY_FAILURE = "exposure_quality_failure"
+MAPPING_TYPE_RETURN_EXPOSURE_DERIVED = "return_exposure_derived"
+MAPPING_TYPE_RETURN_QUALITY_FAILURE = "return_mapping_quality_failure"
+RETURN_MAPPING_METHOD = "sw2_return_regression_v1"
 QUALITY_STATUS_QUALIFIED = "qualified"
 QUALITY_STATUS_FAILED = "failed"
 _FAILURE_ETF_CODE = "__NO_QUALIFIED_ETF__"
+_RETURN_FAILURE_REASON = "no_return_exposure_with_sufficient_observations"
 
 SECTOR_ETF_MAP_DDL = """
 CREATE TABLE IF NOT EXISTS trade_sector_etf_map (
@@ -28,6 +33,7 @@ CREATE TABLE IF NOT EXISTS trade_sector_etf_map (
     sector_name VARCHAR(128) NOT NULL,
     etf_code VARCHAR(32) NOT NULL,
     mapping_type VARCHAR(32) NOT NULL,
+    mapping_method VARCHAR(64) DEFAULT NULL,
     is_primary TINYINT NOT NULL DEFAULT 0,
     effective_from DATE NOT NULL,
     effective_to DATE DEFAULT NULL,
@@ -53,6 +59,19 @@ CREATE TABLE IF NOT EXISTS trade_sector_etf_map (
     basket_source_priority VARCHAR(64) DEFAULT NULL,
     cross_check_status VARCHAR(32) DEFAULT NULL,
     cross_check_detail VARCHAR(1024) DEFAULT NULL,
+    lookback_trading_days SMALLINT DEFAULT NULL,
+    window_start_date DATE DEFAULT NULL,
+    window_end_date DATE DEFAULT NULL,
+    sample_count SMALLINT DEFAULT NULL,
+    corr DECIMAL(24,12) DEFAULT NULL,
+    beta DECIMAL(24,12) DEFAULT NULL,
+    r_squared DECIMAL(24,12) DEFAULT NULL,
+    residual_vol DECIMAL(24,12) DEFAULT NULL,
+    sector_fit_score DECIMAL(24,12) DEFAULT NULL,
+    confidence_status VARCHAR(32) DEFAULT NULL,
+    price_source VARCHAR(64) DEFAULT NULL,
+    price_as_of_date DATE DEFAULT NULL,
+    universe_source VARCHAR(64) DEFAULT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     PRIMARY KEY (id),
@@ -66,6 +85,7 @@ CREATE TABLE IF NOT EXISTS trade_sector_etf_map (
 # qualified rows enforce complete provenance in Python; failure rows may keep
 # unavailable provenance fields null so the quality event remains auditable.
 _MIGRATION_COLUMNS = {
+    "mapping_method": "VARCHAR(64) NULL",
     "source_as_of_date": "DATE NULL",
     "source_provider": "VARCHAR(64) NULL",
     "exposure_weight": "DECIMAL(18,8) NULL",
@@ -88,6 +108,19 @@ _MIGRATION_COLUMNS = {
     "basket_source_priority": "VARCHAR(64) NULL",
     "cross_check_status": "VARCHAR(32) NULL",
     "cross_check_detail": "VARCHAR(1024) NULL",
+    "lookback_trading_days": "SMALLINT NULL",
+    "window_start_date": "DATE NULL",
+    "window_end_date": "DATE NULL",
+    "sample_count": "SMALLINT NULL",
+    "corr": "DECIMAL(24,12) NULL",
+    "beta": "DECIMAL(24,12) NULL",
+    "r_squared": "DECIMAL(24,12) NULL",
+    "residual_vol": "DECIMAL(24,12) NULL",
+    "sector_fit_score": "DECIMAL(24,12) NULL",
+    "confidence_status": "VARCHAR(32) NULL",
+    "price_source": "VARCHAR(64) NULL",
+    "price_as_of_date": "DATE NULL",
+    "universe_source": "VARCHAR(64) NULL",
     "updated_at": "DATETIME NULL",
 }
 
@@ -151,6 +184,70 @@ SET target.effective_to=CASE
 END
 WHERE target.sector_level=%s AND target.sector_name=%s
   AND target.mapping_type IN ('exposure_derived', 'exposure_quality_failure')
+"""
+
+_INSERT_RETURN_MAPPING_SQL = """
+INSERT INTO trade_sector_etf_map (
+    sector_level, sector_name, etf_code, mapping_type, mapping_method,
+    is_primary, effective_from, effective_to, source_as_of_date,
+    source_provider, exposure_weight, coverage_ratio, mapping_version,
+    config_hash, rank_no, membership_asof_mode, quality_status,
+    failure_reason, lookback_trading_days, window_start_date,
+    window_end_date, sample_count, corr, beta, r_squared, residual_vol,
+    sector_fit_score, confidence_status, price_source, price_as_of_date,
+    universe_source
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+ON DUPLICATE KEY UPDATE
+    mapping_method=VALUES(mapping_method), is_primary=VALUES(is_primary),
+    effective_to=VALUES(effective_to), source_as_of_date=VALUES(source_as_of_date),
+    source_provider=VALUES(source_provider), mapping_version=VALUES(mapping_version),
+    config_hash=VALUES(config_hash), rank_no=VALUES(rank_no),
+    quality_status=VALUES(quality_status), failure_reason=VALUES(failure_reason),
+    lookback_trading_days=VALUES(lookback_trading_days),
+    window_start_date=VALUES(window_start_date), window_end_date=VALUES(window_end_date),
+    sample_count=VALUES(sample_count), corr=VALUES(corr), beta=VALUES(beta),
+    r_squared=VALUES(r_squared), residual_vol=VALUES(residual_vol),
+    sector_fit_score=VALUES(sector_fit_score), confidence_status=VALUES(confidence_status),
+    price_source=VALUES(price_source), price_as_of_date=VALUES(price_as_of_date),
+    universe_source=VALUES(universe_source)
+"""
+
+_LOCK_RETURN_SECTOR_SQL = """
+SELECT id FROM trade_sector_etf_map
+WHERE sector_level=%s AND sector_name=%s
+  AND mapping_type='return_exposure_derived'
+FOR UPDATE
+"""
+
+_DELETE_SAME_DAY_RETURN_SQL = """
+DELETE FROM trade_sector_etf_map
+WHERE sector_level=%s AND sector_name=%s AND effective_from=%s
+  AND mapping_type='return_exposure_derived'
+"""
+
+_REBUILD_RETURN_EFFECTIVE_INTERVALS_SQL = """
+UPDATE trade_sector_etf_map AS target
+LEFT JOIN (
+    SELECT current_event.effective_from,
+           MIN(next_event.effective_from) AS next_effective_from
+    FROM (
+        SELECT DISTINCT effective_from
+        FROM trade_sector_etf_map
+        WHERE sector_level=%s AND sector_name=%s
+          AND mapping_type='return_exposure_derived'
+    ) AS current_event
+    LEFT JOIN trade_sector_etf_map AS next_event
+      ON next_event.sector_level=%s AND next_event.sector_name=%s
+     AND next_event.effective_from > current_event.effective_from
+     AND next_event.mapping_type='return_exposure_derived'
+    GROUP BY current_event.effective_from
+) AS intervals ON intervals.effective_from=target.effective_from
+SET target.effective_to=CASE
+    WHEN intervals.next_effective_from IS NULL THEN NULL
+    ELSE DATE_SUB(intervals.next_effective_from, INTERVAL 1 DAY)
+END
+WHERE target.sector_level=%s AND target.sector_name=%s
+  AND target.mapping_type='return_exposure_derived'
 """
 
 
@@ -385,6 +482,116 @@ def persist_exposure_assessment(
     )
 
 
+def persist_return_exposure_mapping(
+    sector_name: str,
+    sector_level: int,
+    as_of_date: date,
+    ranked: Iterable[ReturnExposureResult],
+    *,
+    window_start_date: date,
+    window_end_date: date,
+    lookback_trading_days: int,
+    price_as_of_date: date,
+    price_source: str,
+    universe_source: str,
+    mapping_version: str,
+    config_hash: str,
+    transaction: Callable[[], AbstractContextManager[MappingTransaction]] = open_mapping_transaction,
+    ensure_schema: Callable[[], None] | None = None,
+) -> int:
+    """Atomically persist one SW2 return-regression mapping event.
+
+    This is deliberately separate from holdings-derived persistence: return
+    rows have price-window provenance and never pass through constituent or
+    holdings-freshness validation.
+    """
+
+    if sector_level != 2:
+        raise ValueError("return exposure mapping requires sector_level=2")
+    _validate_return_mapping_provenance(
+        as_of_date=as_of_date,
+        window_start_date=window_start_date,
+        window_end_date=window_end_date,
+        lookback_trading_days=lookback_trading_days,
+        price_as_of_date=price_as_of_date,
+        price_source=price_source,
+        universe_source=universe_source,
+        mapping_version=mapping_version,
+        config_hash=config_hash,
+    )
+    if ensure_schema is not None:
+        ensure_schema()
+
+    qualified = sorted(
+        (item for item in ranked if item.sample_count >= 50),
+        key=lambda item: (-item.sector_fit_score, -item.r_squared, item.etf_code),
+    )[:3]
+    rows = _return_mapping_rows(
+        sector_name=sector_name,
+        sector_level=sector_level,
+        as_of_date=as_of_date,
+        ranked=qualified,
+        window_start_date=window_start_date,
+        window_end_date=window_end_date,
+        lookback_trading_days=lookback_trading_days,
+        price_as_of_date=price_as_of_date,
+        price_source=price_source,
+        universe_source=universe_source,
+        mapping_version=mapping_version,
+        config_hash=config_hash,
+    )
+    with transaction() as db:
+        db.execute(_LOCK_RETURN_SECTOR_SQL, (sector_level, sector_name))
+        db.execute(_DELETE_SAME_DAY_RETURN_SQL, (sector_level, sector_name, as_of_date))
+        db.execute_many(_INSERT_RETURN_MAPPING_SQL, rows)
+        db.execute(
+            _REBUILD_RETURN_EFFECTIVE_INTERVALS_SQL,
+            (sector_level, sector_name, sector_level, sector_name, sector_level, sector_name),
+        )
+    return len(rows)
+
+
+def load_effective_return_etfs(
+    sector_name: str,
+    sector_level: int,
+    as_of_date: date,
+    query: Callable[[str, tuple[object, ...]], list[dict[str, Any]]] = execute_query,
+) -> list[dict[str, Any]]:
+    """Load return-regression Top3 effective on a date, including low confidence."""
+
+    if sector_level != 2:
+        raise ValueError("return exposure mapping requires sector_level=2")
+    rows = query(
+        """SELECT etf_code, mapping_type, mapping_method, is_primary,
+                  effective_from, effective_to, source_as_of_date,
+                  source_provider, mapping_version, config_hash, rank_no,
+                  quality_status, failure_reason, lookback_trading_days,
+                  window_start_date, window_end_date, sample_count, corr, beta,
+                  r_squared, residual_vol, sector_fit_score, confidence_status,
+                  price_source, price_as_of_date, universe_source
+             FROM trade_sector_etf_map
+             WHERE sector_name=%s AND sector_level=%s AND effective_from <= %s
+               AND (effective_to IS NULL OR effective_to >= %s)
+               AND mapping_type='return_exposure_derived'
+               AND mapping_method='sw2_return_regression_v1'
+               AND quality_status='qualified' AND price_as_of_date=%s
+               AND window_end_date=%s
+             ORDER BY rank_no ASC, etf_code ASC
+             LIMIT 3""",
+        (sector_name, sector_level, as_of_date, as_of_date, as_of_date, as_of_date),
+    )
+    return sorted(
+        (
+            row for row in rows
+            if row.get("mapping_type") == MAPPING_TYPE_RETURN_EXPOSURE_DERIVED
+            and row.get("mapping_method") == RETURN_MAPPING_METHOD
+            and row.get("quality_status") == QUALITY_STATUS_QUALIFIED
+            and _has_return_mapping_provenance(row, as_of_date)
+        ),
+        key=_effective_mapping_sort_key,
+    )[:3]
+
+
 def load_effective_etfs(
     sector_name: str,
     sector_level: int,
@@ -480,6 +687,122 @@ def _mapping_rows(
         )
         for rank_no, item in enumerate(ranked, start=1)
     ]
+
+
+def _return_mapping_rows(
+    *,
+    sector_name: str,
+    sector_level: int,
+    as_of_date: date,
+    ranked: list[ReturnExposureResult],
+    window_start_date: date,
+    window_end_date: date,
+    lookback_trading_days: int,
+    price_as_of_date: date,
+    price_source: str,
+    universe_source: str,
+    mapping_version: str,
+    config_hash: str,
+) -> list[tuple[object, ...]]:
+    common = (
+        sector_level,
+        sector_name,
+        RETURN_MAPPING_METHOD,
+        as_of_date,
+        None,
+        price_as_of_date,
+        price_source,
+        0.0,
+        0.0,
+        mapping_version,
+        config_hash,
+        CURRENT_MAPPING_MODE,
+        lookback_trading_days,
+        window_start_date,
+        window_end_date,
+        price_source,
+        price_as_of_date,
+        universe_source,
+    )
+    if not ranked:
+        return [(
+            common[0], common[1], _FAILURE_ETF_CODE,
+            MAPPING_TYPE_RETURN_QUALITY_FAILURE, common[2], 0,
+            common[3], common[4], common[5], common[6], common[7], common[8],
+            common[9], common[10], 0, common[11], QUALITY_STATUS_FAILED,
+            _RETURN_FAILURE_REASON, common[12], common[13], common[14],
+            None, None, None, None, None, None, None,
+            common[15], common[16], common[17],
+        )]
+    return [
+        (
+            common[0], common[1], item.etf_code,
+            MAPPING_TYPE_RETURN_EXPOSURE_DERIVED, common[2], int(rank_no == 1),
+            common[3], common[4], common[5], common[6], common[7], common[8],
+            common[9], common[10], rank_no, common[11], QUALITY_STATUS_QUALIFIED,
+            None, common[12], common[13], common[14], item.sample_count,
+            item.corr, item.beta, item.r_squared, item.residual_vol,
+            item.sector_fit_score, item.confidence_status,
+            common[15], common[16], common[17],
+        )
+        for rank_no, item in enumerate(ranked, start=1)
+    ]
+
+
+def _validate_return_mapping_provenance(
+    *,
+    as_of_date: date,
+    window_start_date: date,
+    window_end_date: date,
+    lookback_trading_days: int,
+    price_as_of_date: date,
+    price_source: str,
+    universe_source: str,
+    mapping_version: str,
+    config_hash: str,
+) -> None:
+    if any(
+        type(value) is not date
+        for value in (as_of_date, window_start_date, window_end_date, price_as_of_date)
+    ):
+        raise ValueError("return mapping dates must be dates")
+    if window_start_date > window_end_date:
+        raise ValueError("window_start_date must not be after window_end_date")
+    if window_end_date != as_of_date or price_as_of_date != as_of_date:
+        raise ValueError("window_end_date and price_as_of_date must equal as_of_date")
+    if isinstance(lookback_trading_days, bool) or lookback_trading_days < 1:
+        raise ValueError("lookback_trading_days must be positive")
+    for field, value in (
+        ("price_source", price_source),
+        ("universe_source", universe_source),
+        ("mapping_version", mapping_version),
+        ("config_hash", config_hash),
+    ):
+        if not str(value or "").strip():
+            raise ValueError(f"{field} is required")
+
+
+def _has_return_mapping_provenance(row: dict[str, Any], as_of_date: date) -> bool:
+    if row.get("price_as_of_date") != as_of_date or row.get("window_end_date") != as_of_date:
+        return False
+    if type(row.get("window_start_date")) is not date:
+        return False
+    if not str(row.get("price_source") or "").strip():
+        return False
+    if not str(row.get("universe_source") or "").strip():
+        return False
+    if row.get("confidence_status") not in {"qualified", "low_confidence"}:
+        return False
+    try:
+        lookback = int(row.get("lookback_trading_days"))
+        sample_count = int(row.get("sample_count"))
+        metrics = tuple(
+            float(row.get(field))
+            for field in ("corr", "beta", "r_squared", "residual_vol", "sector_fit_score")
+        )
+    except (TypeError, ValueError):
+        return False
+    return lookback > 0 and sample_count >= 50 and all(isfinite(value) for value in metrics)
 
 
 def _sector_field(sector_level: int) -> str:
