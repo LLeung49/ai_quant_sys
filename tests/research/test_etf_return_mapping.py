@@ -15,11 +15,12 @@ from morning_conference.sector_rotation2.research.etf_core.mapping import (
     persist_return_exposure_mapping,
 )
 from morning_conference.sector_rotation2.research.etf_core.return_data import ReturnMappingInput
+from morning_conference.sector_rotation2.research.etf_core.return_data import load_return_mapping_input
 from morning_conference.sector_rotation2.research.etf_core.return_exposure import (
     ReturnExposureFailure,
     ReturnExposureResult,
 )
-from morning_conference.sector_rotation2.research.etf_core.service import build_etf_candidate
+from morning_conference.sector_rotation2.research.etf_core import run_daily
 
 
 AS_OF_DATE = date(2026, 8, 19)
@@ -585,31 +586,63 @@ def test_return_refresh_cli_uses_injected_local_pipeline_without_external_import
     )
 
 
-def test_local_return_refresh_persists_both_confidence_events_and_blocks_low_confidence_candidate(
+def test_local_return_refresh_runs_real_loader_assessor_and_runner_for_low_confidence_gate(
     monkeypatch,
     capsys,
 ) -> None:
-    requested_date = date(2026, 8, 22)
-    observed_date = date(2026, 8, 21)
-    index = pd.bdate_range(end=observed_date, periods=61)
-    loaded = ReturnMappingInput(
-        as_of_date=requested_date,
-        sector_closes={"Sector A": pd.Series(range(61), index=index)},
-        etf_closes={"510001": pd.Series(range(61), index=index), "510002": pd.Series(range(61), index=index)},
-        universe_codes=("510001", "510002"),
-    )
-    database = StatefulMappingDatabase()
+    requested_date = date.today()
+    trade_dates = [item.date() for item in pd.bdate_range(end=requested_date, periods=61)]
+    sector_returns = [0.01 if index % 2 == 0 else -0.005 for index in range(60)]
 
-    def loader(target_date: date, sector_level: int, window: int) -> ReturnMappingInput:
-        assert (target_date, sector_level, window) == (requested_date, 2, 60)
-        return loaded
+    def close_prices(returns: list[float]) -> list[float]:
+        prices = [100.0]
+        for daily_return in returns:
+            prices.append(prices[-1] * (1.0 + daily_return))
+        return prices
 
-    def assessor(_etfs, _sector, window: int, min_samples: int):
-        assert (window, min_samples) == (60, 50)
+    def price_rows(code: str, name: str, returns: list[float]) -> list[dict[str, object]]:
         return [
-            _result("510001", 0.9, 0.8),
-            _result("510002", 0.8, 0.7, "low_confidence"),
-        ], []
+            {
+                "stock_code": code,
+                "stock_name": name,
+                "trade_date": trade_date,
+                "close_price": close_price,
+            }
+            for trade_date, close_price in zip(trade_dates, close_prices(returns), strict=True)
+        ]
+
+    local_queries: list[str] = []
+
+    def local_query(sql: str, params: tuple[object, ...]) -> list[dict[str, object]]:
+        local_queries.append(sql)
+        if "SELECT DISTINCT trade_date" in sql:
+            assert params == (2, requested_date, 61)
+            return [{"trade_date": trade_date} for trade_date in reversed(trade_dates)]
+        if "FROM trade_sector_daily" in sql:
+            return [
+                {
+                    "sector_name": "Sector A",
+                    "trade_date": trade_date,
+                    "close_idx": close_price,
+                }
+                for trade_date, close_price in zip(trade_dates, close_prices(sector_returns), strict=True)
+            ]
+        if "FROM trade_stock_daily" in sql:
+            return [
+                *price_rows("510001.SH", "Qualified Equity ETF", [2.0 * value for value in sector_returns]),
+                *price_rows("510002.SH", "Low Confidence Equity ETF", [0.001 if index % 3 == 0 else -0.001 for index in range(60)]),
+            ]
+        raise AssertionError(f"unexpected SQL: {sql}")
+
+    def local_loader(target_date: date, sector_level: int, window: int):
+        return load_return_mapping_input(
+            target_date,
+            sector_level,
+            window,
+            query=local_query,
+        )
+
+    database = StatefulMappingDatabase()
 
     real_import = builtins.__import__
     attempted_imports: list[str] = []
@@ -633,10 +666,8 @@ def test_local_return_refresh_persists_both_confidence_events_and_blocks_low_con
     mapping.get_connection = database.connect
     try:
         assert refresh_module.main(
-            ["--as-of-date", "2026-08-22", "--level", "2", "--config-hash", "cfg"],
-            load_input=loader,
-            assessor=assessor,
-            persist=persist_return_exposure_mapping,
+            ["--as-of-date", requested_date.isoformat(), "--level", "2", "--config-hash", "cfg"],
+            load_input=local_loader,
             ensure_schema=lambda: None,
         ) == 0
     finally:
@@ -657,21 +688,35 @@ def test_local_return_refresh_persists_both_confidence_events_and_blocks_low_con
         ("return_exposure_derived", "510002"),
     }
 
-    low_confidence = build_etf_candidate(
-        as_of_date=requested_date,
-        sector_level=2,
-        sector_name="Sector A",
-        etf_code="510002",
-        sector_allowed=True,
-        liquid=True,
-        macd_evidence={"macd_triggered": True},
-        extended=False,
-        run_id="acceptance-run",
-        mapping_metadata=effective[1],
+    snapshots = []
+    monkeypatch.setattr(run_daily, "MySQLSnapshotStore", lambda: type("Store", (), {"ensure_schema": lambda self: None})())
+    monkeypatch.setattr(run_daily, "load_sector_rows", lambda *_: [{
+        "sector_name": "Sector A", "candidate_status": "ready", "model_version": "sector_v1",
+        "config_hash": "sector-cfg", "snapshot_mode": "live_shadow",
+    }])
+    monkeypatch.setattr(
+        run_daily,
+        "load_effective_return_etfs",
+        lambda sector_name, sector_level, as_of_date: load_effective_return_etfs(
+            sector_name,
+            sector_level,
+            as_of_date,
+            database.effective_query,
+        ),
     )
+    monkeypatch.setattr(run_daily, "load_etf_macd_evidence", lambda *_: {"macd_triggered": True})
+    monkeypatch.setattr(run_daily, "load_etf_execution_evidence", lambda *_: {"liquid": True, "extended": False})
+    monkeypatch.setattr(run_daily, "persist_etf_candidate", lambda _store, snapshot: snapshots.append(snapshot))
+
+    assert run_daily.run_one_date(requested_date.isoformat(), 2) == 2
+    low_confidence = next(snapshot for snapshot in snapshots if snapshot.entity_code == "510002")
     assert low_confidence.candidate_status == "blocked"
     assert "low_return_exposure_confidence" in low_confidence.risk_flags_json
     assert "persisted_rows=2" in capsys.readouterr().out
+    assert all(
+        any(table in sql for table in ("trade_sector_daily", "trade_stock_daily", "trade_stock_status"))
+        for sql in local_queries
+    )
     assert not any(
         any(token in name.lower() for token in ("akshare", "miniqmt", "xtquant"))
         or name.lower() == "providers"
