@@ -1,4 +1,5 @@
 import math
+import warnings
 from datetime import date
 
 import pandas as pd
@@ -130,6 +131,21 @@ def test_assess_return_exposure_rejects_stale_etf_with_auditable_failure():
     assert results == []
     assert failures[0].etf_code == "510300.SH"
     assert failures[0].failure_reason == "stale_price_data"
+
+
+def test_assess_return_exposure_rejects_zero_variance_etf_without_numpy_warning():
+    sector_returns = [0.01 if index % 2 == 0 else -0.005 for index in range(60)]
+    sector = _close_from_returns(sector_returns)
+    flat_return_etf = _close_from_returns([0.001] * 60)
+
+    with warnings.catch_warnings(record=True) as captured:
+        warnings.simplefilter("always")
+        results, failures = assess_return_exposure({"FLAT_ETF.SH": flat_return_etf}, sector)
+
+    assert results == []
+    assert len(failures) == 1
+    assert failures[0].failure_reason == "zero_etf_return_variance"
+    assert not [warning for warning in captured if issubclass(warning.category, RuntimeWarning)]
 
 
 def test_assess_return_exposure_records_each_etfs_actual_aligned_price_window():

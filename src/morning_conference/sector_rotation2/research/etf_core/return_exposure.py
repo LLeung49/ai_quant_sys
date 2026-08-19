@@ -94,6 +94,10 @@ def assess_return_exposure(
         if not math.isfinite(variance) or variance == 0.0:
             failures.append(ReturnExposureFailure(code, "zero_sector_return_variance"))
             continue
+        etf_variance = float(((y - y.mean()) ** 2).mean())
+        if not math.isfinite(etf_variance) or etf_variance == 0.0:
+            failures.append(ReturnExposureFailure(code, "zero_etf_return_variance"))
+            continue
         covariance = float(((x - x.mean()) * (y - y.mean())).mean())
         beta = covariance / variance
         corr = float(x.corr(y))
