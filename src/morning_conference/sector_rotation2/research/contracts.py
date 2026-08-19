@@ -1,4 +1,4 @@
-"""Immutable data contracts shared by all candidate-producing strategies."""
+﻿"""Immutable data contracts shared by all candidate-producing strategies."""
 
 from dataclasses import dataclass, field
 from datetime import date
@@ -47,6 +47,7 @@ class CandidateSnapshot:
     feature_json: Mapping[str, Any] = field(default_factory=dict)
     reasons_json: tuple[str, ...] = ()
     risk_flags_json: tuple[str, ...] = ()
+    rank_in_sector: int | None = None
 
     @property
     def identity(self) -> SnapshotIdentity:
