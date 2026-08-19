@@ -1,7 +1,8 @@
 """Persistence boundary for immutable Research Cockpit snapshots."""
 
 import json
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any, Callable
 
 import pymysql
@@ -73,8 +74,8 @@ class MySQLSnapshotStore:
             snapshot.as_of_date, snapshot.entity_type, snapshot.entity_code, snapshot.sector_level, snapshot.sector_name,
             snapshot.strategy_type, snapshot.candidate_status, snapshot.candidate_score, snapshot.research_status.value,
             snapshot.validation_status.value, snapshot.execution_status.value, snapshot.model_version, snapshot.config_hash,
-            snapshot.run_id, snapshot.snapshot_mode.value, json.dumps(dict(snapshot.feature_json), ensure_ascii=False),
-            json.dumps(snapshot.reasons_json, ensure_ascii=False), json.dumps(snapshot.risk_flags_json, ensure_ascii=False),
+            snapshot.run_id, snapshot.snapshot_mode.value, _json_dump(snapshot.feature_json),
+            _json_dump(snapshot.reasons_json), _json_dump(snapshot.risk_flags_json),
         )
         self._execute(
             """INSERT INTO research_candidate_snapshot
@@ -109,6 +110,20 @@ def _identity_values(identity: SnapshotIdentity) -> tuple[object, ...]:
         identity.config_hash,
         identity.snapshot_mode.value,
     )
+
+
+def _json_dump(value: object) -> str:
+    """Serialize DB-native scalar values retained in immutable provenance."""
+
+    return json.dumps(value, ensure_ascii=False, default=_json_default)
+
+
+def _json_default(value: object) -> str:
+    if isinstance(value, Decimal):
+        return str(value)
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    raise TypeError(f"Object of type {type(value).__name__} is not JSON serializable")
 
 
 def _snapshot_from_row(row: dict[str, Any]) -> CandidateSnapshot:
