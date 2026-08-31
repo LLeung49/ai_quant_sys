@@ -24,13 +24,14 @@ RAW_INSERT_SQL = """
 -- 原始行情是交易事实；重复下载同一日期时以供应商最新值幂等覆盖。
 INSERT INTO trade_stock_daily_raw
     (stock_code, trade_date, open_price, high_price, low_price, close_price,
-     volume, amount, pre_close, suspend_flag)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+     volume, amount, pre_close, suspend_flag, data_source)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 ON DUPLICATE KEY UPDATE
     open_price = VALUES(open_price), high_price = VALUES(high_price),
     low_price = VALUES(low_price), close_price = VALUES(close_price),
     volume = VALUES(volume), amount = VALUES(amount),
     pre_close = VALUES(pre_close), suspend_flag = VALUES(suspend_flag),
+    data_source = VALUES(data_source),
     updated_at = CURRENT_TIMESTAMP
 """
 
@@ -114,7 +115,7 @@ def write_daily_rows(
                 row["stock_code"], row["trade_date"], row["open_price"],
                 row["high_price"], row["low_price"], row["close_price"],
                 row["volume"], row["amount"], row.get("pre_close"),
-                row.get("suspend_flag"),
+                row.get("suspend_flag"), row.get("data_source", "xtquant"),
             )
             for row in rows
         ]
@@ -154,7 +155,7 @@ def write_daily_rows_batch(
                 row["stock_code"], row["trade_date"], row["open_price"],
                 row["high_price"], row["low_price"], row["close_price"],
                 row["volume"], row["amount"], row.get("pre_close"),
-                row.get("suspend_flag"),
+                row.get("suspend_flag"), row.get("data_source", "xtquant"),
             )
             for row in rows
         ]

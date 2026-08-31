@@ -74,8 +74,24 @@ def test_raw_rows_preserve_pre_close_and_suspend_flag(monkeypatch):
     sql, rows = written[0]
     assert "INSERT INTO trade_stock_daily_raw" in sql
     assert rows == [
-        ("600519.SH", "2025-01-02", 10.0, 11.0, 9.0, 10.5, 100, 1000.0, 9.8, 0)
+        ("600519.SH", "2025-01-02", 10.0, 11.0, 9.0, 10.5, 100, 1000.0, 9.8, 0, "xtquant")
     ]
+
+
+def test_raw_rows_persist_the_actual_fallback_source(monkeypatch):
+    written = []
+    monkeypatch.setattr(store, "execute_many", lambda sql, rows: written.append((sql, rows)))
+
+    store.write_daily_rows("none", [{
+        "stock_code": "600519.SH", "trade_date": "2025-01-02",
+        "open_price": 10.0, "high_price": 11.0, "low_price": 9.0,
+        "close_price": 10.5, "volume": 100, "amount": 1000.0,
+        "pre_close": 9.8, "suspend_flag": 0, "data_source": "akshare",
+    }], adjustment_asof=None)
+
+    sql, rows = written[0]
+    assert "data_source" in sql
+    assert rows[0][-1] == "akshare"
 
 
 @pytest.mark.parametrize(
@@ -227,6 +243,55 @@ def test_collector_backfills_all_modes_when_one_projection_table_is_empty():
     ) == collector.DATA_START
 
 
+def test_collector_retries_unresolved_current_date_from_last_successful_date():
+    collector = load_collector(types.SimpleNamespace())
+
+    assert collector._earliest_start(
+        {
+            "none": {"515443.SH": "20260819"},
+            "front": {"515443.SH": "20260819"},
+            "back": {"515443.SH": "20260819"},
+        },
+        "515443.SH",
+    ) == "20260819"
+
+
+def test_collector_classifies_current_date_fallback_failure_as_pending():
+    collector = load_collector(types.SimpleNamespace())
+
+    pending, failed = collector._classify_fallback_failures(
+        {
+            "2026-08-20": "AkShare response missing target date",
+            "2026-08-19": "provider unavailable",
+        },
+        asof="2026-08-20",
+    )
+
+    assert pending == {"2026-08-20": "AkShare response missing target date"}
+    assert failed == {"2026-08-19": "provider unavailable"}
+
+
+def test_collector_normalizes_share_volume_from_fallback_to_lot():
+    collector = load_collector(types.SimpleNamespace())
+
+    rows = collector._rows_from_fallback(
+        "600000.SH",
+        {
+            "2026-08-28": {
+                "open": 10,
+                "high": 10,
+                "low": 10,
+                "close": 10,
+                "volume": 100_000,
+                "amount": 1_000_000,
+            }
+        },
+        "none",
+    )
+
+    assert rows[0]["volume"] == 1_000
+
+
 def test_collector_treats_each_mode_empty_response_as_failure(monkeypatch):
     fake_xtdata = types.SimpleNamespace(
         download_history_data=lambda *args, **kwargs: None,
@@ -372,7 +437,9 @@ def test_batch_replaces_only_qmt_invalid_row_with_akshare_row(monkeypatch):
             {
                 "2026-07-29": {
                     "open": 30.0, "high": 31.0, "low": 29.0, "close": 30.5,
-                    "volume": 300, "amount": 3000.0,
+                    # AkShare volume is in shares; keep amount/price/volume
+                    # economically coherent so the unit-contract guard admits it.
+                    "volume": 300, "amount": 9150.0,
                 }
             },
             {},

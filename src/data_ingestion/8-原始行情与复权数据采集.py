@@ -21,6 +21,7 @@ from xtquant import xtdata
 
 from akshare_market_fallback import fetch_valid_rows
 from db_config import execute_query
+from market_volume_contract import normalize_to_lot
 from price_corporate_actions import run_due_refresh_tasks, sync_qmt_factor_snapshot
 from price_projection_store import (
     get_existing_latest_dates,
@@ -145,6 +146,7 @@ def _split_qmt_rows(stock_code: str, dataframe, dividend_type: str) -> tuple[lis
             item["pre_close"] = _optional_number(row, "preClose")
             suspend = _optional_number(row, "suspendFlag")
             item["suspend_flag"] = int(suspend) if suspend is not None else None
+            item["data_source"] = "xtquant"
         else:
             item["turnover_rate"] = None
         rows.append(item)
@@ -161,6 +163,12 @@ def _rows_from_fallback(stock_code: str, rows_by_date: dict[str, dict], dividend
     for trade_date, values in rows_by_date.items():
         if any(_is_invalid_market_value(values.get(field)) for field in REQUIRED_MARKET_FIELDS):
             continue
+        try:
+            volume = normalize_to_lot(
+                values["amount"], values["close"], values["volume"]
+            )
+        except ValueError:
+            continue
         item = {
             "stock_code": stock_code,
             "trade_date": trade_date,
@@ -168,16 +176,35 @@ def _rows_from_fallback(stock_code: str, rows_by_date: dict[str, dict], dividend
             "high_price": float(values["high"]),
             "low_price": float(values["low"]),
             "close_price": float(values["close"]),
-            "volume": int(values["volume"]),
+            "volume": volume,
             "amount": float(values["amount"]),
         }
         if dividend_type == "none":
             item["pre_close"] = None
             item["suspend_flag"] = None
+            item["data_source"] = "akshare"
         else:
             item["turnover_rate"] = None
         rows.append(item)
     return rows
+
+
+def _classify_fallback_failures(
+    failures: dict[str, str], asof: str | None = None,
+) -> tuple[dict[str, str], dict[str, str]]:
+    """Separate today's not-yet-published rows from actual fallback failures."""
+    today_text = asof or date.today().isoformat()
+    pending = {
+        trade_date: reason
+        for trade_date, reason in failures.items()
+        if trade_date == today_text
+    }
+    failed = {
+        trade_date: reason
+        for trade_date, reason in failures.items()
+        if trade_date != today_text
+    }
+    return pending, failed
 
 
 def _rows_with_fallback(stock_code: str, dataframe, dividend_type: str) -> tuple[list[dict], dict[str, str]]:
@@ -187,10 +214,17 @@ def _rows_with_fallback(stock_code: str, dataframe, dividend_type: str) -> tuple
     fallback_rows, failures = fetch_valid_rows(stock_code, dividend_type, dirty_dates)
     rows.extend(_rows_from_fallback(stock_code, fallback_rows, dividend_type))
     if failures:
-        _progress(
-            f"[行情回退失败] stock={stock_code} mode={dividend_type} "
-            f"dates={sorted(failures)} reasons={failures}"
-        )
+        pending, failed = _classify_fallback_failures(failures)
+        if pending:
+            _progress(
+                f"[行情待补] stock={stock_code} mode={dividend_type} "
+                f"dates={sorted(pending)} reasons={pending}"
+            )
+        if failed:
+            _progress(
+                f"[行情回退失败] stock={stock_code} mode={dividend_type} "
+                f"dates={sorted(failed)} reasons={failed}"
+            )
     return rows, failures
 
 
@@ -227,10 +261,11 @@ def download_and_save_mode(
             f"QMT returned no valid {MODE_LABELS[dividend_type]} rows for {stock_code}"
         )
     write_daily_rows(dividend_type, rows, adjustment_asof)
-    if fallback_failures:
+    _, hard_failures = _classify_fallback_failures(fallback_failures)
+    if hard_failures:
         raise RuntimeError(
             f"AkShare could not repair {MODE_LABELS[dividend_type]} rows for {stock_code}: "
-            f"{sorted(fallback_failures)}"
+            f"{sorted(hard_failures)}"
         )
     return len(rows)
 
@@ -318,7 +353,8 @@ def download_and_save_batch(
             if not code_rows:
                 failed_codes.add(stock_code)
                 continue
-            if fallback_failures:
+            _, hard_failures = _classify_fallback_failures(fallback_failures)
+            if hard_failures:
                 failed_codes.add(stock_code)
             rows.extend(code_rows)
         missing = sum(

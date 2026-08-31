@@ -143,7 +143,7 @@ def test_daily_collection_routes_qmt_none_front_back_to_independent_tables(monke
         "trade_stock_daily_qfq",
         "trade_stock_daily_bfq",
     ]
-    assert database_writes[0][1][0][-2:] == (9.8, 0)
+    assert database_writes[0][1][0][-3:] == (9.8, 0, "xtquant")
     assert database_writes[1][1][0][-1] == date(2026, 7, 24)
     assert database_writes[2][1][0][-1] == date(2026, 7, 24)
 
