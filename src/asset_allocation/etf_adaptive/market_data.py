@@ -160,6 +160,17 @@ def to_signal_price(raw_price: float, adjustment_ratio: float) -> float:
     return result
 
 
+def to_raw_price(signal_price: float, adjustment_ratio: float) -> float:
+    """Convert a signal-coordinate price into the execution coordinate."""
+
+    signal = _positive_finite(signal_price, "signal_price")
+    ratio = _positive_finite(adjustment_ratio, "adjustment_ratio")
+    result = signal / ratio
+    if not math.isfinite(result):
+        raise ValueError("result must be finite")
+    return result
+
+
 def to_raw_distance(signal_distance: float, adjustment_ratio: float) -> float:
     """Convert a non-negative signal distance into the raw coordinate."""
 

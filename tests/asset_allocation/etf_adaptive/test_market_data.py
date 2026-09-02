@@ -14,6 +14,7 @@ from asset_allocation.etf_adaptive.market_data import (
     METADATA_SQL,
     AdaptiveMarketDataProvider,
     to_raw_distance,
+    to_raw_price,
     to_signal_price,
 )
 
@@ -136,6 +137,11 @@ def test_provider_loads_one_row_per_coordinate_and_uses_same_day_ratio() -> None
 def test_signal_coordinate_round_trip_uses_same_day_ratio() -> None:
     assert to_signal_price(4.08, 0.25) == pytest.approx(1.02)
     assert to_raw_distance(0.05, 0.25) == pytest.approx(0.20)
+
+
+def test_signal_and_raw_price_conversion_is_a_round_trip() -> None:
+    assert to_signal_price(4.08, 0.25) == pytest.approx(1.02)
+    assert to_raw_price(1.02, 0.25) == pytest.approx(4.08)
 
 
 @pytest.mark.parametrize(
