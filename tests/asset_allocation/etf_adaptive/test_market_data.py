@@ -144,6 +144,11 @@ def test_signal_and_raw_price_conversion_is_a_round_trip() -> None:
     assert to_raw_price(1.02, 0.25) == pytest.approx(4.08)
 
 
+def test_raw_price_conversion_rejects_underflow_to_zero() -> None:
+    with pytest.raises(ValueError, match="result must be positive"):
+        to_raw_price(5e-324, 1e308)
+
+
 @pytest.mark.parametrize(
     ("conversion", "left", "right"),
     [

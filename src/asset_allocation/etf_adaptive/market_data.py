@@ -168,6 +168,8 @@ def to_raw_price(signal_price: float, adjustment_ratio: float) -> float:
     result = signal / ratio
     if not math.isfinite(result):
         raise ValueError("result must be finite")
+    if result <= 0:
+        raise ValueError("result must be positive")
     return result
 
 

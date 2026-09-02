@@ -19,6 +19,8 @@
 - Commission is `max(notional * 0.0001, 5)` per side; baseline slippage is 3 bp with 0/1/5/10 bp scenarios.
 - GRID/TREND stops and the 10% hard stop never move down within a cycle.
 - Insufficient cash, lot size, eligibility, or stop-risk budget means no order.
+- Every execution-facing order intent/state payload must carry `signal_atr20` and the complete signal thresholds used to create the intent (including entry/exit/stop thresholds), plus the signal bar identity and intended side/quantity rationale. The execution simulator receives `next_bar` and is solely responsible for converting `signal_atr20` and all signal price thresholds to execution coordinates using `next_bar.adjustment_ratio` before raw lot sizing, stop-risk budgeting, slippage, or fills; signal-coordinate values must never be passed directly to raw sizing.
+- Add a future integration test that submits an intent with a deliberately distinct `signal_atr20` and `next_bar.adjustment_ratio`, then asserts raw lot/risk sizing uses the converted ATR (and fails if the signal ATR reaches sizing unconverted).
 
 ---
 
