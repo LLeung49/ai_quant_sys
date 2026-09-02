@@ -139,6 +139,7 @@ class ETFEligibility:
     exposure_group: str | None
     history_session_count: int
     average_amount_20d: float | None
+    classification_provenance: str = "metadata"
 
     def __post_init__(self) -> None:
         _require_bool(self.eligible, "eligible")
@@ -151,6 +152,13 @@ class ETFEligibility:
         if not self.eligible and not self.rejection_reasons:
             raise ValueError("ineligible decisions must have rejection reasons")
         _validate_optional_text(self.exposure_group, "exposure_group")
+        if not isinstance(self.classification_provenance, str) or (
+            self.classification_provenance
+            not in {"metadata", "name_fallback"}
+        ):
+            raise ValueError(
+                "classification_provenance must be metadata or name_fallback"
+            )
         if not isinstance(self.history_session_count, int) or isinstance(
             self.history_session_count, bool
         ) or self.history_session_count < 0:
