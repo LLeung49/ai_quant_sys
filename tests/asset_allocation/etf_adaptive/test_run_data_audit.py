@@ -307,6 +307,57 @@ def test_audit_fails_closed_for_an_unclassified_quality_error() -> None:
     assert report.data_quality_by_reason == {"unclassified_data_quality_error": 1}
 
 
+def test_default_provider_uses_authoritative_calendar_to_detect_shared_gap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    missing = AS_OF_DATE - timedelta(days=1)
+
+    def query(sql: str, params: tuple[object, ...]) -> tuple[dict[str, object], ...]:
+        if sql == RAW_BARS_SQL:
+            return (
+                {
+                    "stock_code": "510300.SH",
+                    "trade_date": AS_OF_DATE,
+                    "open_price": 4.0,
+                    "high_price": 4.4,
+                    "low_price": 3.6,
+                    "close_price": 4.0,
+                    "amount": 20_000_000.0,
+                    "pre_close": 4.0,
+                    "suspend_flag": False,
+                },
+            )
+        if sql == QFQ_BARS_SQL:
+            return (
+                {
+                    "stock_code": "510300.SH",
+                    "trade_date": AS_OF_DATE,
+                    "open_price": 1.0,
+                    "high_price": 1.1,
+                    "low_price": 0.9,
+                    "close_price": 1.0,
+                    "adjustment_asof": None,
+                },
+            )
+        if sql == LATEST_ACTION_SQL:
+            return ({"latest_action_date": None},)
+        raise AssertionError(f"unexpected query: {sql!r}, {params!r}")
+
+    monkeypatch.setattr(audit_cli, "execute_query", query)
+    monkeypatch.setattr(
+        audit_cli,
+        "load_authoritative_market_calendar",
+        lambda start, end, calendar_query: (start, end),
+        raising=False,
+    )
+
+    provider = audit_cli.default_provider()
+    with pytest.raises(DataQualityError) as raised:
+        provider.load_bars("510300.SH", missing, AS_OF_DATE)
+
+    assert raised.value.issues[0].code == "missing_market_session"
+
+
 class FutureBarProvider(ProviderFixture):
     def load_bars(
         self, stock_code: str, start_date: date, end_date: date
@@ -330,7 +381,7 @@ def test_audit_rejects_future_bars_and_excludes_them_from_coverage() -> None:
     assert report.date_coverage["510300.SH"].session_count == 252
 
 
-def _adaptive_provider_with_only_first_bar_provenance_warning() -> AdaptiveMarketDataProvider:
+def _adaptive_provider_with_no_actions() -> AdaptiveMarketDataProvider:
     first_day = AS_OF_DATE - timedelta(days=251)
     days = tuple(first_day + timedelta(days=offset) for offset in range(252))
 
@@ -367,7 +418,7 @@ def _adaptive_provider_with_only_first_bar_provenance_warning() -> AdaptiveMarke
                     "high_price": 1.1,
                     "low_price": 0.9,
                     "close_price": 1.0,
-                    "adjustment_asof": AS_OF_DATE,
+                    "adjustment_asof": None,
                 }
                 for day in days
             )
@@ -375,14 +426,27 @@ def _adaptive_provider_with_only_first_bar_provenance_warning() -> AdaptiveMarke
             return ({"latest_action_date": None},)
         raise AssertionError(f"unexpected query: {sql!r}, {params!r}")
 
-    return AdaptiveMarketDataProvider(query=query)
+    class PointInTimeMetadataFixture(AdaptiveMarketDataProvider):
+        def load_metadata(self, as_of_date: date) -> tuple[ETFMetadata, ...]:
+            assert as_of_date == AS_OF_DATE
+            self.last_quality_issues = ()
+            return (
+                ETFMetadata(
+                    stock_code="510300.SH",
+                    fund_name="CSI 300 ETF",
+                    listing_date=first_day,
+                    tracking_index_code="000300.SH",
+                ),
+            )
+
+    return PointInTimeMetadataFixture(query=query)
 
 
-def test_main_returns_zero_for_adaptive_provider_first_bar_provenance_warning(
+def test_audit_accepts_null_adjustment_provenance_when_no_action_exists(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    provider = _adaptive_provider_with_only_first_bar_provenance_warning()
+    provider = _adaptive_provider_with_no_actions()
     output = tmp_path / "audit.json"
     monkeypatch.setattr(audit_cli, "default_provider", lambda: provider)
 
@@ -393,3 +457,31 @@ def test_main_returns_zero_for_adaptive_provider_first_bar_provenance_warning(
     assert provider.last_quality_issues[0].code == "unverified_pre_close"
     assert exit_code == 0
     assert json.loads(output.read_text(encoding="utf-8"))["data_quality_error_count"] == 0
+
+
+def test_audit_reports_current_metadata_source_limitations_without_loading_bars() -> None:
+    calls: list[str] = []
+
+    def query(sql: str, _params: tuple[object, ...]) -> tuple[dict[str, object], ...]:
+        calls.append(sql)
+        if sql == METADATA_SQL:
+            return (
+                {
+                    "stock_code": "510300.SH",
+                    "fund_name": "CSI 300 ETF",
+                    "listing_date": date(2012, 5, 28),
+                },
+            )
+        raise AssertionError("bar data must not be loaded from unversioned metadata")
+
+    report = audit_universe(
+        AS_OF_DATE, AdaptiveMarketDataProvider(query=query)
+    )
+
+    assert calls == [METADATA_SQL]
+    assert report.universe_count == 0
+    assert report.eligible_count == 0
+    assert report.data_quality_by_reason == {
+        "classification_provenance_unavailable": 1,
+        "point_in_time_metadata_unavailable": 1,
+    }

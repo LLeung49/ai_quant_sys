@@ -11,6 +11,9 @@ from pathlib import Path
 from typing import Protocol
 
 from data_ingestion.db_config import execute_query
+from morning_conference.sector_rotation2.research.evaluation.prices import (
+    load_authoritative_market_calendar,
+)
 
 from .contracts import DataQualityError, DataQualityIssue, DualPriceBar, ETFMetadata
 from .market_data import AdaptiveMarketDataProvider
@@ -177,7 +180,12 @@ def audit_universe(
 def default_provider() -> AdaptiveMarketDataProvider:
     """Build the production provider over the repository's read-only query adapter."""
 
-    return AdaptiveMarketDataProvider(query=execute_query)
+    return AdaptiveMarketDataProvider(
+        query=execute_query,
+        calendar_loader=lambda start_date, end_date: load_authoritative_market_calendar(
+            start_date, end_date, execute_query
+        ),
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:

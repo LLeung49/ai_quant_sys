@@ -50,6 +50,7 @@ _NAME_EXCLUSION_TOKENS = _METADATA_EXCLUSION_TOKENS + (
 )
 
 _INDEX_CODE_GROUPS = {
+    "000010.SH": "core_broad",
     "000016.SH": "core_broad",
     "000300.SH": "core_broad",
     "000906.SH": "core_broad",
@@ -60,6 +61,13 @@ _INDEX_CODE_GROUPS = {
     "000688.SH": "growth_broad",
     "000922.SH": "defensive",
 }
+
+_DOMESTIC_EQUITY_FUND_TYPE_TOKENS = (
+    "domestic equity etf",
+    "股票型ETF",
+    "股票指数ETF",
+    "指数股票型",
+)
 
 _FALLBACK_GROUP_TOKENS = (
     (
@@ -111,6 +119,11 @@ def _classification(metadata: ETFMetadata) -> tuple[str | None, str]:
     if index_code in _INDEX_CODE_GROUPS:
         return _INDEX_CODE_GROUPS[index_code], "metadata"
 
+    if not _contains_token(
+        metadata.fund_type, _DOMESTIC_EQUITY_FUND_TYPE_TOKENS
+    ):
+        return None, "metadata"
+
     fallback_text = " ".join(
         value for value in (metadata.tracking_index_name, metadata.fund_name) if value
     )
@@ -134,7 +147,7 @@ def evaluate_eligibility(
 ) -> ETFEligibility:
     """Evaluate classification, history, liquidity, and tradability as of a date."""
 
-    available = sorted(
+    point_in_time = sorted(
         (bar for bar in bars if bar.trade_date <= as_of_date),
         key=lambda bar: (
             bar.trade_date,
@@ -154,10 +167,18 @@ def evaluate_eligibility(
     )
     expected_code = metadata.stock_code.strip().upper()
     has_foreign_bar = any(
-        bar.stock_code.strip().upper() != expected_code for bar in available
+        bar.stock_code.strip().upper() != expected_code for bar in point_in_time
+    )
+    has_pre_listing_bar = any(
+        bar.stock_code.strip().upper() == expected_code
+        and bar.trade_date < metadata.listing_date
+        for bar in point_in_time
     )
     matching = [
-        bar for bar in available if bar.stock_code.strip().upper() == expected_code
+        bar
+        for bar in point_in_time
+        if bar.stock_code.strip().upper() == expected_code
+        and bar.trade_date >= metadata.listing_date
     ]
     observed_by_date: dict[date, DualPriceBar] = {}
     has_duplicate_date = False
@@ -172,6 +193,10 @@ def evaluate_eligibility(
     reasons: list[str] = []
     if category is None:
         reasons.append("not_domestic_equity_etf")
+    if metadata.listing_date > as_of_date:
+        reasons.append("listing_date_after_as_of_date")
+    if has_pre_listing_bar:
+        reasons.append("bar_date_before_listing_date")
     if has_foreign_bar:
         reasons.append("bar_stock_code_mismatch")
     if has_duplicate_date:

@@ -11,6 +11,8 @@ from asset_allocation.etf_adaptive.contracts import (
     DataQualityError,
 )
 from asset_allocation.etf_adaptive.market_data import (
+    LATEST_ACTION_SQL,
+    METADATA_SQL,
     AdaptiveMarketDataProvider,
     to_raw_distance,
     to_signal_price,
@@ -109,7 +111,8 @@ def test_provider_loads_one_row_per_coordinate_and_uses_same_day_ratio() -> None
     assert "MAX(ex_date)" in query.calls[2][0]
     assert query.calls[0][1] == (CODE, START, END)
     assert query.calls[1][1] == (CODE, START, END)
-    assert query.calls[2][1] == (CODE,)
+    assert "ex_date <= %s" in LATEST_ACTION_SQL
+    assert query.calls[2][1] == (CODE, END)
 
 
 def test_signal_coordinate_round_trip_uses_same_day_ratio() -> None:
@@ -250,9 +253,9 @@ def test_provider_reports_pre_close_and_adjustment_provenance_deterministically(
             high_price=Decimal("1.025"),
             low_price=Decimal("0.950"),
             close_price=Decimal("1.000"),
-            adjustment_asof=None,
+            adjustment_asof=date(2026, 8, 15),
         ),
-        _qfq_row(adjustment_asof=date(2026, 8, 1)),
+        _qfq_row(adjustment_asof=date(2026, 8, 15)),
     ]
     provider = AdaptiveMarketDataProvider(
         query=QueryFixture(raw=raw, qfq=qfq, latest_action=date(2026, 8, 15))
@@ -263,18 +266,122 @@ def test_provider_reports_pre_close_and_adjustment_provenance_deterministically(
     assert len(bars) == 2
     assert [issue.code for issue in provider.last_quality_issues] == [
         "missing_pre_close",
-        "missing_adjustment_asof",
         "inconsistent_pre_close",
-        "stale_adjustment_asof",
-        "inconsistent_adjustment_asof",
     ]
     assert [issue.trade_date for issue in provider.last_quality_issues] == [
         START,
-        START,
         END,
-        END,
-        None,
     ]
+
+
+def test_provider_rejects_adjustment_version_after_historical_end_date() -> None:
+    provider = AdaptiveMarketDataProvider(
+        query=QueryFixture(
+            qfq=[_qfq_row(adjustment_asof=date(2026, 9, 2))],
+            latest_action=END,
+        )
+    )
+
+    with pytest.raises(DataQualityError, match="after requested end_date") as raised:
+        provider.load_bars(CODE, START, END)
+
+    assert [issue.code for issue in raised.value.issues] == [
+        "future_adjustment_asof"
+    ]
+
+
+def test_provider_rejects_action_query_returning_event_after_end_date() -> None:
+    provider = AdaptiveMarketDataProvider(
+        query=QueryFixture(latest_action=date(2026, 9, 2))
+    )
+
+    with pytest.raises(DataQualityError, match="after requested end_date") as raised:
+        provider.load_bars(CODE, START, END)
+
+    assert [issue.code for issue in raised.value.issues] == [
+        "future_latest_action_date"
+    ]
+
+
+def test_provider_rejects_adjustment_version_unequal_to_bounded_action() -> None:
+    provider = AdaptiveMarketDataProvider(
+        query=QueryFixture(
+            qfq=[_qfq_row(adjustment_asof=date(2026, 8, 1))],
+            latest_action=date(2026, 8, 15),
+        )
+    )
+
+    with pytest.raises(DataQualityError, match="does not match") as raised:
+        provider.load_bars(CODE, START, END)
+
+    assert [issue.code for issue in raised.value.issues] == [
+        "adjustment_asof_mismatch"
+    ]
+
+
+def test_provider_accepts_null_adjustment_provenance_when_no_action_exists() -> None:
+    provider = AdaptiveMarketDataProvider(
+        query=QueryFixture(
+            qfq=[_qfq_row(adjustment_asof=None)],
+            latest_action=None,
+        )
+    )
+
+    bars = provider.load_bars(CODE, START, END)
+
+    assert len(bars) == 1
+    assert [issue.code for issue in provider.last_quality_issues] == [
+        "unverified_pre_close"
+    ]
+
+
+def test_provider_detects_session_missing_from_both_price_coordinates() -> None:
+    missing = date(2026, 8, 31)
+    start = date(2026, 8, 30)
+    raw = [_raw_row(start), _raw_row(END)]
+    qfq = [_qfq_row(start), _qfq_row(END)]
+
+    def calendar_loader(requested_start: date, requested_end: date) -> tuple[date, ...]:
+        assert (requested_start, requested_end) == (start, END)
+        return (start, missing, END)
+
+    provider = AdaptiveMarketDataProvider(
+        query=QueryFixture(raw=raw, qfq=qfq),
+        calendar_loader=calendar_loader,
+    )
+
+    with pytest.raises(DataQualityError, match="expected market session is missing") as raised:
+        provider.load_bars(CODE, start, END)
+
+    assert raised.value.issues[0].code == "missing_market_session"
+    assert raised.value.issues[0].trade_date == missing
+
+
+def test_provider_accepts_expected_suspended_session_with_aligned_rows() -> None:
+    raw = [_raw_row(START, suspend_flag=1), _raw_row(END)]
+    qfq = [_qfq_row(START), _qfq_row(END)]
+    provider = AdaptiveMarketDataProvider(
+        query=QueryFixture(raw=raw, qfq=qfq),
+        calendar_loader=lambda _start, _end: (START, END),
+    )
+
+    bars = provider.load_bars(CODE, START, END)
+
+    assert [bar.suspended for bar in bars] == [True, False]
+
+
+def test_provider_reports_unavailable_market_calendar_as_quality_error() -> None:
+    def unavailable(_start: date, _end: date) -> tuple[date, ...]:
+        raise RuntimeError("calendar unavailable")
+
+    provider = AdaptiveMarketDataProvider(
+        query=QueryFixture(), calendar_loader=unavailable
+    )
+
+    with pytest.raises(DataQualityError, match="market calendar unavailable") as raised:
+        provider.load_bars(CODE, START, END)
+
+    assert raised.value.issues[0].code == "market_calendar_unavailable"
 
 
 def test_first_bar_pre_close_is_unverified_even_when_later_bar_confirms() -> None:
@@ -309,7 +416,7 @@ def test_first_bar_pre_close_is_unverified_even_when_later_bar_confirms() -> Non
     assert provider.last_quality_issues[0].trade_date == START
 
 
-def test_load_metadata_reads_only_rows_listed_by_the_as_of_date() -> None:
+def test_current_metadata_source_fails_closed_with_provenance_issues() -> None:
     metadata_rows = [
         {
             "stock_code": CODE,
@@ -320,17 +427,46 @@ def test_load_metadata_reads_only_rows_listed_by_the_as_of_date() -> None:
     query = QueryFixture(metadata=metadata_rows)
     provider = AdaptiveMarketDataProvider(query=query)
 
-    result = provider.load_metadata(END)
+    with pytest.raises(DataQualityError, match="point-in-time ETF metadata unavailable") as raised:
+        provider.load_metadata(END)
 
-    assert len(result) == 1
-    assert result[0].stock_code == CODE
-    assert result[0].listing_date == date(2012, 5, 28)
-    assert result[0].fund_type is None
-    assert result[0].is_cross_border is False
+    assert [issue.code for issue in raised.value.issues] == [
+        "point_in_time_metadata_unavailable",
+        "classification_provenance_unavailable",
+    ]
     assert len(query.calls) == 1
     assert "FROM trade_stock_status" in query.calls[0][0]
-    assert "fund_type" not in query.calls[0][0]
+    assert "listing_date IS NULL" in METADATA_SQL
+    assert "LEFT(stock_code, 3)" in METADATA_SQL
     assert query.calls[0][1] == (END,)
+
+
+def test_current_metadata_source_reports_unknown_listing_date() -> None:
+    row = {"stock_code": CODE, "fund_name": "CSI 300 ETF", "listing_date": None}
+    provider = AdaptiveMarketDataProvider(query=QueryFixture(metadata=[row]))
+
+    with pytest.raises(DataQualityError) as raised:
+        provider.load_metadata(END)
+
+    assert "unknown_listing_date" in [
+        issue.code for issue in raised.value.issues
+    ]
+
+
+def test_current_metadata_source_rejects_non_etf_candidate_rows() -> None:
+    row = {
+        "stock_code": "600000.SH",
+        "fund_name": "Pudong Development Bank",
+        "listing_date": date(1999, 11, 10),
+    }
+    provider = AdaptiveMarketDataProvider(query=QueryFixture(metadata=[row]))
+
+    with pytest.raises(DataQualityError) as raised:
+        provider.load_metadata(END)
+
+    assert "metadata_non_etf_candidate" in [
+        issue.code for issue in raised.value.issues
+    ]
 
 
 def test_load_metadata_rejects_future_and_duplicate_rows_from_adapter() -> None:

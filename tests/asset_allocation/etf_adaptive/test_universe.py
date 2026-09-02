@@ -22,6 +22,7 @@ def _metadata(
         "stock_code": stock_code,
         "fund_name": fund_name,
         "listing_date": date(2020, 1, 1),
+        "fund_type": "domestic equity ETF",
     }
     values.update(overrides)
     return ETFMetadata(**values)  # type: ignore[arg-type]
@@ -75,6 +76,36 @@ def test_classification_uses_index_code_then_deterministic_name_fallback() -> No
     ) == "core_broad"
     assert classify_etf(_metadata(fund_name="沪深300ETF")) == "core_broad"
     assert classify_etf(_metadata("159905.SZ", "红利低波ETF")) == "defensive"
+
+
+def test_name_fallback_requires_affirmative_domestic_equity_provenance() -> None:
+    assert classify_etf(
+        _metadata(fund_name="沪深300ETF", fund_type=None)
+    ) is None
+    assert classify_etf(
+        _metadata(fund_name="沪深300ETF", fund_type="domestic equity ETF")
+    ) == "core_broad"
+
+
+def test_authoritative_sse_180_index_is_classified_as_core_broad() -> None:
+    assert classify_etf(
+        _metadata(
+            stock_code="510180.SH",
+            fund_name="上证180ETF",
+            fund_type=None,
+            tracking_index_code="000010.SH",
+        )
+    ) == "core_broad"
+
+
+def test_overseas_geographic_name_cannot_use_domestic_name_fallback() -> None:
+    assert classify_etf(
+        _metadata(
+            stock_code="159900.SZ",
+            fund_name="美国红利ETF",
+            fund_type=None,
+        )
+    ) is None
 
 
 @pytest.mark.parametrize(
@@ -156,6 +187,28 @@ def test_eligibility_uses_only_bars_available_on_as_of_date() -> None:
     assert result.history_session_count == 253
     assert result.average_amount_20d == 12_000_000.0
     assert result.classification_provenance == "name_fallback"
+
+
+def test_eligibility_excludes_and_reports_pre_listing_bars() -> None:
+    metadata = _metadata(listing_date=AS_OF_DATE - timedelta(days=250))
+
+    result = evaluate_eligibility(metadata, _amount_bars(252), AS_OF_DATE)
+
+    assert result.eligible is False
+    assert result.history_session_count == 251
+    assert "bar_date_before_listing_date" in result.rejection_reasons
+    assert "listing_history_lt_252" in result.rejection_reasons
+
+
+def test_eligibility_rejects_instrument_listed_after_as_of_date() -> None:
+    metadata = _metadata(listing_date=AS_OF_DATE + timedelta(days=1))
+
+    result = evaluate_eligibility(metadata, _amount_bars(252), AS_OF_DATE)
+
+    assert result.eligible is False
+    assert result.history_session_count == 0
+    assert "listing_date_after_as_of_date" in result.rejection_reasons
+    assert "bar_date_before_listing_date" in result.rejection_reasons
 
 
 def test_foreign_entity_bar_is_reported_and_never_counts_as_history() -> None:

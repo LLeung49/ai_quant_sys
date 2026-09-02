@@ -77,6 +77,17 @@ def test_etf_eligibility_preserves_valid_rejected_decision() -> None:
     assert decision.eligible is False
 
 
+def test_etf_eligibility_requires_exposure_group_when_eligible() -> None:
+    with pytest.raises(ValueError, match="eligible decisions require an exposure_group"):
+        ETFEligibility(
+            eligible=True,
+            rejection_reasons=(),
+            exposure_group=None,
+            history_session_count=252,
+            average_amount_20d=10_000_000.0,
+        )
+
+
 @pytest.mark.parametrize(
     "factory",
     [

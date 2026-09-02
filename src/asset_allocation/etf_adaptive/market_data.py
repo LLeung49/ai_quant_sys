@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 import math
+import re
 from typing import Callable, Mapping, Sequence
 
 from .contracts import (
@@ -18,6 +19,13 @@ from .contracts import (
 
 
 Query = Callable[[str, tuple[object, ...]], Sequence[Mapping[str, object]]]
+CalendarLoader = Callable[[date, date], Sequence[date]]
+
+_ETF_CANDIDATE_CODE = re.compile(
+    r"^(?:(?:510|511|512|513|515|516|517|518|560|561|562|563|588|589)"
+    r"\d{3}\.SH|159\d{3}\.SZ)$",
+    re.IGNORECASE,
+)
 
 RAW_BARS_SQL = """
 SELECT stock_code, trade_date, open_price, high_price, low_price, close_price,
@@ -38,13 +46,20 @@ ORDER BY trade_date
 LATEST_ACTION_SQL = """
 SELECT MAX(ex_date) AS latest_action_date
 FROM trade_corporate_action
-WHERE stock_code = %s AND event_status = 'effective' AND data_source = 'xtquant'
+WHERE stock_code = %s AND ex_date <= %s
+  AND event_status = 'effective' AND data_source = 'xtquant'
 """
 
 METADATA_SQL = """
 SELECT stock_code, stock_name AS fund_name, listing_date
 FROM trade_stock_status
-WHERE listing_date <= %s
+WHERE (listing_date IS NULL OR listing_date <= %s)
+  AND (
+    (RIGHT(stock_code, 3) = '.SH' AND LEFT(stock_code, 3) IN
+      ('510', '511', '512', '513', '515', '516', '517', '518',
+       '560', '561', '562', '563', '588', '589'))
+    OR (RIGHT(stock_code, 3) = '.SZ' AND LEFT(stock_code, 3) = '159')
+  )
 ORDER BY stock_code
 """
 
@@ -165,7 +180,13 @@ def to_raw_distance(signal_distance: float, adjustment_ratio: float) -> float:
 class AdaptiveMarketDataProvider:
     """Load market facts without substituting dates or entities."""
 
-    def __init__(self, query: Query, *, ratio_tolerance: float = 1e-6) -> None:
+    def __init__(
+        self,
+        query: Query,
+        *,
+        ratio_tolerance: float = 1e-6,
+        calendar_loader: CalendarLoader | None = None,
+    ) -> None:
         if not callable(query):
             raise ValueError("query must be callable")
         if (
@@ -177,6 +198,9 @@ class AdaptiveMarketDataProvider:
             raise ValueError("ratio_tolerance must be a non-negative finite number")
         self._query = query
         self._ratio_tolerance = float(ratio_tolerance)
+        if calendar_loader is not None and not callable(calendar_loader):
+            raise ValueError("calendar_loader must be callable")
+        self._calendar_loader = calendar_loader
         self.last_quality_issues: tuple[DataQualityIssue, ...] = ()
 
     def _fail(
@@ -252,7 +276,7 @@ class AdaptiveMarketDataProvider:
         params = (code, start_date, end_date)
         raw_rows = self._query(RAW_BARS_SQL, params)
         qfq_rows = self._query(QFQ_BARS_SQL, params)
-        latest_rows = self._query(LATEST_ACTION_SQL, (code,))
+        latest_rows = self._query(LATEST_ACTION_SQL, (code, end_date))
         raw = self._index_rows(
             raw_rows,
             coordinate="raw",
@@ -274,6 +298,42 @@ class AdaptiveMarketDataProvider:
                 "raw/qfq date mismatch",
             )
 
+        if self._calendar_loader is not None:
+            try:
+                calendar_values = self._calendar_loader(start_date, end_date)
+            except Exception as exc:
+                self._fail(
+                    "market_calendar_unavailable",
+                    code,
+                    f"market calendar unavailable: {exc}",
+                )
+            expected_sessions: set[date] = set()
+            for value in calendar_values:
+                try:
+                    session = _as_date(value, "market_session")
+                except ValueError:
+                    self._fail(
+                        "invalid_market_session",
+                        code,
+                        "market calendar contains an invalid session",
+                    )
+                if session < start_date or session > end_date:
+                    self._fail(
+                        "market_session_outside_range",
+                        code,
+                        "market calendar session outside requested range",
+                        session,
+                    )
+                expected_sessions.add(session)
+            missing_sessions = sorted(expected_sessions - raw.keys())
+            if missing_sessions:
+                self._fail(
+                    "missing_market_session",
+                    code,
+                    "expected market session is missing from both price coordinates",
+                    missing_sessions[0],
+                )
+
         latest_action_date: date | None = None
         if latest_rows:
             latest_value = latest_rows[0].get("latest_action_date")
@@ -288,11 +348,17 @@ class AdaptiveMarketDataProvider:
                         code,
                         "invalid latest corporate-action date",
                     )
+                if latest_action_date > end_date:
+                    self._fail(
+                        "future_latest_action_date",
+                        code,
+                        "latest corporate-action date is after requested end_date",
+                        latest_action_date,
+                    )
 
         bars: list[DualPriceBar] = []
         issues: list[DataQualityIssue] = []
         prior_raw_close: float | None = None
-        adjustment_versions: set[date | None] = set()
         for day in sorted(raw):
             raw_row = raw[day]
             qfq_row = qfq[day]
@@ -385,43 +451,32 @@ class AdaptiveMarketDataProvider:
             adjustment_value = qfq_row.get("adjustment_asof")
             if adjustment_value is None:
                 adjustment_asof = None
-                issues.append(
-                    DataQualityIssue(
-                        "missing_adjustment_asof",
-                        code,
-                        day,
-                        "qfq adjustment_asof is missing",
-                    )
-                )
             else:
                 try:
                     adjustment_asof = _as_date(
                         adjustment_value, "adjustment_asof"
                     )
                 except ValueError:
-                    adjustment_asof = None
-                    issues.append(
-                        DataQualityIssue(
-                            "invalid_adjustment_asof",
-                            code,
-                            day,
-                            "qfq adjustment_asof is invalid",
-                        )
+                    self._fail(
+                        "invalid_adjustment_asof",
+                        code,
+                        "qfq adjustment_asof is invalid",
+                        day,
                     )
-                else:
-                    if (
-                        latest_action_date is not None
-                        and adjustment_asof < latest_action_date
-                    ):
-                        issues.append(
-                            DataQualityIssue(
-                                "stale_adjustment_asof",
-                                code,
-                                day,
-                                "qfq adjustment_asof predates the latest effective corporate action",
-                            )
-                        )
-            adjustment_versions.add(adjustment_asof)
+                if adjustment_asof > end_date:
+                    self._fail(
+                        "future_adjustment_asof",
+                        code,
+                        "qfq adjustment_asof is after requested end_date",
+                        day,
+                    )
+            if adjustment_asof != latest_action_date:
+                self._fail(
+                    "adjustment_asof_mismatch",
+                    code,
+                    "qfq adjustment_asof does not match the latest bounded corporate action",
+                    day,
+                )
             prior_raw_close = raw_prices["close"]
             bars.append(
                 DualPriceBar(
@@ -441,15 +496,6 @@ class AdaptiveMarketDataProvider:
                 )
             )
 
-        if len(adjustment_versions) > 1:
-            issues.append(
-                DataQualityIssue(
-                    "inconsistent_adjustment_asof",
-                    code,
-                    None,
-                    "qfq rows contain inconsistent adjustment_asof versions",
-                )
-            )
         self.last_quality_issues = tuple(issues)
         return tuple(bars)
 
@@ -459,7 +505,20 @@ class AdaptiveMarketDataProvider:
         _validate_range(as_of_date, as_of_date)
         self.last_quality_issues = ()
         rows = self._query(METADATA_SQL, (as_of_date,))
-        metadata: list[ETFMetadata] = []
+        issues = [
+            DataQualityIssue(
+                "point_in_time_metadata_unavailable",
+                "<metadata-source>",
+                None,
+                "trade_stock_status is current-state and has no effective-dated instrument history",
+            ),
+            DataQualityIssue(
+                "classification_provenance_unavailable",
+                "<metadata-source>",
+                None,
+                "trade_stock_status has no authoritative ETF classification fields",
+            ),
+        ]
         observed_codes: set[str] = set()
         for row in rows:
             try:
@@ -477,6 +536,26 @@ class AdaptiveMarketDataProvider:
                     "duplicate metadata stock_code",
                 )
             observed_codes.add(code)
+            if not _ETF_CANDIDATE_CODE.fullmatch(code):
+                issues.append(
+                    DataQualityIssue(
+                        "metadata_non_etf_candidate",
+                        code,
+                        None,
+                        "metadata row is outside exchange ETF code families",
+                    )
+                )
+                continue
+            if row.get("listing_date") is None:
+                issues.append(
+                    DataQualityIssue(
+                        "unknown_listing_date",
+                        code,
+                        None,
+                        "metadata listing_date is unknown",
+                    )
+                )
+                continue
             try:
                 listing_date = _as_date(row.get("listing_date"), "listing_date")
             except ValueError:
@@ -491,32 +570,11 @@ class AdaptiveMarketDataProvider:
             fund_name = _as_optional_text(row.get("fund_name"))
             if fund_name is None:
                 self._fail("missing_fund_name", code, "metadata fund_name is missing")
-            try:
-                is_cross_border = _as_bool(
-                    row.get("is_cross_border", False), "is_cross_border"
-                )
-                is_leveraged = _as_bool(
-                    row.get("is_leveraged", False), "is_leveraged"
-                )
-            except ValueError as exc:
-                self._fail("invalid_metadata_flag", code, str(exc))
-            metadata.append(
-                ETFMetadata(
-                    stock_code=code,
-                    fund_name=fund_name,
-                    listing_date=listing_date,
-                    fund_type=_as_optional_text(row.get("fund_type")),
-                    tracking_index_code=_as_optional_text(
-                        row.get("tracking_index_code")
-                    ),
-                    tracking_index_name=_as_optional_text(
-                        row.get("tracking_index_name")
-                    ),
-                    is_cross_border=is_cross_border,
-                    is_leveraged=is_leveraged,
-                )
-            )
-        return tuple(metadata)
+        self.last_quality_issues = tuple(issues)
+        raise DataQualityError(
+            "point-in-time ETF metadata unavailable",
+            self.last_quality_issues,
+        )
 
     def load_actions(
         self, stock_code: str, start_date: date, end_date: date

@@ -152,6 +152,8 @@ class ETFEligibility:
         if not self.eligible and not self.rejection_reasons:
             raise ValueError("ineligible decisions must have rejection reasons")
         _validate_optional_text(self.exposure_group, "exposure_group")
+        if self.eligible and self.exposure_group is None:
+            raise ValueError("eligible decisions require an exposure_group")
         if not isinstance(self.classification_provenance, str) or (
             self.classification_provenance
             not in {"metadata", "name_fallback"}
