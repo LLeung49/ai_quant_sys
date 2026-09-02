@@ -91,6 +91,7 @@ class ETFMetadata:
     fund_type: str | None = None
     tracking_index_code: str | None = None
     tracking_index_name: str | None = None
+    is_domestic_equity: bool | None = None
     is_cross_border: bool = False
     is_leveraged: bool = False
 
@@ -101,6 +102,8 @@ class ETFMetadata:
         _validate_optional_text(self.fund_type, "fund_type")
         _validate_optional_text(self.tracking_index_code, "tracking_index_code")
         _validate_optional_text(self.tracking_index_name, "tracking_index_name")
+        if self.is_domestic_equity is not None:
+            _require_bool(self.is_domestic_equity, "is_domestic_equity")
         _require_bool(self.is_cross_border, "is_cross_border")
         _require_bool(self.is_leveraged, "is_leveraged")
 

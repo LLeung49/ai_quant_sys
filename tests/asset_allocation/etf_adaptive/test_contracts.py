@@ -95,6 +95,7 @@ def test_etf_eligibility_requires_exposure_group_when_eligible() -> None:
         lambda: ETFEligibility(1, (), None, 252, 10_000_000.0),
         lambda: ETFMetadata("510300.SH", "CSI 300 ETF", "2020-01-01"),
         lambda: ETFMetadata("510300.SH", "CSI 300 ETF", date(2020, 1, 1), is_cross_border=0),
+        lambda: ETFMetadata("510300.SH", "CSI 300 ETF", date(2020, 1, 1), is_domestic_equity=0),
         lambda: CorporateAction(
             "510300.SH", "2026-09-01", CorporateActionType.CASH_DIVIDEND,
             Decimal("0.1"), Decimal("1"),

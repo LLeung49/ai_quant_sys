@@ -11,7 +11,6 @@ from asset_allocation.etf_adaptive.contracts import (
     DataQualityError,
 )
 from asset_allocation.etf_adaptive.market_data import (
-    LATEST_ACTION_SQL,
     METADATA_SQL,
     AdaptiveMarketDataProvider,
     to_raw_distance,
@@ -77,18 +76,40 @@ class QueryFixture:
             return self.raw
         if "trade_stock_daily_qfq" in sql:
             return self.qfq
-        if "MAX(ex_date)" in sql:
-            return [{"latest_action_date": self.latest_action}]
         if "trade_stock_status" in sql:
             return self.metadata
         if "trade_corporate_action" in sql:
             return self.actions
         raise AssertionError(f"unexpected query: {sql}")
 
+    def provider(self, **overrides: object) -> AdaptiveMarketDataProvider:
+        calendar_loader = lambda _start, _end: tuple(
+            sorted(
+                {
+                    day
+                    for row in self.raw
+                    if isinstance((day := row.get("trade_date")), date)
+                }
+            )
+        )
+        provenance_loader = lambda code, as_of_date: {
+            "stock_code": code,
+            "as_of_date": as_of_date,
+            "latest_action_date": self.latest_action,
+            "complete": True,
+            "source": "authoritative-test-snapshot",
+        }
+        options: dict[str, object] = {
+            "calendar_loader": calendar_loader,
+            "adjustment_provenance_loader": provenance_loader,
+        }
+        options.update(overrides)
+        return AdaptiveMarketDataProvider(query=self, **options)  # type: ignore[arg-type]
+
 
 def test_provider_loads_one_row_per_coordinate_and_uses_same_day_ratio() -> None:
     query = QueryFixture()
-    provider = AdaptiveMarketDataProvider(query=query)
+    provider = query.provider()
 
     bars = provider.load_bars(CODE, START, END)
 
@@ -105,14 +126,11 @@ def test_provider_loads_one_row_per_coordinate_and_uses_same_day_ratio() -> None
         "unverified_pre_close"
     ]
     assert provider.last_quality_issues[0].trade_date == END
-    assert len(query.calls) == 3
+    assert len(query.calls) == 2
     assert "FROM trade_stock_daily_raw" in query.calls[0][0]
     assert "FROM trade_stock_daily_qfq" in query.calls[1][0]
-    assert "MAX(ex_date)" in query.calls[2][0]
     assert query.calls[0][1] == (CODE, START, END)
     assert query.calls[1][1] == (CODE, START, END)
-    assert "ex_date <= %s" in LATEST_ACTION_SQL
-    assert query.calls[2][1] == (CODE, END)
 
 
 def test_signal_coordinate_round_trip_uses_same_day_ratio() -> None:
@@ -135,7 +153,7 @@ def test_coordinate_conversions_reject_non_finite_results(
 
 
 def test_provider_rejects_dates_missing_from_either_price_coordinate() -> None:
-    provider = AdaptiveMarketDataProvider(query=QueryFixture(qfq=[]))
+    provider = QueryFixture(qfq=[]).provider()
 
     with pytest.raises(DataQualityError, match="raw/qfq date mismatch"):
         provider.load_bars(CODE, START, END)
@@ -151,7 +169,7 @@ def test_provider_rejects_duplicate_dates_before_alignment(table: str) -> None:
     query = QueryFixture(**{table: rows})
 
     with pytest.raises(DataQualityError, match=f"duplicate {table} trade_date"):
-        AdaptiveMarketDataProvider(query=query).load_bars(CODE, START, END)
+        query.provider().load_bars(CODE, START, END)
 
 
 @pytest.mark.parametrize(
@@ -169,14 +187,14 @@ def test_provider_never_substitutes_an_entity_or_date(
     query = QueryFixture(**{table: rows})
 
     with pytest.raises(DataQualityError, match=message):
-        AdaptiveMarketDataProvider(query=query).load_bars(CODE, START, END)
+        query.provider().load_bars(CODE, START, END)
 
 
 def test_provider_wraps_malformed_source_identity_as_data_quality_error() -> None:
     query = QueryFixture(raw=[_raw_row(stock_code=None)])
 
     with pytest.raises(DataQualityError, match="invalid raw stock_code"):
-        AdaptiveMarketDataProvider(query=query).load_bars(CODE, START, END)
+        query.provider().load_bars(CODE, START, END)
 
 
 @pytest.mark.parametrize(
@@ -200,7 +218,7 @@ def test_provider_rejects_invalid_prices_ohlc_and_adjustment_ratios(
     )
 
     with pytest.raises(DataQualityError, match=message):
-        AdaptiveMarketDataProvider(query=query).load_bars(CODE, START, END)
+        query.provider().load_bars(CODE, START, END)
 
 
 def test_ratio_tolerance_is_relative_for_small_adjustment_factors() -> None:
@@ -224,14 +242,14 @@ def test_ratio_tolerance_is_relative_for_small_adjustment_factors() -> None:
     )
 
     with pytest.raises(DataQualityError, match="inconsistent raw/qfq OHLC ratio"):
-        AdaptiveMarketDataProvider(query=query).load_bars(CODE, START, END)
+        query.provider().load_bars(CODE, START, END)
 
 
 def test_provider_rejects_unknown_suspend_flag_instead_of_assuming_tradable() -> None:
     query = QueryFixture(raw=[_raw_row(suspend_flag=None)])
 
     with pytest.raises(DataQualityError, match="invalid suspend_flag"):
-        AdaptiveMarketDataProvider(query=query).load_bars(CODE, START, END)
+        query.provider().load_bars(CODE, START, END)
 
 
 def test_provider_reports_pre_close_and_adjustment_provenance_deterministically() -> None:
@@ -257,9 +275,9 @@ def test_provider_reports_pre_close_and_adjustment_provenance_deterministically(
         ),
         _qfq_row(adjustment_asof=date(2026, 8, 15)),
     ]
-    provider = AdaptiveMarketDataProvider(
-        query=QueryFixture(raw=raw, qfq=qfq, latest_action=date(2026, 8, 15))
-    )
+    provider = QueryFixture(
+        raw=raw, qfq=qfq, latest_action=date(2026, 8, 15)
+    ).provider()
 
     bars = provider.load_bars(CODE, START, END)
 
@@ -275,12 +293,10 @@ def test_provider_reports_pre_close_and_adjustment_provenance_deterministically(
 
 
 def test_provider_rejects_adjustment_version_after_historical_end_date() -> None:
-    provider = AdaptiveMarketDataProvider(
-        query=QueryFixture(
+    provider = QueryFixture(
             qfq=[_qfq_row(adjustment_asof=date(2026, 9, 2))],
             latest_action=END,
-        )
-    )
+        ).provider()
 
     with pytest.raises(DataQualityError, match="after requested end_date") as raised:
         provider.load_bars(CODE, START, END)
@@ -291,9 +307,7 @@ def test_provider_rejects_adjustment_version_after_historical_end_date() -> None
 
 
 def test_provider_rejects_action_query_returning_event_after_end_date() -> None:
-    provider = AdaptiveMarketDataProvider(
-        query=QueryFixture(latest_action=date(2026, 9, 2))
-    )
+    provider = QueryFixture(latest_action=date(2026, 9, 2)).provider()
 
     with pytest.raises(DataQualityError, match="after requested end_date") as raised:
         provider.load_bars(CODE, START, END)
@@ -304,12 +318,10 @@ def test_provider_rejects_action_query_returning_event_after_end_date() -> None:
 
 
 def test_provider_rejects_adjustment_version_unequal_to_bounded_action() -> None:
-    provider = AdaptiveMarketDataProvider(
-        query=QueryFixture(
+    provider = QueryFixture(
             qfq=[_qfq_row(adjustment_asof=date(2026, 8, 1))],
             latest_action=date(2026, 8, 15),
-        )
-    )
+        ).provider()
 
     with pytest.raises(DataQualityError, match="does not match") as raised:
         provider.load_bars(CODE, START, END)
@@ -320,12 +332,10 @@ def test_provider_rejects_adjustment_version_unequal_to_bounded_action() -> None
 
 
 def test_provider_accepts_null_adjustment_provenance_when_no_action_exists() -> None:
-    provider = AdaptiveMarketDataProvider(
-        query=QueryFixture(
+    provider = QueryFixture(
             qfq=[_qfq_row(adjustment_asof=None)],
             latest_action=None,
-        )
-    )
+        ).provider()
 
     bars = provider.load_bars(CODE, START, END)
 
@@ -333,6 +343,70 @@ def test_provider_accepts_null_adjustment_provenance_when_no_action_exists() -> 
     assert [issue.code for issue in provider.last_quality_issues] == [
         "unverified_pre_close"
     ]
+
+
+def test_null_adjustment_pair_is_not_proof_without_authoritative_source() -> None:
+    provider = AdaptiveMarketDataProvider(
+        query=QueryFixture(
+            qfq=[_qfq_row(adjustment_asof=None)], latest_action=None
+        ),
+        calendar_loader=lambda _start, _end: (END,),
+    )
+
+    with pytest.raises(
+        DataQualityError, match="adjustment provenance unavailable"
+    ) as raised:
+        provider.load_bars(CODE, START, END)
+
+    assert raised.value.issues[0].code == "adjustment_provenance_unavailable"
+
+
+def test_injected_authoritative_source_can_establish_no_action_state() -> None:
+    provider = AdaptiveMarketDataProvider(
+        query=QueryFixture(
+            qfq=[_qfq_row(adjustment_asof=None)], latest_action=None
+        ),
+        calendar_loader=lambda _start, _end: (END,),
+        adjustment_provenance_loader=lambda code, as_of_date: {
+            "stock_code": code,
+            "as_of_date": as_of_date,
+            "latest_action_date": None,
+            "complete": True,
+            "source": "authoritative-test-snapshot",
+        },
+    )
+
+    bars = provider.load_bars(CODE, START, END)
+
+    assert len(bars) == 1
+
+
+def test_provider_requires_calendar_for_bar_loading() -> None:
+    provider = AdaptiveMarketDataProvider(query=QueryFixture())
+
+    with pytest.raises(DataQualityError, match="market calendar unavailable") as raised:
+        provider.load_bars(CODE, START, END)
+
+    assert raised.value.issues[0].code == "market_calendar_unavailable"
+
+
+def test_provider_rejects_aligned_rows_absent_from_authoritative_calendar() -> None:
+    provider = AdaptiveMarketDataProvider(
+        query=QueryFixture(),
+        calendar_loader=lambda _start, _end: (),
+        adjustment_provenance_loader=lambda code, as_of_date: {
+            "stock_code": code,
+            "as_of_date": as_of_date,
+            "latest_action_date": date(2026, 8, 15),
+            "complete": True,
+            "source": "authoritative-test-snapshot",
+        },
+    )
+
+    with pytest.raises(DataQualityError, match="not in authoritative calendar") as raised:
+        provider.load_bars(CODE, START, END)
+
+    assert raised.value.issues[0].code == "unexpected_market_session"
 
 
 def test_provider_detects_session_missing_from_both_price_coordinates() -> None:
@@ -345,9 +419,8 @@ def test_provider_detects_session_missing_from_both_price_coordinates() -> None:
         assert (requested_start, requested_end) == (start, END)
         return (start, missing, END)
 
-    provider = AdaptiveMarketDataProvider(
-        query=QueryFixture(raw=raw, qfq=qfq),
-        calendar_loader=calendar_loader,
+    provider = QueryFixture(raw=raw, qfq=qfq).provider(
+        calendar_loader=calendar_loader
     )
 
     with pytest.raises(DataQualityError, match="expected market session is missing") as raised:
@@ -360,9 +433,8 @@ def test_provider_detects_session_missing_from_both_price_coordinates() -> None:
 def test_provider_accepts_expected_suspended_session_with_aligned_rows() -> None:
     raw = [_raw_row(START, suspend_flag=1), _raw_row(END)]
     qfq = [_qfq_row(START), _qfq_row(END)]
-    provider = AdaptiveMarketDataProvider(
-        query=QueryFixture(raw=raw, qfq=qfq),
-        calendar_loader=lambda _start, _end: (START, END),
+    provider = QueryFixture(raw=raw, qfq=qfq).provider(
+        calendar_loader=lambda _start, _end: (START, END)
     )
 
     bars = provider.load_bars(CODE, START, END)
@@ -374,9 +446,7 @@ def test_provider_reports_unavailable_market_calendar_as_quality_error() -> None
     def unavailable(_start: date, _end: date) -> tuple[date, ...]:
         raise RuntimeError("calendar unavailable")
 
-    provider = AdaptiveMarketDataProvider(
-        query=QueryFixture(), calendar_loader=unavailable
-    )
+    provider = QueryFixture().provider(calendar_loader=unavailable)
 
     with pytest.raises(DataQualityError, match="market calendar unavailable") as raised:
         provider.load_bars(CODE, START, END)
@@ -406,7 +476,7 @@ def test_first_bar_pre_close_is_unverified_even_when_later_bar_confirms() -> Non
         ),
         _qfq_row(),
     ]
-    provider = AdaptiveMarketDataProvider(query=QueryFixture(raw=raw, qfq=qfq))
+    provider = QueryFixture(raw=raw, qfq=qfq).provider()
 
     provider.load_bars(CODE, START, END)
 

@@ -47,6 +47,8 @@ _NAME_EXCLUSION_TOKENS = _METADATA_EXCLUSION_TOKENS + (
     "标普",
     "恒生",
     "日经",
+    "美国",
+    "德国",
 )
 
 _INDEX_CODE_GROUPS = {
@@ -121,7 +123,7 @@ def _classification(metadata: ETFMetadata) -> tuple[str | None, str]:
 
     if not _contains_token(
         metadata.fund_type, _DOMESTIC_EQUITY_FUND_TYPE_TOKENS
-    ):
+    ) or metadata.is_domestic_equity is not True:
         return None, "metadata"
 
     fallback_text = " ".join(

@@ -20,6 +20,7 @@ from .contracts import (
 
 Query = Callable[[str, tuple[object, ...]], Sequence[Mapping[str, object]]]
 CalendarLoader = Callable[[date, date], Sequence[date]]
+AdjustmentProvenanceLoader = Callable[[str, date], Mapping[str, object]]
 
 _ETF_CANDIDATE_CODE = re.compile(
     r"^(?:(?:510|511|512|513|515|516|517|518|560|561|562|563|588|589)"
@@ -41,13 +42,6 @@ SELECT stock_code, trade_date, open_price, high_price, low_price, close_price,
 FROM trade_stock_daily_qfq
 WHERE stock_code = %s AND trade_date BETWEEN %s AND %s
 ORDER BY trade_date
-"""
-
-LATEST_ACTION_SQL = """
-SELECT MAX(ex_date) AS latest_action_date
-FROM trade_corporate_action
-WHERE stock_code = %s AND ex_date <= %s
-  AND event_status = 'effective' AND data_source = 'xtquant'
 """
 
 METADATA_SQL = """
@@ -186,6 +180,7 @@ class AdaptiveMarketDataProvider:
         *,
         ratio_tolerance: float = 1e-6,
         calendar_loader: CalendarLoader | None = None,
+        adjustment_provenance_loader: AdjustmentProvenanceLoader | None = None,
     ) -> None:
         if not callable(query):
             raise ValueError("query must be callable")
@@ -201,6 +196,11 @@ class AdaptiveMarketDataProvider:
         if calendar_loader is not None and not callable(calendar_loader):
             raise ValueError("calendar_loader must be callable")
         self._calendar_loader = calendar_loader
+        if adjustment_provenance_loader is not None and not callable(
+            adjustment_provenance_loader
+        ):
+            raise ValueError("adjustment_provenance_loader must be callable")
+        self._adjustment_provenance_loader = adjustment_provenance_loader
         self.last_quality_issues: tuple[DataQualityIssue, ...] = ()
 
     def _fail(
@@ -273,10 +273,21 @@ class AdaptiveMarketDataProvider:
         code = _validate_code(stock_code)
         _validate_range(start_date, end_date)
         self.last_quality_issues = ()
+        if self._calendar_loader is None:
+            self._fail(
+                "market_calendar_unavailable",
+                code,
+                "market calendar unavailable: calendar_loader is required",
+            )
+        if self._adjustment_provenance_loader is None:
+            self._fail(
+                "adjustment_provenance_unavailable",
+                code,
+                "adjustment provenance unavailable: authoritative source is required",
+            )
         params = (code, start_date, end_date)
         raw_rows = self._query(RAW_BARS_SQL, params)
         qfq_rows = self._query(QFQ_BARS_SQL, params)
-        latest_rows = self._query(LATEST_ACTION_SQL, (code, end_date))
         raw = self._index_rows(
             raw_rows,
             coordinate="raw",
@@ -298,63 +309,103 @@ class AdaptiveMarketDataProvider:
                 "raw/qfq date mismatch",
             )
 
-        if self._calendar_loader is not None:
+        try:
+            calendar_values = self._calendar_loader(start_date, end_date)
+        except Exception as exc:
+            self._fail(
+                "market_calendar_unavailable",
+                code,
+                f"market calendar unavailable: {exc}",
+            )
+        expected_sessions: set[date] = set()
+        for value in calendar_values:
             try:
-                calendar_values = self._calendar_loader(start_date, end_date)
-            except Exception as exc:
+                session = _as_date(value, "market_session")
+            except ValueError:
                 self._fail(
-                    "market_calendar_unavailable",
+                    "invalid_market_session",
                     code,
-                    f"market calendar unavailable: {exc}",
+                    "market calendar contains an invalid session",
                 )
-            expected_sessions: set[date] = set()
-            for value in calendar_values:
-                try:
-                    session = _as_date(value, "market_session")
-                except ValueError:
-                    self._fail(
-                        "invalid_market_session",
-                        code,
-                        "market calendar contains an invalid session",
-                    )
-                if session < start_date or session > end_date:
-                    self._fail(
-                        "market_session_outside_range",
-                        code,
-                        "market calendar session outside requested range",
-                        session,
-                    )
-                expected_sessions.add(session)
-            missing_sessions = sorted(expected_sessions - raw.keys())
-            if missing_sessions:
+            if session < start_date or session > end_date:
                 self._fail(
-                    "missing_market_session",
+                    "market_session_outside_range",
                     code,
-                    "expected market session is missing from both price coordinates",
-                    missing_sessions[0],
+                    "market calendar session outside requested range",
+                    session,
                 )
+            expected_sessions.add(session)
+        missing_sessions = sorted(expected_sessions - raw.keys())
+        if missing_sessions:
+            self._fail(
+                "missing_market_session",
+                code,
+                "expected market session is missing from both price coordinates",
+                missing_sessions[0],
+            )
+        unexpected_sessions = sorted(raw.keys() - expected_sessions)
+        if unexpected_sessions:
+            self._fail(
+                "unexpected_market_session",
+                code,
+                "aligned price row is not in authoritative calendar",
+                unexpected_sessions[0],
+            )
 
+        try:
+            provenance = self._adjustment_provenance_loader(code, end_date)
+        except Exception as exc:
+            self._fail(
+                "adjustment_provenance_unavailable",
+                code,
+                f"adjustment provenance unavailable: {exc}",
+            )
+        if not isinstance(provenance, Mapping):
+            self._fail(
+                "adjustment_provenance_unavailable",
+                code,
+                "adjustment provenance unavailable: invalid source response",
+            )
+        provenance_source = _as_optional_text(provenance.get("source"))
+        if provenance_source is None or provenance.get("complete") is not True:
+            self._fail(
+                "adjustment_provenance_unavailable",
+                code,
+                "adjustment provenance unavailable: source is not complete",
+            )
+        try:
+            provenance_code = _validate_code(provenance.get("stock_code"))  # type: ignore[arg-type]
+            provenance_date = _as_date(provenance.get("as_of_date"), "as_of_date")
+        except ValueError:
+            self._fail(
+                "adjustment_provenance_unavailable",
+                code,
+                "adjustment provenance unavailable: invalid source identity",
+            )
+        if provenance_code != code or provenance_date != end_date:
+            self._fail(
+                "adjustment_provenance_unavailable",
+                code,
+                "adjustment provenance unavailable: source identity mismatch",
+            )
         latest_action_date: date | None = None
-        if latest_rows:
-            latest_value = latest_rows[0].get("latest_action_date")
-            if latest_value is not None:
-                try:
-                    latest_action_date = _as_date(
-                        latest_value, "latest_action_date"
-                    )
-                except ValueError:
-                    self._fail(
-                        "invalid_latest_action_date",
-                        code,
-                        "invalid latest corporate-action date",
-                    )
-                if latest_action_date > end_date:
-                    self._fail(
-                        "future_latest_action_date",
-                        code,
-                        "latest corporate-action date is after requested end_date",
-                        latest_action_date,
-                    )
+        latest_value = provenance.get("latest_action_date")
+        if latest_value is not None:
+            try:
+                latest_action_date = _as_date(latest_value, "latest_action_date")
+            except ValueError:
+                self._fail(
+                    "adjustment_provenance_unavailable",
+                    code,
+                    "adjustment provenance unavailable: invalid latest action date",
+                )
+            if latest_action_date > end_date:
+                self._fail(
+                    "future_latest_action_date",
+                    code,
+                    "latest corporate-action date is after requested end_date",
+                    latest_action_date,
+                )
 
         bars: list[DualPriceBar] = []
         issues: list[DataQualityIssue] = []

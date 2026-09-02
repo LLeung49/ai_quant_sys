@@ -21,6 +21,16 @@ from .universe import evaluate_eligibility
 
 
 _NON_MATERIAL_QUALITY_REASONS = frozenset({"unverified_pre_close"})
+_ADJUSTMENT_VERSION_QUALITY_REASONS = frozenset(
+    {
+        "stale_adjustment_asof",
+        "adjustment_provenance_unavailable",
+        "invalid_adjustment_asof",
+        "adjustment_asof_mismatch",
+        "future_adjustment_asof",
+        "future_latest_action_date",
+    }
+)
 
 
 class AuditProvider(Protocol):
@@ -165,8 +175,9 @@ def audit_universe(
         raw_qfq_mismatch_count=data_quality_by_reason.get(
             "raw_qfq_date_mismatch", 0
         ),
-        stale_adjustment_version_count=data_quality_by_reason.get(
-            "stale_adjustment_asof", 0
+        stale_adjustment_version_count=sum(
+            data_quality_by_reason.get(reason, 0)
+            for reason in _ADJUSTMENT_VERSION_QUALITY_REASONS
         ),
     )
     if output_path is not None:

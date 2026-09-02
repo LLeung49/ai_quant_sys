@@ -14,7 +14,6 @@ from asset_allocation.etf_adaptive.contracts import (
     ETFMetadata,
 )
 from asset_allocation.etf_adaptive.market_data import (
-    LATEST_ACTION_SQL,
     METADATA_SQL,
     QFQ_BARS_SQL,
     RAW_BARS_SQL,
@@ -228,6 +227,52 @@ def test_audit_counts_nonfatal_and_fatal_data_quality_issues() -> None:
     assert report.date_coverage["510500.SH"].session_count == 0
 
 
+class CurrentAdjustmentIssueProvider(ProviderFixture):
+    def load_bars(
+        self, stock_code: str, start_date: date, end_date: date
+    ) -> tuple[DualPriceBar, ...]:
+        bars = super().load_bars(stock_code, start_date, end_date)
+        self.last_quality_issues = (
+            DataQualityIssue(
+                "adjustment_asof_mismatch",
+                stock_code,
+                AS_OF_DATE,
+                "adjustment version mismatch",
+            ),
+            DataQualityIssue(
+                "future_adjustment_asof",
+                stock_code,
+                AS_OF_DATE,
+                "future adjustment version",
+            ),
+            DataQualityIssue(
+                "adjustment_provenance_unavailable",
+                stock_code,
+                AS_OF_DATE,
+                "adjustment provenance unavailable",
+            ),
+            DataQualityIssue(
+                "invalid_adjustment_asof",
+                stock_code,
+                AS_OF_DATE,
+                "invalid adjustment version",
+            ),
+        )
+        return bars
+
+
+def test_stale_adjustment_count_includes_current_provider_issue_taxonomy() -> None:
+    report = audit_universe(AS_OF_DATE, CurrentAdjustmentIssueProvider())
+
+    assert report.stale_adjustment_version_count == 8
+    assert report.data_quality_by_reason == {
+        "adjustment_asof_mismatch": 2,
+        "adjustment_provenance_unavailable": 2,
+        "future_adjustment_asof": 2,
+        "invalid_adjustment_asof": 2,
+    }
+
+
 @pytest.mark.parametrize(
     ("provider", "expected_exit_code"),
     [(ProviderFixture(), 0), (QualityIssueProvider(), 2)],
@@ -307,7 +352,7 @@ def test_audit_fails_closed_for_an_unclassified_quality_error() -> None:
     assert report.data_quality_by_reason == {"unclassified_data_quality_error": 1}
 
 
-def test_default_provider_uses_authoritative_calendar_to_detect_shared_gap(
+def test_default_provider_fails_closed_without_authoritative_adjustment_provenance(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     missing = AS_OF_DATE - timedelta(days=1)
@@ -339,8 +384,6 @@ def test_default_provider_uses_authoritative_calendar_to_detect_shared_gap(
                     "adjustment_asof": None,
                 },
             )
-        if sql == LATEST_ACTION_SQL:
-            return ({"latest_action_date": None},)
         raise AssertionError(f"unexpected query: {sql!r}, {params!r}")
 
     monkeypatch.setattr(audit_cli, "execute_query", query)
@@ -355,7 +398,7 @@ def test_default_provider_uses_authoritative_calendar_to_detect_shared_gap(
     with pytest.raises(DataQualityError) as raised:
         provider.load_bars("510300.SH", missing, AS_OF_DATE)
 
-    assert raised.value.issues[0].code == "missing_market_session"
+    assert raised.value.issues[0].code == "adjustment_provenance_unavailable"
 
 
 class FutureBarProvider(ProviderFixture):
@@ -422,8 +465,6 @@ def _adaptive_provider_with_no_actions() -> AdaptiveMarketDataProvider:
                 }
                 for day in days
             )
-        if sql == LATEST_ACTION_SQL:
-            return ({"latest_action_date": None},)
         raise AssertionError(f"unexpected query: {sql!r}, {params!r}")
 
     class PointInTimeMetadataFixture(AdaptiveMarketDataProvider):
@@ -439,7 +480,17 @@ def _adaptive_provider_with_no_actions() -> AdaptiveMarketDataProvider:
                 ),
             )
 
-    return PointInTimeMetadataFixture(query=query)
+    return PointInTimeMetadataFixture(
+        query=query,
+        calendar_loader=lambda _start, _end: days,
+        adjustment_provenance_loader=lambda code, as_of_date: {
+            "stock_code": code,
+            "as_of_date": as_of_date,
+            "latest_action_date": None,
+            "complete": True,
+            "source": "authoritative-test-snapshot",
+        },
+    )
 
 
 def test_audit_accepts_null_adjustment_provenance_when_no_action_exists(

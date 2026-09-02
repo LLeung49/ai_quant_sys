@@ -23,6 +23,7 @@ def _metadata(
         "fund_name": fund_name,
         "listing_date": date(2020, 1, 1),
         "fund_type": "domestic equity ETF",
+        "is_domestic_equity": True,
     }
     values.update(overrides)
     return ETFMetadata(**values)  # type: ignore[arg-type]
@@ -83,7 +84,11 @@ def test_name_fallback_requires_affirmative_domestic_equity_provenance() -> None
         _metadata(fund_name="沪深300ETF", fund_type=None)
     ) is None
     assert classify_etf(
-        _metadata(fund_name="沪深300ETF", fund_type="domestic equity ETF")
+        _metadata(
+            fund_name="沪深300ETF",
+            fund_type="domestic equity ETF",
+            is_domestic_equity=True,
+        )
     ) == "core_broad"
 
 
@@ -104,6 +109,30 @@ def test_overseas_geographic_name_cannot_use_domestic_name_fallback() -> None:
             stock_code="159900.SZ",
             fund_name="美国红利ETF",
             fund_type=None,
+        )
+    ) is None
+
+
+@pytest.mark.parametrize("country", ["美国", "德国"])
+def test_positive_generic_fund_type_does_not_prove_domestic_product(
+    country: str,
+) -> None:
+    assert classify_etf(
+        _metadata(
+            stock_code="159900.SZ",
+            fund_name=f"{country}红利ETF",
+            fund_type="domestic equity ETF",
+            is_domestic_equity=None,
+        )
+    ) is None
+
+
+def test_name_fallback_requires_explicit_domestic_product_provenance() -> None:
+    assert classify_etf(
+        _metadata(
+            fund_name="沪深300ETF",
+            fund_type="domestic equity ETF",
+            is_domestic_equity=None,
         )
     ) is None
 
