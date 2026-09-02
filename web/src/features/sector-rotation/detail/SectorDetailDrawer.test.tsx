@@ -15,6 +15,9 @@ vi.mock("../kline/SectorKlineCard", () => ({
 vi.mock("../kline/SectorKlineModal", () => ({
   SectorKlineModal: () => <div role="dialog" aria-label="半导体放大行情图" />,
 }));
+vi.mock("../research-cockpit/SectorResearchCockpit", () => ({
+  SectorResearchCockpit: ({ asOfDate, sectorName, snapshotMode }: { asOfDate: string; sectorName: string; snapshotMode: string }) => <div data-testid="sector-research-cockpit">{sectorName}|{asOfDate}|{snapshotMode}</div>,
+}));
 
 // 拦截 fetchShortTermHistory,避免真实网络请求。
 const fetchShortTermHistoryMock = vi.fn();
@@ -75,6 +78,7 @@ describe("SectorDetailDrawer", () => {
     await waitFor(() => expect(screen.getByTestId("sector-kline-card")).toBeInTheDocument());
     expect(screen.getByRole("heading", { level: 3, name: "加速走强 · 未知状态" })).toBeInTheDocument();
     expect(screen.getByTestId("sector-kline-card")).toHaveTextContent("半导体|2|2026-08-04");
+    expect(screen.getByTestId("sector-research-cockpit")).toHaveTextContent("半导体|2026-08-04|backfill");
     fireEvent.click(screen.getByRole("button", { name: "关闭详情" }));
     expect(onClose).toHaveBeenCalledOnce();
   });

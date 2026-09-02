@@ -1707,3 +1707,38 @@ h1 { margin: 0; font-size: clamp(28px, 3.2vw, 46px); line-height: 1.05; letter-s
     min-width: 64px;
   }
 }
+.research-cockpit-page { display: grid; gap: 18px; padding: 2px 0; }
+.research-date-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(11, 22, 38, .82); box-shadow: 0 14px 40px rgba(0, 0, 0, .16); }
+.research-date-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; color: var(--muted); font-size: 12px; }
+.research-date-controls input, .research-date-controls select, .research-date-controls button { border: 1px solid var(--line); border-radius: 7px; background: #0c192b; color: var(--text); padding: 6px 9px; font-size: 12px; }
+.research-date-controls button { color: var(--blue); }
+.research-date-note { color: var(--subtle); font-size: 11px; }
+.research-cockpit-panel { border: 1px solid var(--line); border-radius: 14px; background: linear-gradient(145deg, rgba(17, 32, 53, .93), rgba(11, 23, 40, .86)); box-shadow: 0 16px 36px rgba(0,0,0,.13); padding: 18px; }
+.research-cockpit-panel > header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; }
+.research-cockpit-panel h2 { margin: 2px 0 0; font-size: 18px; }
+.research-status-badge { display: inline-flex; align-items: center; gap: 5px; color: var(--amber); background: rgba(240, 182, 90, .10); border: 1px solid rgba(240, 182, 90, .35); border-radius: 999px; padding: 4px 8px; font-size: 10px; letter-spacing: .06em; }
+.research-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.research-summary-item { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; border: 1px solid var(--line); border-radius: 10px; background: rgba(7, 16, 29, .45); padding: 12px; }
+.research-summary-item strong { font-size: 20px; }
+.research-warning { color: var(--amber); font-size: 12px; }
+.research-candidate-list { display: grid; gap: 7px; }
+.research-candidate-row { display: flex; justify-content: space-between; gap: 16px; padding: 11px; border: 1px solid var(--line); border-radius: 9px; background: rgba(7, 16, 29, .34); font-size: 13px; }
+.research-security, .research-candidate-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.research-security strong { color: var(--text); }
+.research-security small, .research-candidate-row span, .research-candidate-row small { color: var(--muted); }
+.research-availability { display: flex; flex-basis: 100%; flex-wrap: wrap; gap: 3px 10px; }
+.research-availability small { color: var(--subtle); font-size: 10px; }
+.research-availability.legacy { color: var(--amber); }
+.research-security span { color: var(--teal); font-size: 10px; text-transform: uppercase; }
+.research-row-actions { display: inline-flex; gap: 5px; }
+.research-row-actions button { border: 1px solid var(--line-strong); border-radius: 6px; background: rgba(103, 169, 255, .08); color: var(--text); padding: 4px 7px; font-size: 10px; }
+.research-source-note, .research-muted { color: var(--muted); font-size: 12px; }
+.research-records-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.research-record { display: flex; justify-content: space-between; border-top: 1px solid var(--line); padding: 7px 0; margin: 0; font-size: 13px; }
+.research-record small { color: var(--muted); }
+.research-candidate-sections { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.research-candidate-sections h3 { display: flex; justify-content: space-between; font-size: 14px; margin: 0 0 6px; }
+.research-candidate-sections h3 small { color: var(--muted); font-weight: 500; }
+.sector-detail .research-cockpit-panel { margin-top: 14px; }
+.sector-detail .research-candidate-sections { grid-template-columns: 1fr; }
+@media (max-width: 720px) { .research-date-bar, .research-candidate-row { align-items: flex-start; flex-direction: column; } .research-date-note { display: none; } .research-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

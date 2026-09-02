@@ -1,0 +1,1 @@
+"""Research candidate watchlist persistence."""

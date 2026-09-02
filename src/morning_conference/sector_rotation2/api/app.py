@@ -14,6 +14,7 @@ from pymysql import MySQLError
 from .router import router
 from ..short_term.api import short_term_router
 from .macd_router import macd_router
+from .research_router import research_router
 
 
 LOGGER = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ def create_app() -> FastAPI:
         # 避免开发端口变化导致页面读取失败，同时不向任意外部域开放 API。
         allow_origin_regex=r"^http://(?:localhost|127\.0\.0\.1):\d+$",
         allow_credentials=False,
-        allow_methods=["GET", "OPTIONS"],
+        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Accept", "Content-Type", "X-Request-ID"],
     )
 
@@ -143,4 +144,5 @@ def create_app() -> FastAPI:
     app.include_router(router)
     app.include_router(short_term_router)
     app.include_router(macd_router)
+    app.include_router(research_router)
     return app

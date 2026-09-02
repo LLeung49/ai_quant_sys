@@ -11,6 +11,7 @@ import type { SectorKlineResponse } from "../kline/sectorKlineApi";
 import { getIntensityMeta, getShortTermLabelMeta, orderLabelsByPriority, parseLabelsCsv } from "../short_term/labels";
 import type { ShortTermSector } from "../short_term/api";
 import { ShortTermStripView } from "./ShortTermStripView";
+import { SectorResearchCockpit } from "../research-cockpit/SectorResearchCockpit";
 import { useShortTermHistory } from "./useShortTermHistory";
 import { buildKlineModalSelectionIdentity, type DetailSector, type SectorDetailDrawerProps } from "./DetailSector";
 
@@ -346,6 +347,7 @@ export function SectorDetailDrawer({
           expandButtonRef={expandButtonRef}
           onExpand={(data) => setKlineModalSelection({ identity: currentModalIdentity, data })}
         />
+        <SectorResearchCockpit asOfDate={asOfDate} level={level} sectorName={sector.sector_name} snapshotMode={isLatestDate ? "live_shadow" : "backfill"} />
         <footer className="detail-risk">模型阶段是研究观察信号,不代表未来收益;请结合自身风险承受能力独立判断。</footer>
       </aside>
       {activeKlineModal && (
