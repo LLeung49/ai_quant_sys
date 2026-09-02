@@ -234,15 +234,19 @@ git commit -m "feat: implement adaptive grid decisions"
 - [ ] **Step 1: Write failing risk-size and exit-priority tests**
 
 ```python
-def test_unit_size_divides_by_complete_stop_distance_and_never_forces_one_lot() -> None:
-    assert calculate_unit_shares(120_000, 0.005, atr20_raw=0.20, stop_n=2.0) == 100
-    assert calculate_unit_shares(10_000, 0.0025, atr20_raw=2.0, stop_n=2.0) == 0
+def test_unit_size_converts_signal_atr_using_next_execution_ratio() -> None:
+    signal_atr20 = 0.05
+    raw_atr20 = to_raw_distance(signal_atr20, adjustment_ratio=0.25)
+    assert raw_atr20 == pytest.approx(0.20)
+    assert calculate_unit_shares(120_000, 0.005, raw_atr20, stop_n=2.0) == 1_500
 
 
 def test_trend_exit_wins_over_add_signal() -> None:
     decision = evaluate_trend_close(_trend_state(), _snapshot(stop_hit=True, add_hit=True), eligible=True)
     assert decision.orders == (_full_exit(OrderReason.TREND_STOP),)
 ```
+
+Signal ATR `0.05` must never directly enter a raw-price order calculation; `IndicatorSnapshot.atr20` remains in signal coordinates until converted at T+1 using that execution bar's adjustment ratio.
 
 - [ ] **Step 2: Run TREND tests and verify failure**
 
@@ -253,11 +257,12 @@ Expected: FAIL because TREND functions are absent.
 - [ ] **Step 3: Implement entry, units, adds, and exits**
 
 ```python
-def calculate_unit_shares(budget: float, risk_per_unit: float, atr20_raw: float, stop_n: float) -> int:
-    stop_distance = stop_n * atr20_raw
-    if stop_distance <= 0:
-        return 0
-    return max(0, int((budget * risk_per_unit / stop_distance) // 100) * 100)
+def calculate_unit_shares(budget: float, risk_per_unit: float, raw_atr20: float, stop_n: float) -> int:
+    stop_distance = stop_n * raw_atr20
+    return 0 if stop_distance <= 0 else max(0, int((budget * risk_per_unit / stop_distance) // 100) * 100)
+
+raw_atr20 = to_raw_distance(signal_atr20, next_bar.adjustment_ratio)
+shares = calculate_unit_shares(budget, risk_per_unit, raw_atr20, stop_n)
 
 
 def trend_entry_allowed(snapshot: IndicatorSnapshot, config: TrendConfig) -> bool:
@@ -266,6 +271,8 @@ def trend_entry_allowed(snapshot: IndicatorSnapshot, config: TrendConfig) -> boo
     amount_ok = config.amount_ratio_min is None or snapshot.amount_ratio >= config.amount_ratio_min
     return base and macd_ok and amount_ok
 ```
+
+Complete signal price thresholds must use `to_raw_price`; signal-only comparisons remain in the signal coordinate.
 
 Store each unit's actual fill, signal-coordinate fill, signal-day ATR, shares, and next-add reference. Implement one-add-per-day, aggregate stop-risk cap `budget * risk_per_unit * max_units`, monotone stops, prior-10-low exit, and exact MACD dead-cross exit.
 
@@ -326,7 +333,14 @@ def slipped_open(raw_open: float, side: Side, bps: float) -> float:
     return raw_open * multiplier
 ```
 
-Reject fills for suspension, zero amount, exchange-limit lock, insufficient cash/shares, and pre-fill risk failure. Credit explicit cash dividends and share adjustments exactly once using event identifiers.
+Reject fills for suspension, zero amount, exchange-limit lock, insufficient cash/shares, and pre-fill risk failure. De-duplicate corporate actions by event ID:
+
+```python
+if action.event_id not in applied_action_ids:
+    applied_action_ids.add(action.event_id)
+```
+
+Apply cash dividends and share multipliers exactly once, preserving exact `Decimal` arithmetic and an explicit fractional-entitlement policy; do not silently round or discard fractional entitlements. This plan specifies the contract only; no action-processing engine is implemented here.
 
 - [ ] **Step 4: Run execution plus data-coordinate tests**
 
