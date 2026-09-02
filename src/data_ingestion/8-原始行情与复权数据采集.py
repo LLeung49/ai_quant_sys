@@ -39,7 +39,7 @@ DIVIDEND_TYPES = ("none", "front", "back")  # QMT 原始、前复权、后复权
 # 每日重复读取最近窗口：即使权益公告在之后被修订/撤回，也能被快照比较发现。
 ACTION_LOOKBACK_DAYS = 10
 # QMT 一次返回过多 DataFrame 会占用大量内存；按固定批次限制峰值并便于失败重试。
-MARKET_BATCH_SIZE = 50
+MARKET_BATCH_SIZE = 20
 MARKET_FIELDS = (
     "open", "high", "low", "close", "volume", "amount", "preClose", "suspendFlag",
 )
