@@ -18,7 +18,10 @@ import pandas as pd
 
 from ..config_hash import build_config_hash
 from ..contracts import CandidateSnapshot
-from ..snapshot import SnapshotStore, persist_backfill_snapshot, persist_live_shadow_snapshot
+from ..snapshot import (
+    SnapshotStore, persist_backfill_snapshot, persist_delayed_shadow_snapshot,
+    persist_live_shadow_snapshot,
+)
 from ..status import ExecutionStatus, ResearchStatus, SnapshotMode, ValidationStatus
 from .common import (
     StockEligibilityRow,
@@ -29,6 +32,7 @@ from .common import (
 from .config import TrendAlphaConfig
 from .trend import classify_candidate, score_trend_candidates
 from .trend_features import (
+    calc_adx14,
     calc_alpha_persistence,
     calc_kama_er,
     calc_relative_returns,
@@ -207,6 +211,8 @@ def build_trend_candidate(
     }
     config_hash = build_config_hash(config_payload)
     risk_flags: list[str] = []
+    if bool(row.get("data_quality_blocked")):
+        risk_flags.append("data_quality_blocked")
     if row.get("hot_leader_source") == "unavailable" and row.get("limit_up_streak") is not None:
         risk_flags.append("hot_leader_unavailable")
     feature_json = {
@@ -244,6 +250,8 @@ def build_trend_candidate(
         },
     }
     reasons: list[str] = []
+    if bool(row.get("data_quality_blocked")):
+        reasons.extend(f"missing:{name}" for name in row.get("data_quality_reasons", []))
     if row.get("alpha_strength") is not None and not (isinstance(row["alpha_strength"], float) and np.isnan(row["alpha_strength"])):
         reasons.append(f"alpha_strength={float(row['alpha_strength']):.3f}")
     if row.get("breakout20"):
@@ -287,10 +295,12 @@ def persist_trend_candidates(
     for snapshot in snapshots:
         if snapshot.snapshot_mode is SnapshotMode.LIVE_SHADOW:
             persisted.append(persist_live_shadow_snapshot(store, snapshot))
+        elif snapshot.snapshot_mode is SnapshotMode.DELAYED_SHADOW:
+            persisted.append(persist_delayed_shadow_snapshot(store, snapshot))
         elif snapshot.snapshot_mode is SnapshotMode.BACKFILL:
             persisted.append(persist_backfill_snapshot(store, snapshot))
         else:
-            raise ValueError("Trend Alpha only supports LIVE_SHADOW or BACKFILL modes")
+            raise ValueError("Trend Alpha only supports LIVE_SHADOW or BACKFILL (or DELAYED_SHADOW) modes")
     return persisted
 
 
@@ -307,6 +317,7 @@ def assemble_features_frame(
     volume_3d_mean_feed: Mapping[str, float] | None = None,
     volume_20d_mean_feed: Mapping[str, float] | None = None,
     high_feed: Mapping[str, pd.Series] | None = None,
+    ohlcv_feed: Mapping[str, Mapping] | None = None,
 ) -> pd.DataFrame:
     """Compute the per-stock feature frame including structure components.
 
@@ -321,6 +332,7 @@ def assemble_features_frame(
     volume_3d_mean_feed = volume_3d_mean_feed or {}
     volume_20d_mean_feed = volume_20d_mean_feed or {}
     high_feed = high_feed or {}
+    ohlcv_feed = ohlcv_feed or {}
     rows: list[dict[str, Any]] = []
     for stock in universe:
         stock_close_dict = stock_close_series.get(stock.stock_code)
@@ -332,6 +344,13 @@ def assemble_features_frame(
             continue
         rr = calc_relative_returns(aligned["close"], aligned["sector"], windows=config.windows)
         er = calc_kama_er(aligned["close"], window=10)
+        ohlcv = pd.DataFrame.from_dict(ohlcv_feed.get(stock.stock_code, {}), orient="index").sort_index()
+        required_ohlcv = {"high", "low", "close"}
+        if not required_ohlcv.issubset(ohlcv.columns):
+            ohlcv = pd.DataFrame(index=aligned.index, columns=sorted(required_ohlcv))
+        else:
+            ohlcv = ohlcv.reindex(aligned.index).dropna(subset=["high", "low", "close"])
+        adx = calc_adx14(ohlcv["high"], ohlcv["low"], ohlcv["close"]) if not ohlcv.empty else None
         ma20 = calc_ma(aligned["close"], window=20)
         ma60 = calc_ma(aligned["close"], window=60)
         ma20_slope = calc_ma_slope(ma20, window=5)
@@ -365,7 +384,7 @@ def assemble_features_frame(
             "rr_10": rr.get("rr_10"),
             "rr_20": rr.get("rr_20"),
             "er": er,
-            "adx": None,
+            "adx": adx,
             "ma_stack": ma_stack,
             "breakout20": breakout20,
             "breakout60": breakout60,
@@ -465,4 +484,16 @@ def score_features_frame(
     out["risk_penalty"] = risk_penalties
     # Final score.
     out = score_trend_candidates(out, config=config)
+    # Core trend evidence is fail-closed. Keep a row for auditability, but do
+    # not classify or rank it as a usable candidate when the required inputs
+    # are unavailable.
+    required = ("alpha_strength", "persistence", "trend_quality", "liquidity")
+    blocked: list[list[str]] = []
+    for _, row in out.iterrows():
+        missing = [name for name in required if name not in out.columns or pd.isna(row.get(name))]
+        blocked.append(missing)
+    out["data_quality_blocked"] = [bool(items) for items in blocked]
+    out["data_quality_reasons"] = blocked
+    out.loc[out["data_quality_blocked"], "candidate_score"] = np.nan
+    out.loc[out["data_quality_blocked"], "candidate_status"] = "data_quality_blocked"
     return out

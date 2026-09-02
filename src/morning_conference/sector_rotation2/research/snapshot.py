@@ -34,9 +34,12 @@ class InMemorySnapshotStore:
 
 
 def assert_snapshot_compatible(existing: CandidateSnapshot, incoming: CandidateSnapshot) -> None:
-    # ``run_id`` identifies an execution audit record, not the model output.
+    # ``run_id`` and ``snapshot_id`` identify persistence/audit records, not
+    # immutable model output.  A re-run constructs a snapshot before MySQL has
+    # assigned its surrogate id, so comparing a stored id against ``None``
+    # would incorrectly turn an idempotent retry into a semantic conflict.
     # Re-running identical inputs must remain an idempotent no-op.
-    if replace(existing, run_id=incoming.run_id) != incoming:
+    if replace(existing, run_id=incoming.run_id, snapshot_id=incoming.snapshot_id) != incoming:
         raise SnapshotConflictError(f"immutable snapshot conflict for {incoming.identity}")
 
 
@@ -59,3 +62,15 @@ def persist_backfill_snapshot(store: SnapshotStore, snapshot: CandidateSnapshot)
     else:
         assert_snapshot_compatible(existing, backfill)
     return backfill
+
+
+def persist_delayed_shadow_snapshot(store: SnapshotStore, snapshot: CandidateSnapshot) -> CandidateSnapshot:
+    """Persist an immutable operational delayed-shadow snapshot."""
+    if snapshot.snapshot_mode is not SnapshotMode.DELAYED_SHADOW:
+        raise ValueError("persist_delayed_shadow_snapshot requires DELAYED_SHADOW mode")
+    existing = store.get(snapshot.identity)
+    if existing is None:
+        store.insert(snapshot)
+    else:
+        assert_snapshot_compatible(existing, snapshot)
+    return snapshot

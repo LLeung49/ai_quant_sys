@@ -10,7 +10,7 @@ from typing import Mapping
 class TrendAlphaConfig:
     """All result-affecting parameters for stock-level Trend Alpha V1."""
 
-    model_version: str = "stock_trend_v1"
+    model_version: str = "stock_trend_v2"
     min_listing_age: int = 120
     min_price_history: int = 60
     windows: tuple = (5, 10, 20)

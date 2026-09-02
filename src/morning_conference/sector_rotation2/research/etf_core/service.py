@@ -8,7 +8,10 @@ from typing import Any, Mapping
 from ..config_hash import build_config_hash
 from ..contracts import CandidateSnapshot
 from ..status import SnapshotMode
-from ..snapshot import SnapshotStore, persist_backfill_snapshot, persist_live_shadow_snapshot
+from ..snapshot import (
+    SnapshotStore, persist_backfill_snapshot, persist_delayed_shadow_snapshot,
+    persist_live_shadow_snapshot,
+)
 from .selector import select_candidate_status
 
 
@@ -59,7 +62,11 @@ def build_etf_candidate(*, as_of_date: date, sector_level: int, sector_name: str
 
 
 def persist_etf_candidate(store: SnapshotStore, snapshot: CandidateSnapshot) -> CandidateSnapshot:
-    return persist_live_shadow_snapshot(store, snapshot) if snapshot.snapshot_mode is SnapshotMode.LIVE_SHADOW else persist_backfill_snapshot(store, snapshot)
+    if snapshot.snapshot_mode is SnapshotMode.LIVE_SHADOW:
+        return persist_live_shadow_snapshot(store, snapshot)
+    if snapshot.snapshot_mode is SnapshotMode.DELAYED_SHADOW:
+        return persist_delayed_shadow_snapshot(store, snapshot)
+    return persist_backfill_snapshot(store, snapshot)
 
 
 def normalize_mapping_metadata(value: Any) -> Any:

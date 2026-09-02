@@ -269,3 +269,31 @@ def load_stock_close_series(
                 continue
             out.setdefault(code, {})[trade_date] = float(close)
     return out
+
+
+def load_stock_ohlcv_series(
+    stock_codes: Iterable[str], as_of_date: date, query: Callable = execute_query,
+    *, batch_size: int = 100,
+) -> dict[str, dict[date, dict[str, float]]]:
+    """Load raw OHLCV history for technical features without changing the close API."""
+    codes = sorted({code for code in stock_codes if code})
+    out: dict[str, dict[date, dict[str, float]]] = {}
+    for i in range(0, len(codes), batch_size):
+        chunk = codes[i:i + batch_size]
+        placeholders = ", ".join(["%s"] * len(chunk))
+        sql = (
+            "SELECT stock_code, trade_date, open_price AS open, high_price AS high, "
+            "low_price AS low, close_price AS close, volume, amount "
+            "FROM trade_stock_daily_qfq WHERE trade_date <= %s AND stock_code IN ("
+            + placeholders + ") ORDER BY stock_code, trade_date"
+        )
+        for row in query(sql, (as_of_date, *chunk)):
+            code = str(row.get("stock_code") or "").strip()
+            day = _as_date(row.get("trade_date"))
+            if not code or day is None or row.get("close") is None:
+                continue
+            out.setdefault(code, {})[day] = {
+                key: float(row[key]) for key in ("open", "high", "low", "close", "volume", "amount")
+                if row.get(key) is not None
+            }
+    return out

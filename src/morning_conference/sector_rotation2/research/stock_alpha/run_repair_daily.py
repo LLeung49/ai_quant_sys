@@ -1,18 +1,18 @@
-﻿"""Daily/backfill runner for SHADOW Repair Alpha stock candidates.
+"""Daily/backfill runner for SHADOW Repair Alpha stock candidates.
 
 Reads only the upstream sector_opportunity snapshots whose playbook is
 ``repair_probe`` or ``early_repair``.  All downstream rows are persisted
 to ``research_candidate_snapshot`` with ``strategy_type='stock_repair'``.
 
 CLI flags mirror the Phase 3 trend runner:
-  --mode {live_shadow,backfill}
+  --mode {live_shadow,delayed_shadow,backfill}
   --today <ISO date>     override LIVE_SHADOW today gate
   --dry-run              in-memory build, no persist
   --sector <NAME>        single-sector smoke test
   --workers N            thread-pool size
-  --force-replace        delete + rewrite stock_repair for the date
   --skip-migrations      debug only
   --allow-estimated-pit  include PIT_ESTIMATED rows (off by default)
+  --force-replace        delete + rewrite stock_repair for the date
 
 The Repair pipeline does not auto-provision the financial PIT tables
 (schemas live in ``sql/20260820_create_repair_alpha_persistence_tables.sql``).
@@ -23,7 +23,8 @@ from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, datetime
+from dataclasses import replace
+from datetime import date, datetime, timedelta
 from typing import Any, Callable
 from uuid import uuid4
 
@@ -31,6 +32,9 @@ from data_ingestion.db_config import execute_query, execute_update
 
 from ...snapshot_store import create_run, mark_run_failed, mark_run_succeeded
 from ..config_hash import build_config_hash
+from ..availability import AvailabilityBasis, AvailabilityMetadata, as_shanghai_naive, resolve_availability
+from ..calendar import TradingCalendar
+from ..evaluation.prices import load_authoritative_market_calendar as load_trading_calendar
 from ..orchestrator.store import MySQLSnapshotStore
 from ..status import SnapshotMode
 from ..financial.service import (
@@ -52,7 +56,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--level", type=int, choices=(1, 2), required=True)
     parser.add_argument(
         "--mode",
-        choices=("live_shadow", "backfill"),
+        choices=("live_shadow", "delayed_shadow", "backfill"),
         help="Override the snapshot mode.  LIVE_SHADOW requires today's date unless --today is supplied.",
     )
     parser.add_argument("--today", help="ISO date for the LIVE_SHADOW gate.")
@@ -63,7 +67,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--force-replace",
         action="store_true",
-        help="Delete existing stock_repair rows for the date before persisting.",
+        help="Delete existing stock_repair snapshots for the target date and level before persisting.",
     )
     parser.add_argument(
         "--allow-estimated-pit",
@@ -104,28 +108,33 @@ def _backfill_dates(start_date: str, end_date: str, level: int, query: Callable 
     rows = query(
         """SELECT DISTINCT as_of_date FROM research_candidate_snapshot
              WHERE as_of_date BETWEEN %s AND %s AND sector_level=%s
-               AND strategy_type='sector_opportunity' AND snapshot_mode=%s
+               AND strategy_type='sector_opportunity'
              ORDER BY as_of_date""",
-        (start_date, end_date, level, SnapshotMode.BACKFILL.value),
+        (start_date, end_date, level),
     )
     return [str(row["as_of_date"]) for row in rows]
 
 
+def _delayed_availability(target: date, level: int, run_at: datetime, query: Callable) -> AvailabilityMetadata:
+    dates = load_trading_calendar(target, run_at.date() + timedelta(days=14), query, sector_level=level)
+    return resolve_availability(target, AvailabilityBasis.MARKET_CLOSE_1800, TradingCalendar(dates), run_at)
+
+
 def _delete_existing_repair_snapshots(
-    as_of_date: str, level: int, query=execute_query, update=execute_update,
+    as_of_date: str, level: int, mode: SnapshotMode, query=execute_query, update=execute_update,
 ) -> int:
     count_row = query(
         "SELECT COUNT(*) AS c FROM research_candidate_snapshot "
-        "WHERE as_of_date=%s AND sector_level=%s AND strategy_type='stock_repair'",
-        (as_of_date, level),
+        "WHERE as_of_date=%s AND sector_level=%s AND strategy_type='stock_repair' AND snapshot_mode=%s",
+        (as_of_date, level, mode.value),
     )
     deleted = int(count_row[0]["c"]) if count_row else 0
     if deleted == 0:
         return 0
     update(
         "DELETE FROM research_candidate_snapshot "
-        "WHERE as_of_date=%s AND sector_level=%s AND strategy_type='stock_repair'",
-        (as_of_date, level),
+        "WHERE as_of_date=%s AND sector_level=%s AND strategy_type='stock_repair' AND snapshot_mode=%s",
+        (as_of_date, level, mode.value),
     )
     return deleted
 
@@ -144,6 +153,7 @@ def run_one_date(
     sector_filter: str | None = None,
     force_replace: bool = False,
     allow_estimated_pit: bool = False,
+    now: datetime | None = None,
 ) -> int:
     """Build and persist Repair Alpha SHADOW candidates for ``as_of_date``."""
 
@@ -154,7 +164,7 @@ def run_one_date(
     store = None if dry_run else MySQLSnapshotStore()
     if store is not None:
         if force_replace:
-            deleted = _delete_existing_repair_snapshots(as_of_date, level)
+            deleted = _delete_existing_repair_snapshots(as_of_date, level, mode)
             if deleted:
                 print(f"{as_of_date}: --force-replace deleted {deleted} stock_repair rows")
         store.ensure_schema()
@@ -171,7 +181,7 @@ def run_one_date(
             for sector in sectors:
                 snapshots.extend(score_repair_sector(
                     sector, as_of_date=as_of_date, level=level, mode=mode,
-                    config=config, run_id=run_id, store=store, query=query,
+                    config=config, run_id=run_id, store=None, query=query,
                     allow_estimated_pit=allow_estimated_pit,
                 ))
         else:
@@ -180,7 +190,7 @@ def run_one_date(
                     pool.submit(
                         score_repair_sector, sector,
                         as_of_date=as_of_date, level=level, mode=mode,
-                        config=config, run_id=run_id, store=store, query=query,
+                        config=config, run_id=run_id, store=None, query=query,
                         allow_estimated_pit=allow_estimated_pit,
                     )
                     for sector in sectors
@@ -191,6 +201,20 @@ def run_one_date(
         if store is not None:
             mark_run_failed(run_id, str(exc))
         raise
+    if snapshots and mode is SnapshotMode.DELAYED_SHADOW:
+        availability = _delayed_availability(target, level, as_shanghai_naive(now), query)
+        snapshots = [
+            replace(
+                snapshot,
+                data_available_at=availability.data_available_at,
+                run_at=availability.run_at,
+                execution_eligible_at=availability.execution_eligible_at,
+                availability_basis=availability.availability_basis,
+            )
+            for snapshot in snapshots
+        ]
+    if store is not None:
+        persist_repair_candidates(store, snapshots)
     if store is not None:
         mark_run_succeeded(run_id, len(snapshots), 0)
     persist_label = "dry-run" if dry_run else f"persisted {len(snapshots)}"

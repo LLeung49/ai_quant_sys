@@ -234,7 +234,32 @@ def test_build_parser_accepts_backfill_window() -> None:
     args = parser.parse_args(["--backfill-start", "2026-08-10", "--backfill-end", "2026-08-17", "--level", "2"])
     assert args.backfill_start == "2026-08-10"
     assert args.backfill_end == "2026-08-17"
+
+
+def test_build_parser_retains_force_replace_flag() -> None:
+    parser = build_parser()
+    args = parser.parse_args(["--as-of-date", "2026-08-17", "--level", "2", "--force-replace"])
+    assert args.force_replace is True
     assert args.level == 2
+
+
+def test_force_replace_trend_deletes_only_requested_snapshot_mode() -> None:
+    calls: list[tuple[str, tuple[object, ...]]] = []
+
+    def query(sql: str, params: tuple[object, ...]) -> list[dict[str, int]]:
+        calls.append((sql, params))
+        return [{"c": 2}]
+
+    def update(sql: str, params: tuple[object, ...]) -> None:
+        calls.append((sql, params))
+
+    deleted = run_trend_daily._delete_existing_trend_snapshots(
+        "2026-08-17", 2, SnapshotMode.DELAYED_SHADOW, query=query, update=update,
+    )
+
+    assert deleted == 2
+    assert all("snapshot_mode=%s" in sql for sql, _ in calls)
+    assert all(params == ("2026-08-17", 2, "delayed_shadow") for _, params in calls)
 
 
 def test_build_parser_rejects_missing_date_window() -> None:

@@ -27,5 +27,6 @@ class ExecutionStatus(_StringEnum):
 
 class SnapshotMode(_StringEnum):
     LIVE_SHADOW = "live_shadow"
+    DELAYED_SHADOW = "delayed_shadow"
     BACKFILL = "backfill"
     REPLAY = "replay"

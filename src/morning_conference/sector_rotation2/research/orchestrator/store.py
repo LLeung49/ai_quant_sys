@@ -10,8 +10,12 @@ import pymysql
 
 from data_ingestion.db_config import get_connection
 
+from ..availability import AvailabilityBasis
 from ..contracts import CandidateSnapshot, SnapshotIdentity
-from ..snapshot import SnapshotStore, persist_backfill_snapshot, persist_live_shadow_snapshot
+from ..snapshot import (
+    SnapshotStore, persist_backfill_snapshot, persist_delayed_shadow_snapshot,
+    persist_live_shadow_snapshot,
+)
 from ..status import SnapshotMode
 
 
@@ -33,6 +37,10 @@ CREATE TABLE IF NOT EXISTS research_candidate_snapshot (
     config_hash VARCHAR(64) NOT NULL,
     run_id VARCHAR(64) NOT NULL,
     snapshot_mode VARCHAR(16) NOT NULL,
+    data_available_at DATETIME NULL,
+    run_at DATETIME NULL,
+    execution_eligible_at DATETIME NULL,
+    availability_basis VARCHAR(32) NULL,
     rank_in_sector INT NULL,
     feature_json JSON NOT NULL,
     reasons_json JSON NOT NULL,
@@ -44,7 +52,8 @@ CREATE TABLE IF NOT EXISTS research_candidate_snapshot (
     ),
     KEY idx_research_rank (
         as_of_date, sector_level, sector_name, strategy_type, rank_in_sector
-    )
+    ),
+    KEY idx_research_snapshot_execution (snapshot_mode, execution_eligible_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8
 """
 
@@ -129,6 +138,43 @@ class MySQLSnapshotStore:
 
     def ensure_schema(self) -> None:
         self._execute(RESEARCH_SNAPSHOT_DDL, ())
+        self._ensure_availability_schema()
+
+    def _ensure_availability_schema(self) -> None:
+        """Add availability metadata to existing snapshot tables, idempotently."""
+        connection = self._connection_factory()
+        cursor = connection.cursor()
+        try:
+            cursor.execute(
+                "SELECT column_name FROM information_schema.columns "
+                "WHERE table_schema=DATABASE() AND table_name='research_candidate_snapshot'"
+            )
+            columns = {row[0] for row in cursor.fetchall()}
+            additions = (
+                ("data_available_at", "DATETIME NULL"),
+                ("run_at", "DATETIME NULL"),
+                ("execution_eligible_at", "DATETIME NULL"),
+                ("availability_basis", "VARCHAR(32) NULL"),
+            )
+            for name, definition in additions:
+                if name not in columns:
+                    cursor.execute(f"ALTER TABLE research_candidate_snapshot ADD COLUMN {name} {definition}")
+            cursor.execute(
+                "SELECT 1 FROM information_schema.statistics WHERE table_schema=DATABASE() "
+                "AND table_name='research_candidate_snapshot' AND index_name='idx_research_snapshot_execution'"
+            )
+            if cursor.fetchone() is None:
+                cursor.execute(
+                    "ALTER TABLE research_candidate_snapshot ADD KEY "
+                    "idx_research_snapshot_execution (snapshot_mode, execution_eligible_at)"
+                )
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            cursor.close()
+            connection.close()
 
     def get(self, identity: SnapshotIdentity) -> CandidateSnapshot | None:
         connection = self._connection_factory()
@@ -154,13 +200,17 @@ class MySQLSnapshotStore:
             snapshot.run_id, snapshot.snapshot_mode.value, snapshot.rank_in_sector,
             _json_dump(snapshot.feature_json),
             _json_dump(snapshot.reasons_json), _json_dump(snapshot.risk_flags_json),
+            snapshot.data_available_at, snapshot.run_at, snapshot.execution_eligible_at,
+            snapshot.availability_basis.value if snapshot.availability_basis is not None else None,
         )
         self._execute(
             """INSERT INTO research_candidate_snapshot
                (as_of_date, entity_type, entity_code, sector_level, sector_name, strategy_type, candidate_status,
                 candidate_score, research_status, validation_status, execution_status, model_version, config_hash,
-                run_id, snapshot_mode, rank_in_sector, feature_json, reasons_json, risk_flags_json)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                run_id, snapshot_mode, rank_in_sector, feature_json, reasons_json, risk_flags_json,
+                data_available_at, run_at, execution_eligible_at, availability_basis)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+                       %s, %s, %s, %s)""",
             values,
         )
 
@@ -212,16 +262,32 @@ def _snapshot_from_row(row: dict[str, Any]) -> CandidateSnapshot:
     from ..status import ExecutionStatus, ResearchStatus, ValidationStatus
 
     return CandidateSnapshot(
+        snapshot_id=row.get("id"),
         as_of_date=row["as_of_date"] if isinstance(row["as_of_date"], date) else date.fromisoformat(str(row["as_of_date"])),
         entity_type=row["entity_type"], entity_code=row["entity_code"], sector_level=row["sector_level"],
         sector_name=row["sector_name"], strategy_type=row["strategy_type"], candidate_status=row["candidate_status"],
         candidate_score=row["candidate_score"], research_status=ResearchStatus(row["research_status"]),
         validation_status=ValidationStatus(row["validation_status"]), execution_status=ExecutionStatus(row["execution_status"]),
         model_version=row["model_version"], config_hash=row["config_hash"], run_id=row["run_id"],
-        snapshot_mode=SnapshotMode(row["snapshot_mode"]), feature_json=json.loads(row["feature_json"]),
-        reasons_json=tuple(json.loads(row["reasons_json"])), risk_flags_json=tuple(json.loads(row["risk_flags_json"])),
+        snapshot_mode=SnapshotMode(row["snapshot_mode"]), feature_json=_json_load(row["feature_json"]),
+        reasons_json=tuple(_json_load(row["reasons_json"])), risk_flags_json=tuple(_json_load(row["risk_flags_json"])),
         rank_in_sector=row.get("rank_in_sector"),
+        data_available_at=_datetime_from_row(row.get("data_available_at")),
+        run_at=_datetime_from_row(row.get("run_at")),
+        execution_eligible_at=_datetime_from_row(row.get("execution_eligible_at")),
+        availability_basis=(AvailabilityBasis(row["availability_basis"]) if row.get("availability_basis") else None),
     )
+
+
+def _json_load(value: Any) -> Any:
+    """Accept both pymysql JSON strings and drivers returning decoded values."""
+    return json.loads(value) if isinstance(value, (str, bytes, bytearray)) else value
+
+
+def _datetime_from_row(value: Any) -> datetime | None:
+    if value is None or isinstance(value, datetime):
+        return value
+    return datetime.fromisoformat(str(value))
 
 
 def persist_sector_opportunity(store: SnapshotStore, snapshot: CandidateSnapshot) -> CandidateSnapshot:
@@ -229,4 +295,6 @@ def persist_sector_opportunity(store: SnapshotStore, snapshot: CandidateSnapshot
         return persist_live_shadow_snapshot(store, snapshot)
     if snapshot.snapshot_mode is SnapshotMode.BACKFILL:
         return persist_backfill_snapshot(store, snapshot)
-    raise ValueError("Sector Opportunity only supports LIVE_SHADOW or BACKFILL snapshots")
+    if snapshot.snapshot_mode is SnapshotMode.DELAYED_SHADOW:
+        return persist_delayed_shadow_snapshot(store, snapshot)
+    raise ValueError("Sector Opportunity only supports LIVE_SHADOW or BACKFILL (or DELAYED_SHADOW) snapshots")

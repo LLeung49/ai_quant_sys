@@ -47,6 +47,15 @@ def test_same_snapshot_with_a_new_run_id_is_idempotent() -> None:
     assert backfill_store.count() == 1
 
 
+def test_persisted_snapshot_id_does_not_break_idempotent_rerun() -> None:
+    store, snapshot = InMemorySnapshotStore(), make_snapshot()
+    store.insert(replace(snapshot, snapshot_id=101))
+
+    persist_live_shadow_snapshot(store, snapshot)
+
+    assert store.count(snapshot.identity) == 1
+
+
 def test_backfill_can_coexist_with_live_shadow() -> None:
     store, snapshot = InMemorySnapshotStore(), make_snapshot()
     persist_live_shadow_snapshot(store, snapshot)

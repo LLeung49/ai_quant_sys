@@ -90,6 +90,18 @@ def test_load_repair_sectors_filters_by_playbook() -> None:
     assert names == {"Bank"}
 
 
+def test_load_repair_sectors_never_falls_back_to_another_snapshot_mode() -> None:
+    calls: list[tuple[str, tuple]] = []
+
+    def query(sql: str, params: tuple) -> list[dict[str, Any]]:
+        calls.append((sql, params))
+        return []
+
+    assert load_repair_sectors("2026-08-17", 2, SnapshotMode.BACKFILL, query) == []
+    assert len(calls) == 1
+    assert calls[0][1][-1] == SnapshotMode.BACKFILL.value
+
+
 def test_build_repair_candidate_is_shadow_and_manual_only() -> None:
     cfg = TrendAlphaConfig()
     ctx = RepairSectorContext(
@@ -206,6 +218,33 @@ def test_run_repair_daily_parser_accepts_backfill_window() -> None:
     assert args.mode == "backfill"
     assert args.dry_run is True
     assert args.allow_estimated_pit is True
+
+
+def test_run_repair_daily_parser_retains_force_replace_flag() -> None:
+    from morning_conference.sector_rotation2.research.stock_alpha.run_repair_daily import build_parser
+    args = build_parser().parse_args(["--as-of-date", "2026-08-17", "--level", "2", "--force-replace"])
+    assert args.force_replace is True
+
+
+def test_force_replace_repair_deletes_only_requested_snapshot_mode() -> None:
+    from morning_conference.sector_rotation2.research.stock_alpha import run_repair_daily
+
+    calls: list[tuple[str, tuple[object, ...]]] = []
+
+    def query(sql: str, params: tuple[object, ...]) -> list[dict[str, int]]:
+        calls.append((sql, params))
+        return [{"c": 2}]
+
+    def update(sql: str, params: tuple[object, ...]) -> None:
+        calls.append((sql, params))
+
+    deleted = run_repair_daily._delete_existing_repair_snapshots(
+        "2026-08-17", 2, SnapshotMode.DELAYED_SHADOW, query=query, update=update,
+    )
+
+    assert deleted == 2
+    assert all("snapshot_mode=%s" in sql for sql, _ in calls)
+    assert all(params == ("2026-08-17", 2, "delayed_shadow") for _, params in calls)
 
 
 def test_run_repair_daily_parser_rejects_missing_date_window() -> None:

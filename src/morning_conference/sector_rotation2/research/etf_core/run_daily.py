@@ -1,12 +1,16 @@
 """Daily/backfill runner consuming only effective return-derived ETF maps."""
 
 import argparse
-from datetime import date
+from dataclasses import replace
+from datetime import date, datetime, timedelta
 from uuid import uuid4
 
 from data_ingestion.db_config import execute_query
 
 from ..orchestrator.store import MySQLSnapshotStore
+from ..availability import AvailabilityBasis, AvailabilityMetadata, as_shanghai_naive, resolve_availability
+from ..calendar import TradingCalendar
+from ..evaluation.prices import load_authoritative_market_calendar as load_trading_calendar
 from ..status import SnapshotMode
 from .execution_evidence import load_etf_execution_evidence
 from .macd_adapter import load_etf_macd_evidence
@@ -21,6 +25,11 @@ def build_parser() -> argparse.ArgumentParser:
     date_group.add_argument("--backfill-start")
     parser.add_argument("--backfill-end")
     parser.add_argument("--level", type=int, choices=(1, 2), required=True)
+    parser.add_argument("--today", help="ISO date to treat as today for LIVE_SHADOW validation")
+    parser.add_argument(
+        "--mode", choices=[mode.value for mode in (SnapshotMode.LIVE_SHADOW, SnapshotMode.DELAYED_SHADOW, SnapshotMode.BACKFILL)],
+        help="Snapshot mode; delayed_shadow records next-day operational availability for historical closes.",
+    )
     return parser
 
 
@@ -67,14 +76,19 @@ def _backfill_dates(start_date: str, end_date: str, level: int) -> list[str]:
     return [str(row["as_of_date"]) for row in rows]
 
 
-def run_one_date(as_of_date: str, level: int, mode: SnapshotMode = SnapshotMode.LIVE_SHADOW) -> int:
+def _delayed_availability(target: date, level: int, run_at: datetime, query=execute_query) -> AvailabilityMetadata:
+    dates = load_trading_calendar(target, run_at.date() + timedelta(days=14), query, sector_level=level)
+    return resolve_availability(target, AvailabilityBasis.MARKET_CLOSE_1800, TradingCalendar(dates), run_at)
+
+
+def run_one_date(as_of_date: str, level: int, mode: SnapshotMode = SnapshotMode.LIVE_SHADOW, *, today: date | None = None, now: datetime | None = None) -> int:
     target = date.fromisoformat(as_of_date)
-    validate_mode_for_date(target, mode)
+    validate_mode_for_date(target, mode, today=today)
     store = MySQLSnapshotStore()
     store.ensure_schema()
     run_id = str(uuid4())
     sectors = load_sector_rows(as_of_date, level, mode)
-    count = 0
+    snapshots = []
     for sector in sectors:
         allowed = sector["candidate_status"] not in {"avoid", "risk_reduce"}
         for mapping in load_effective_return_etfs(str(sector["sector_name"]), level, target):
@@ -101,21 +115,37 @@ def run_one_date(as_of_date: str, level: int, mode: SnapshotMode = SnapshotMode.
                     },
                 },
             )
-            persist_etf_candidate(store, snapshot)
-            count += 1
+            snapshots.append(snapshot)
+    if snapshots and mode is SnapshotMode.DELAYED_SHADOW:
+        availability = _delayed_availability(target, level, as_shanghai_naive(now))
+        snapshots = [
+            replace(
+                snapshot,
+                data_available_at=availability.data_available_at,
+                run_at=availability.run_at,
+                execution_eligible_at=availability.execution_eligible_at,
+                availability_basis=availability.availability_basis,
+            )
+            for snapshot in snapshots
+        ]
+    for snapshot in snapshots:
+        persist_etf_candidate(store, snapshot)
+    count = len(snapshots)
     print(f"{as_of_date}: processed {count} {mode.value} ETF candidates")
     return count
 
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    today = date.fromisoformat(args.today) if args.today else None
+    mode = SnapshotMode(args.mode) if args.mode else (SnapshotMode.BACKFILL if args.backfill_start else SnapshotMode.LIVE_SHADOW)
     if args.as_of_date:
-        run_one_date(args.as_of_date, args.level, SnapshotMode.LIVE_SHADOW)
+        run_one_date(args.as_of_date, args.level, mode, today=today)
         return 0
     if not args.backfill_end:
         raise SystemExit("--backfill-end is required with --backfill-start")
     for as_of_date in _backfill_dates(args.backfill_start, args.backfill_end, args.level):
-        run_one_date(as_of_date, args.level, SnapshotMode.BACKFILL)
+        run_one_date(as_of_date, args.level, mode)
     return 0
 
 

@@ -1,4 +1,4 @@
-﻿"""Daily/backfill runner for SHADOW Trend Alpha stock candidates.
+"""Daily/backfill runner for SHADOW Trend Alpha stock candidates.
 
 CLI modes
 =========
@@ -10,6 +10,10 @@ CLI modes
 
 ``--as-of-date <YYYY-MM-DD> --mode backfill``
     Persist a reproducible ``BACKFILL`` snapshot for any historical date.
+
+``--as-of-date <YYYY-MM-DD> --mode delayed_shadow``
+    Persist an operational delayed snapshot for a historical market close,
+    with immutable Shanghai availability and completion timestamps.
 
 ``--backfill-start <YYYY-MM-DD> [--backfill-end <YYYY-MM-DD>] [--mode ...]``
     Walk every available sector-opportunity BACKFILL date in the window and
@@ -26,29 +30,38 @@ sector name (the Chinese sector stored in ``trade_stock_status.sector_2``);
 useful for fast smoke-testing one sector at a time.  ``--workers`` controls
 the thread-pool size for per-sector processing (default 4).
 
-``--force-replace`` deletes any existing ``stock_trend`` snapshots for the
-target date before persisting.  Default is "fail on conflict" (immutable
-behavior).  Use this flag only when you are certain the previous run is
-stale (e.g. a config change or a JSON bug fix).
+Existing snapshots are immutable; configuration changes create a new model
+version or config hash.
+
+``--force-replace`` deletes existing ``stock_trend`` snapshots for the target
+date before persistence. It is an explicit operational override for stale
+runs; the default remains immutable conflict detection.
 """
 
 from __future__ import annotations
 
 import argparse
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, datetime
+from dataclasses import replace
+from datetime import date, datetime, timedelta
 from uuid import uuid4
 from typing import Any, Callable
+
+import pandas as pd
 
 from data_ingestion.db_config import execute_query, execute_update
 
 from ...snapshot_store import create_run, mark_run_failed, mark_run_succeeded
 from ..config_hash import build_config_hash
+from ..availability import AvailabilityBasis, AvailabilityMetadata, as_shanghai_naive, resolve_availability
+from ..calendar import TradingCalendar
+from ..evaluation.prices import load_authoritative_market_calendar as load_trading_calendar
 from ..orchestrator.store import MySQLSnapshotStore
 from ..status import SnapshotMode
 from .common import (
     load_sector_close_series,
     load_stock_close_series,
+    load_stock_ohlcv_series,
     load_stock_universe,
 )
 from .config import TrendAlphaConfig
@@ -72,7 +85,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--level", type=int, choices=(1, 2), required=True)
     parser.add_argument(
         "--mode",
-        choices=("live_shadow", "backfill"),
+        choices=("live_shadow", "delayed_shadow", "backfill"),
         help="Override the snapshot mode.  LIVE_SHADOW requires today's date unless --today is supplied.",
     )
     parser.add_argument(
@@ -102,11 +115,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--force-replace",
         action="store_true",
-        help=(
-            "Delete any existing stock_trend snapshots for the target date and "
-            "level before persisting.  Required to re-run the same date after a "
-            "code or config change; off by default to preserve immutability."
-        ),
+        help="Delete existing stock_trend snapshots for the target date and level before persisting.",
     )
     return parser
 
@@ -142,11 +151,16 @@ def _backfill_dates(start_date: str, end_date: str, level: int, query: Callable 
     rows = query(
         """SELECT DISTINCT as_of_date FROM research_candidate_snapshot
              WHERE as_of_date BETWEEN %s AND %s AND sector_level=%s
-               AND strategy_type='sector_opportunity' AND snapshot_mode=%s
+               AND strategy_type='sector_opportunity'
              ORDER BY as_of_date""",
-        (start_date, end_date, level, SnapshotMode.BACKFILL.value),
+        (start_date, end_date, level),
     )
     return [str(row["as_of_date"]) for row in rows]
+
+
+def _delayed_availability(target: date, level: int, run_at: datetime, query: Callable) -> AvailabilityMetadata:
+    dates = load_trading_calendar(target, run_at.date() + timedelta(days=14), query, sector_level=level)
+    return resolve_availability(target, AvailabilityBasis.MARKET_CLOSE_1800, TradingCalendar(dates), run_at)
 
 
 def _process_sector(
@@ -179,6 +193,13 @@ def _process_sector(
     stock_close_series = load_stock_close_series(
         [row.stock_code for row in universe], target, query,
     )
+    ohlcv_series = load_stock_ohlcv_series(
+        [row.stock_code for row in universe], target, query,
+    )
+    amount_feed = {
+        code: float(pd.Series([v.get("amount") for v in values.values() if v.get("amount") is not None]).tail(20).median())
+        for code, values in ohlcv_series.items()
+    }
     feature_frame = assemble_features_frame(
         as_of_date=target,
         sector_level=level,
@@ -187,6 +208,8 @@ def _process_sector(
         sector_close_series=sector_close_series,
         stock_close_series=stock_close_series,
         config=config,
+        amount_feed=amount_feed,
+        ohlcv_feed=ohlcv_series,
     )
     if feature_frame.empty:
         return []
@@ -208,28 +231,26 @@ def _process_sector(
         )
         for _, row in scored.iterrows()
     ]
-    if store is not None:
-        persist_trend_candidates(store, snapshots)
     return snapshots
 
 
 def _delete_existing_trend_snapshots(
-    as_of_date: str, level: int, query=execute_query, update=execute_update,
+    as_of_date: str, level: int, mode: SnapshotMode, query=execute_query, update=execute_update,
 ) -> int:
-    """Delete existing stock_trend snapshots for ``as_of_date``/``level``."""
+    """Delete stock_trend snapshots only for one immutable snapshot mode."""
 
     count_row = query(
         "SELECT COUNT(*) AS c FROM research_candidate_snapshot "
-        "WHERE as_of_date=%s AND sector_level=%s AND strategy_type='stock_trend'",
-        (as_of_date, level),
+        "WHERE as_of_date=%s AND sector_level=%s AND strategy_type='stock_trend' AND snapshot_mode=%s",
+        (as_of_date, level, mode.value),
     )
     deleted = int(count_row[0]["c"]) if count_row else 0
     if deleted == 0:
         return 0
     update(
         "DELETE FROM research_candidate_snapshot "
-        "WHERE as_of_date=%s AND sector_level=%s AND strategy_type='stock_trend'",
-        (as_of_date, level),
+        "WHERE as_of_date=%s AND sector_level=%s AND strategy_type='stock_trend' AND snapshot_mode=%s",
+        (as_of_date, level, mode.value),
     )
     return deleted
 
@@ -247,19 +268,20 @@ def run_one_date(
     workers: int = 1,
     sector_filter: str | None = None,
     force_replace: bool = False,
+    now: datetime | None = None,
 ) -> int:
     """Build and persist Trend Alpha SHADOW candidates for ``as_of_date``."""
 
     target = date.fromisoformat(as_of_date)
     validate_mode_for_date(target, mode, today=today)
     config = config or TrendAlphaConfig()
-    if not skip_migrations:
+    if not dry_run and not skip_migrations:
         ensure_research_schema()
     run_id = "dry-run" if dry_run else str(uuid4())
     store = None if dry_run else MySQLSnapshotStore()
     if store is not None:
         if force_replace:
-            deleted = _delete_existing_trend_snapshots(as_of_date, level)
+            deleted = _delete_existing_trend_snapshots(as_of_date, level, mode)
             if deleted:
                 print(f"{as_of_date}: --force-replace deleted {deleted} existing stock_trend rows")
         store.ensure_schema()
@@ -276,7 +298,7 @@ def run_one_date(
             for sector in sectors:
                 snapshots.extend(_process_sector(
                     sector, as_of_date=as_of_date, level=level, mode=mode,
-                    config=config, run_id=run_id, store=store, query=query,
+                    config=config, run_id=run_id, store=None, query=query,
                 ))
         else:
             with ThreadPoolExecutor(max_workers=workers) as pool:
@@ -284,7 +306,7 @@ def run_one_date(
                     pool.submit(
                         _process_sector, sector,
                         as_of_date=as_of_date, level=level, mode=mode,
-                        config=config, run_id=run_id, store=store, query=query,
+                        config=config, run_id=run_id, store=None, query=query,
                     )
                     for sector in sectors
                 ]
@@ -294,6 +316,20 @@ def run_one_date(
         if store is not None:
             mark_run_failed(run_id, str(exc))
         raise
+    if snapshots and mode is SnapshotMode.DELAYED_SHADOW:
+        availability = _delayed_availability(target, level, as_shanghai_naive(now), query)
+        snapshots = [
+            replace(
+                snapshot,
+                data_available_at=availability.data_available_at,
+                run_at=availability.run_at,
+                execution_eligible_at=availability.execution_eligible_at,
+                availability_basis=availability.availability_basis,
+            )
+            for snapshot in snapshots
+        ]
+    if store is not None:
+        persist_trend_candidates(store, snapshots)
     if store is not None:
         mark_run_succeeded(run_id, len(snapshots), 0)
     persist_label = "dry-run" if dry_run else f"persisted {len(snapshots)}"

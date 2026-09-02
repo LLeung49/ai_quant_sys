@@ -1,10 +1,12 @@
 """Build immutable Sector Opportunity candidates from v1-owned sector rows."""
 
 from collections.abc import Iterable, Mapping
+from dataclasses import replace
 from datetime import date
 from typing import Any
 
 from ..config_hash import build_config_hash
+from ..availability import AvailabilityMetadata
 from ..contracts import CandidateSnapshot
 from ..snapshot import SnapshotStore
 from ..status import SnapshotMode
@@ -24,6 +26,8 @@ def build_sector_opportunity_snapshots(
     *,
     model_version: str = "sector_opportunity_v1",
     snapshot_mode: SnapshotMode = SnapshotMode.LIVE_SHADOW,
+    availability: AvailabilityMetadata | None = None,
+    persist: bool = True,
 ) -> list[CandidateSnapshot]:
     """Join exact-name v2 evidence onto the v1 sector universe and persist candidates."""
     v2_by_sector = {str(row["sector_name"]): row for row in v2_rows}
@@ -60,7 +64,15 @@ def build_sector_opportunity_snapshots(
             reasons_json=evidence.reasons or (evidence.primary_reason,),
             risk_flags_json=evidence.risk_flags,
         )
-        snapshots.append(persist_sector_opportunity(store, snapshot))
+        if availability is not None:
+            snapshot = replace(
+                snapshot,
+                data_available_at=availability.data_available_at,
+                run_at=availability.run_at,
+                execution_eligible_at=availability.execution_eligible_at,
+                availability_basis=availability.availability_basis,
+            )
+        snapshots.append(persist_sector_opportunity(store, snapshot) if persist else snapshot)
     return snapshots
 
 
