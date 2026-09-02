@@ -312,6 +312,9 @@ def test_execution_converts_signal_atr_and_rejects_missing_atr_payload() -> None
     next_bar = _bar(adjustment_ratio=0.25)
     result = ExecutionSimulator(...).execute((intent,), next_bar, _state())
     assert result.raw_atr20 == pytest.approx(0.20)
+    assert result.shares == 1_500  # budget=120_000, risk_per_unit=0.005, stop_n=2.0; 100-share flooring
+    assert result.stop_distance == pytest.approx(0.20 * 2.0)
+    assert result.risk_validation_distance == pytest.approx(0.20 * 2.0)
     assert result.fills
     missing = replace(intent, signal_atr20=None)
     assert not ExecutionSimulator(...).execute((missing,), next_bar, _state()).fills
