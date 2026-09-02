@@ -230,17 +230,15 @@ git commit -m "feat: implement adaptive grid decisions"
 - Test: `tests/asset_allocation/etf_adaptive/test_trend.py`
 
 **Interfaces:**
-- Produces: `trend_entry_allowed`, `calculate_unit_shares`, `evaluate_trend_close`, and `apply_trend_fill`.
+- Produces: `trend_entry_allowed`, signal-coordinate `OrderIntent` creation, `evaluate_trend_close`, and `apply_trend_fill`; TREND does not size raw lots.
 - Consumes: frozen config/state/snapshot contracts.
 
 - [ ] **Step 1: Write failing risk-size and exit-priority tests**
 
 ```python
-def test_unit_size_converts_signal_atr_using_next_execution_ratio() -> None:
-    signal_atr20 = 0.05
-    raw_atr20 = to_raw_distance(signal_atr20, adjustment_ratio=0.25)
-    assert raw_atr20 == pytest.approx(0.20)
-    assert calculate_unit_shares(120_000, 0.005, raw_atr20, stop_n=2.0) == 1_500
+def test_trend_intent_carries_signal_atr_until_execution() -> None:
+    intent = evaluate_trend_close(_trend_state(), _snapshot(atr20=0.05), eligible=True).orders[0]
+    assert intent.signal_atr20 == pytest.approx(0.05)
 
 
 def test_trend_exit_wins_over_add_signal() -> None:
@@ -259,14 +257,6 @@ Expected: FAIL because TREND functions are absent.
 - [ ] **Step 3: Implement entry, units, adds, and exits**
 
 ```python
-def calculate_unit_shares(budget: float, risk_per_unit: float, raw_atr20: float, stop_n: float) -> int:
-    stop_distance = stop_n * raw_atr20
-    return 0 if stop_distance <= 0 else max(0, int((budget * risk_per_unit / stop_distance) // 100) * 100)
-
-raw_atr20 = to_raw_distance(signal_atr20, next_bar.adjustment_ratio)
-shares = calculate_unit_shares(budget, risk_per_unit, raw_atr20, stop_n)
-
-
 def trend_entry_allowed(snapshot: IndicatorSnapshot, config: TrendConfig) -> bool:
     base = snapshot.adx > 25 and snapshot.close > snapshot.prior_high_20
     macd_ok = not config.require_macd_bullish or snapshot.dif > snapshot.dea
@@ -274,7 +264,7 @@ def trend_entry_allowed(snapshot: IndicatorSnapshot, config: TrendConfig) -> boo
     return base and macd_ok and amount_ok
 ```
 
-Complete signal price thresholds must use `to_raw_price`; signal-only comparisons remain in the signal coordinate.
+TREND stores complete signal-coordinate thresholds, `signal_atr20`, target budget, risk fraction, and signal date in the pending intent. It does not receive `next_bar`, call conversion helpers, calculate shares, or construct raw stops. `ExecutionSimulator.execute(intents, next_bar, state)` is the sole owner of `to_raw_distance(signal_atr20, next_bar.adjustment_ratio)`, `to_raw_price(signal_threshold, next_bar.adjustment_ratio)`, raw lot sizing, raw stop construction, slippage, commission, and pre-fill risk validation.
 
 Store each unit's actual fill, signal-coordinate fill, signal-day ATR, shares, and next-add reference. Implement one-add-per-day, aggregate stop-risk cap `budget * risk_per_unit * max_units`, monotone stops, prior-10-low exit, and exact MACD dead-cross exit.
 
@@ -315,6 +305,16 @@ def test_signal_levels_rebase_without_changing_raw_cost_basis() -> None:
     rebased = rebase_signal_state(state, old_ratio=0.25, new_ratio=0.20)
     assert rebased.grid_anchor == pytest.approx(0.8)
     assert rebased.raw_average_cost == 4.0
+
+
+def test_execution_converts_signal_atr_and_rejects_missing_atr_payload() -> None:
+    intent = _trend_intent(signal_atr20=0.05, signal_date=date(2026, 9, 1))
+    next_bar = _bar(adjustment_ratio=0.25)
+    result = ExecutionSimulator(...).execute((intent,), next_bar, _state())
+    assert result.raw_atr20 == pytest.approx(0.20)
+    assert result.fills
+    missing = replace(intent, signal_atr20=None)
+    assert not ExecutionSimulator(...).execute((missing,), next_bar, _state()).fills
 ```
 
 - [ ] **Step 2: Run execution tests and verify failure**
