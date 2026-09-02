@@ -99,7 +99,10 @@ def test_provider_loads_one_row_per_coordinate_and_uses_same_day_ratio() -> None
     assert bar.amount == pytest.approx(20_000_000.0)
     assert bar.suspended is False
     assert bar.adjustment_ratio == pytest.approx(0.25)
-    assert provider.last_quality_issues == ()
+    assert [issue.code for issue in provider.last_quality_issues] == [
+        "unverified_pre_close"
+    ]
+    assert provider.last_quality_issues[0].trade_date == END
     assert len(query.calls) == 3
     assert "FROM trade_stock_daily_raw" in query.calls[0][0]
     assert "FROM trade_stock_daily_qfq" in query.calls[1][0]
@@ -112,6 +115,20 @@ def test_provider_loads_one_row_per_coordinate_and_uses_same_day_ratio() -> None
 def test_signal_coordinate_round_trip_uses_same_day_ratio() -> None:
     assert to_signal_price(4.08, 0.25) == pytest.approx(1.02)
     assert to_raw_distance(0.05, 0.25) == pytest.approx(0.20)
+
+
+@pytest.mark.parametrize(
+    ("conversion", "left", "right"),
+    [
+        (to_signal_price, 1e308, 1e308),
+        (to_raw_distance, 1e308, 1e-308),
+    ],
+)
+def test_coordinate_conversions_reject_non_finite_results(
+    conversion: object, left: float, right: float
+) -> None:
+    with pytest.raises(ValueError, match="result must be finite"):
+        conversion(left, right)  # type: ignore[operator]
 
 
 def test_provider_rejects_dates_missing_from_either_price_coordinate() -> None:
@@ -260,6 +277,38 @@ def test_provider_reports_pre_close_and_adjustment_provenance_deterministically(
     ]
 
 
+def test_first_bar_pre_close_is_unverified_even_when_later_bar_confirms() -> None:
+    raw = [
+        _raw_row(
+            START,
+            open_price=Decimal("3.90"),
+            high_price=Decimal("4.10"),
+            low_price=Decimal("3.80"),
+            close_price=Decimal("4.00"),
+            pre_close=Decimal("3.90"),
+        ),
+        _raw_row(pre_close=Decimal("4.00")),
+    ]
+    qfq = [
+        _qfq_row(
+            START,
+            open_price=Decimal("0.975"),
+            high_price=Decimal("1.025"),
+            low_price=Decimal("0.950"),
+            close_price=Decimal("1.000"),
+        ),
+        _qfq_row(),
+    ]
+    provider = AdaptiveMarketDataProvider(query=QueryFixture(raw=raw, qfq=qfq))
+
+    provider.load_bars(CODE, START, END)
+
+    assert [issue.code for issue in provider.last_quality_issues] == [
+        "unverified_pre_close"
+    ]
+    assert provider.last_quality_issues[0].trade_date == START
+
+
 def test_load_metadata_reads_only_rows_listed_by_the_as_of_date() -> None:
     metadata_rows = [
         {
@@ -339,6 +388,7 @@ def test_load_actions_converts_cash_and_share_events_without_date_substitution()
     assert actions[1].share_multiplier == Decimal("1.15")
     assert len(query.calls) == 1
     assert "FROM trade_corporate_action" in query.calls[0][0]
+    assert "share_reform_flag" in query.calls[0][0]
     assert query.calls[0][1] == (CODE, START, END)
 
 
@@ -382,6 +432,81 @@ def test_load_actions_wraps_malformed_source_identity_as_data_quality_error() ->
     }
 
     with pytest.raises(DataQualityError, match="invalid corporate action stock_code"):
+        AdaptiveMarketDataProvider(
+            query=QueryFixture(actions=[row])
+        ).load_actions(CODE, START, END)
+
+
+@pytest.mark.parametrize(
+    "missing_field",
+    [
+        "cash_dividend_per_share",
+        "stock_bonus_per_share",
+        "stock_gift_per_share",
+        "rights_issue_per_share",
+    ],
+)
+def test_load_actions_rejects_missing_action_rates(missing_field: str) -> None:
+    row: dict[str, object] = {
+        "stock_code": CODE,
+        "ex_date": END,
+        "cash_dividend_per_share": Decimal("0.08"),
+        "stock_bonus_per_share": Decimal("0"),
+        "stock_gift_per_share": Decimal("0"),
+        "rights_issue_per_share": Decimal("0"),
+        "rights_issue_price": None,
+        "share_reform_flag": 0,
+    }
+    row[missing_field] = None
+
+    with pytest.raises(DataQualityError, match="missing corporate action value"):
+        AdaptiveMarketDataProvider(
+            query=QueryFixture(actions=[row])
+        ).load_actions(CODE, START, END)
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        ({"rights_issue_price": Decimal("2.50")}, "unsupported rights issue"),
+        ({"rights_issue_price": "bad"}, "invalid rights_issue_price"),
+        ({"share_reform_flag": 1}, "unsupported corporate action payload"),
+    ],
+)
+def test_load_actions_rejects_unmodelled_payload_fields(
+    overrides: dict[str, object], message: str
+) -> None:
+    row: dict[str, object] = {
+        "stock_code": CODE,
+        "ex_date": END,
+        "cash_dividend_per_share": Decimal("0"),
+        "stock_bonus_per_share": Decimal("0"),
+        "stock_gift_per_share": Decimal("0"),
+        "rights_issue_per_share": Decimal("0"),
+        "rights_issue_price": None,
+        "share_reform_flag": 0,
+    }
+    row.update(overrides)
+
+    with pytest.raises(DataQualityError, match=message):
+        AdaptiveMarketDataProvider(
+            query=QueryFixture(actions=[row])
+        ).load_actions(CODE, START, END)
+
+
+def test_load_actions_rejects_all_zero_unmodelled_action_row() -> None:
+    row: dict[str, object] = {
+        "stock_code": CODE,
+        "ex_date": END,
+        "cash_dividend_per_share": Decimal("0"),
+        "stock_bonus_per_share": Decimal("0"),
+        "stock_gift_per_share": Decimal("0"),
+        "rights_issue_per_share": Decimal("0"),
+        "rights_issue_price": None,
+        "share_reform_flag": 0,
+    }
+
+    with pytest.raises(DataQualityError, match="unmodelled corporate action"):
         AdaptiveMarketDataProvider(
             query=QueryFixture(actions=[row])
         ).load_actions(CODE, START, END)

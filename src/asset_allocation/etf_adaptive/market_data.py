@@ -51,7 +51,7 @@ ORDER BY stock_code
 ACTIONS_SQL = """
 SELECT stock_code, ex_date, cash_dividend_per_share,
        stock_bonus_per_share, stock_gift_per_share,
-       rights_issue_per_share, rights_issue_price
+       rights_issue_per_share, rights_issue_price, share_reform_flag
 FROM trade_corporate_action
 WHERE stock_code = %s AND ex_date BETWEEN %s AND %s
   AND event_status = 'effective' AND data_source = 'xtquant'
@@ -113,7 +113,7 @@ def _as_optional_text(value: object) -> str | None:
 
 def _as_non_negative_decimal(value: object, field_name: str) -> Decimal:
     if value is None:
-        return Decimal(0)
+        raise ValueError(f"missing corporate action value: {field_name}")
     if isinstance(value, bool):
         raise ValueError(f"invalid {field_name}")
     try:
@@ -145,7 +145,10 @@ def to_signal_price(raw_price: float, adjustment_ratio: float) -> float:
 
     raw = _positive_finite(raw_price, "raw_price")
     ratio = _positive_finite(adjustment_ratio, "adjustment_ratio")
-    return raw * ratio
+    result = raw * ratio
+    if not math.isfinite(result):
+        raise ValueError("result must be finite")
+    return result
 
 
 def to_raw_distance(signal_distance: float, adjustment_ratio: float) -> float:
@@ -153,7 +156,10 @@ def to_raw_distance(signal_distance: float, adjustment_ratio: float) -> float:
 
     distance = _non_negative_finite(signal_distance, "signal_distance")
     ratio = _positive_finite(adjustment_ratio, "adjustment_ratio")
-    return distance / ratio
+    result = distance / ratio
+    if not math.isfinite(result):
+        raise ValueError("result must be finite")
+    return result
 
 
 class AdaptiveMarketDataProvider:
@@ -352,7 +358,16 @@ class AdaptiveMarketDataProvider:
                         )
                     )
                 else:
-                    if prior_raw_close is not None and not math.isclose(
+                    if prior_raw_close is None:
+                        issues.append(
+                            DataQualityIssue(
+                                "unverified_pre_close",
+                                code,
+                                day,
+                                "raw pre_close cannot be verified without a preceding loaded close",
+                            )
+                        )
+                    elif not math.isclose(
                         pre_close,
                         prior_raw_close,
                         rel_tol=self._ratio_tolerance,
@@ -566,13 +581,32 @@ class AdaptiveMarketDataProvider:
                     row.get("rights_issue_per_share"),
                     "rights_issue_per_share",
                 )
+                rights_price_value = row.get("rights_issue_price")
+                rights_price = (
+                    None
+                    if rights_price_value is None
+                    else _as_non_negative_decimal(
+                        rights_price_value, "rights_issue_price"
+                    )
+                )
+                share_reform = _as_bool(
+                    row.get("share_reform_flag", False),
+                    "share_reform_flag",
+                )
             except ValueError as exc:
                 self._fail("invalid_corporate_action_value", code, str(exc), effective_date)
-            if rights > 0:
+            if rights > 0 or (rights_price is not None and rights_price > 0):
                 self._fail(
                     "unsupported_rights_issue",
                     code,
                     "unsupported rights issue",
+                    effective_date,
+                )
+            if share_reform:
+                self._fail(
+                    "unsupported_corporate_action_payload",
+                    code,
+                    "unsupported corporate action payload",
                     effective_date,
                 )
             if cash > 0:
@@ -595,5 +629,12 @@ class AdaptiveMarketDataProvider:
                         None,
                         share_multiplier,
                     )
+                )
+            if cash == 0 and share_multiplier == 1:
+                self._fail(
+                    "unmodelled_corporate_action",
+                    code,
+                    "unmodelled corporate action",
+                    effective_date,
                 )
         return tuple(actions)
