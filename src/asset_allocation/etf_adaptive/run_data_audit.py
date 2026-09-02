@@ -17,6 +17,9 @@ from .market_data import AdaptiveMarketDataProvider
 from .universe import evaluate_eligibility
 
 
+_NON_MATERIAL_QUALITY_REASONS = frozenset({"unverified_pre_close"})
+
+
 class AuditProvider(Protocol):
     last_quality_issues: tuple[DataQualityIssue, ...]
 
@@ -65,19 +68,26 @@ def audit_universe(
     date_coverage: dict[str, DateCoverage] = {}
     data_quality_by_reason: dict[str, int] = {}
 
-    def record_quality_issues(issues: tuple[DataQualityIssue, ...]) -> None:
+    def record_quality_issue(reason: str, stock_code: str) -> None:
+        data_quality_by_reason[reason] = data_quality_by_reason.get(reason, 0) + 1
+        examples_by_reason.setdefault(reason, set()).add(stock_code)
+
+    def record_quality_issues(issues: tuple[DataQualityIssue, ...]) -> int:
+        material_issue_count = 0
         for issue in issues:
             reason = issue.code.value if isinstance(issue.code, Enum) else issue.code
-            data_quality_by_reason[reason] = data_quality_by_reason.get(reason, 0) + 1
-            examples_by_reason.setdefault(reason, set()).add(issue.stock_code)
+            if reason in _NON_MATERIAL_QUALITY_REASONS:
+                continue
+            record_quality_issue(reason, issue.stock_code)
+            material_issue_count += 1
+        return material_issue_count
 
     def record_quality_error(exc: DataQualityError) -> None:
         issues = exc.issues or provider.last_quality_issues
-        if issues:
-            record_quality_issues(issues)
+        if issues and record_quality_issues(issues):
             return
         reason = "unclassified_data_quality_error"
-        data_quality_by_reason[reason] = data_quality_by_reason.get(reason, 0) + 1
+        record_quality_issue(reason, "<unknown>")
 
     try:
         metadata_rows = sorted(
@@ -104,14 +114,25 @@ def audit_universe(
             record_quality_error(exc)
             continue
         record_quality_issues(provider.last_quality_issues)
-        trade_dates = sorted(bar.trade_date for bar in bars)
+        point_in_time_bars = tuple(
+            bar for bar in bars if bar.trade_date <= as_of_date
+        )
+        future_bars = tuple(bar for bar in bars if bar.trade_date > as_of_date)
+        trade_dates = sorted(bar.trade_date for bar in point_in_time_bars)
         date_coverage[metadata.stock_code] = DateCoverage(
             first_trade_date=trade_dates[0].isoformat() if trade_dates else None,
             last_trade_date=trade_dates[-1].isoformat() if trade_dates else None,
             session_count=len(set(trade_dates)),
         )
-        eligibility = evaluate_eligibility(metadata, bars, as_of_date)
-        if eligibility.eligible:
+        eligibility = evaluate_eligibility(metadata, point_in_time_bars, as_of_date)
+        if future_bars:
+            reason = "bar_date_after_as_of_date"
+            rejected_count += 1
+            rejected_by_reason[reason] = rejected_by_reason.get(reason, 0) + 1
+            examples_by_reason.setdefault(reason, set()).add(metadata.stock_code)
+            for _ in future_bars:
+                record_quality_issue(reason, metadata.stock_code)
+        elif eligibility.eligible:
             eligible_count += 1
             exposure_group = eligibility.exposure_group
             if exposure_group is not None:

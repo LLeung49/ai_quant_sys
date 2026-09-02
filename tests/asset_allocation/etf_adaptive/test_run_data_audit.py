@@ -13,6 +13,13 @@ from asset_allocation.etf_adaptive.contracts import (
     DualPriceBar,
     ETFMetadata,
 )
+from asset_allocation.etf_adaptive.market_data import (
+    LATEST_ACTION_SQL,
+    METADATA_SQL,
+    QFQ_BARS_SQL,
+    RAW_BARS_SQL,
+    AdaptiveMarketDataProvider,
+)
 from asset_allocation.etf_adaptive.run_data_audit import audit_universe
 
 
@@ -298,3 +305,91 @@ def test_audit_fails_closed_for_an_unclassified_quality_error() -> None:
 
     assert report.data_quality_error_count == 1
     assert report.data_quality_by_reason == {"unclassified_data_quality_error": 1}
+
+
+class FutureBarProvider(ProviderFixture):
+    def load_bars(
+        self, stock_code: str, start_date: date, end_date: date
+    ) -> tuple[DualPriceBar, ...]:
+        return super().load_bars(stock_code, start_date, end_date) + (
+            _bar(stock_code, AS_OF_DATE + timedelta(days=1)),
+        )
+
+
+def test_audit_rejects_future_bars_and_excludes_them_from_coverage() -> None:
+    report = audit_universe(AS_OF_DATE, FutureBarProvider())
+
+    assert report.eligible_count == 0
+    assert report.rejected_by_reason == {
+        "bar_date_after_as_of_date": 2,
+        "not_domestic_equity_etf": 1,
+    }
+    assert report.data_quality_error_count == 2
+    assert report.data_quality_by_reason == {"bar_date_after_as_of_date": 2}
+    assert report.date_coverage["510300.SH"].last_trade_date == "2026-09-01"
+    assert report.date_coverage["510300.SH"].session_count == 252
+
+
+def _adaptive_provider_with_only_first_bar_provenance_warning() -> AdaptiveMarketDataProvider:
+    first_day = AS_OF_DATE - timedelta(days=251)
+    days = tuple(first_day + timedelta(days=offset) for offset in range(252))
+
+    def query(sql: str, params: tuple[object, ...]) -> tuple[dict[str, object], ...]:
+        if sql == METADATA_SQL:
+            return (
+                {
+                    "stock_code": "510300.SH",
+                    "fund_name": "CSI 300 ETF",
+                    "listing_date": first_day,
+                },
+            )
+        if sql == RAW_BARS_SQL:
+            return tuple(
+                {
+                    "stock_code": "510300.SH",
+                    "trade_date": day,
+                    "open_price": 4.0,
+                    "high_price": 4.4,
+                    "low_price": 3.6,
+                    "close_price": 4.0,
+                    "amount": 20_000_000.0,
+                    "pre_close": 4.0,
+                    "suspend_flag": False,
+                }
+                for day in days
+            )
+        if sql == QFQ_BARS_SQL:
+            return tuple(
+                {
+                    "stock_code": "510300.SH",
+                    "trade_date": day,
+                    "open_price": 1.0,
+                    "high_price": 1.1,
+                    "low_price": 0.9,
+                    "close_price": 1.0,
+                    "adjustment_asof": AS_OF_DATE,
+                }
+                for day in days
+            )
+        if sql == LATEST_ACTION_SQL:
+            return ({"latest_action_date": None},)
+        raise AssertionError(f"unexpected query: {sql!r}, {params!r}")
+
+    return AdaptiveMarketDataProvider(query=query)
+
+
+def test_main_returns_zero_for_adaptive_provider_first_bar_provenance_warning(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = _adaptive_provider_with_only_first_bar_provenance_warning()
+    output = tmp_path / "audit.json"
+    monkeypatch.setattr(audit_cli, "default_provider", lambda: provider)
+
+    exit_code = audit_cli.main(
+        ["--as-of-date", "2026-09-01", "--output-json", str(output)]
+    )
+
+    assert provider.last_quality_issues[0].code == "unverified_pre_close"
+    assert exit_code == 0
+    assert json.loads(output.read_text(encoding="utf-8"))["data_quality_error_count"] == 0
