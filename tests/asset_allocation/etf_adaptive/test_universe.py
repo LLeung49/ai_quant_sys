@@ -32,9 +32,10 @@ def _bar(
     amount: float = 12_000_000.0,
     *,
     suspended: bool = False,
+    stock_code: str = "510300.SH",
 ) -> DualPriceBar:
     return DualPriceBar(
-        stock_code="510300.SH",
+        stock_code=stock_code,
         trade_date=trade_date,
         signal_open=1.0,
         signal_high=1.1,
@@ -55,9 +56,17 @@ def _amount_bars(
     amount: float = 12_000_000.0,
     *,
     end_date: date = AS_OF_DATE,
+    stock_code: str = "510300.SH",
 ) -> list[DualPriceBar]:
     start_date = end_date - timedelta(days=count - 1)
-    return [_bar(start_date + timedelta(days=offset), amount) for offset in range(count)]
+    return [
+        _bar(
+            start_date + timedelta(days=offset),
+            amount,
+            stock_code=stock_code,
+        )
+        for offset in range(count)
+    ]
 
 
 def test_classification_uses_index_code_then_deterministic_name_fallback() -> None:
@@ -109,6 +118,32 @@ def test_code_prefix_is_only_an_exchange_fund_gate_and_fallback_fails_closed(
     assert classify_etf(metadata) is None
 
 
+def test_shanghai_lof_prefix_is_not_accepted_as_an_etf() -> None:
+    metadata = _metadata(
+        "501050.SH",
+        "沪深300ETF",
+        tracking_index_code="000300.SH",
+    )
+
+    assert classify_etf(metadata) is None
+
+
+@pytest.mark.parametrize("cross_border_token", ["港股", "香港"])
+def test_hong_kong_name_and_index_fallbacks_are_excluded(
+    cross_border_token: str,
+) -> None:
+    assert classify_etf(
+        _metadata("159900.SZ", f"{cross_border_token}红利ETF")
+    ) is None
+    assert classify_etf(
+        _metadata(
+            "159901.SZ",
+            "沪深300ETF",
+            tracking_index_name=f"{cross_border_token}价值指数",
+        )
+    ) is None
+
+
 def test_eligibility_uses_only_bars_available_on_as_of_date() -> None:
     bars = list(reversed(_amount_bars(253))) + [
         _bar(date(2026, 9, 2), amount=0.0, suspended=True)
@@ -121,6 +156,36 @@ def test_eligibility_uses_only_bars_available_on_as_of_date() -> None:
     assert result.history_session_count == 253
     assert result.average_amount_20d == 12_000_000.0
     assert result.classification_provenance == "name_fallback"
+
+
+def test_foreign_entity_bar_is_reported_and_never_counts_as_history() -> None:
+    bars = _amount_bars(251)
+    bars.append(
+        _bar(
+            AS_OF_DATE - timedelta(days=251),
+            stock_code="159905.SZ",
+        )
+    )
+
+    result = evaluate_eligibility(_metadata(), bars, AS_OF_DATE)
+
+    assert result.eligible is False
+    assert result.history_session_count == 251
+    assert "bar_stock_code_mismatch" in result.rejection_reasons
+    assert "listing_history_lt_252" in result.rejection_reasons
+
+
+def test_duplicate_trade_date_is_reported_and_counts_as_one_session() -> None:
+    bars = _amount_bars(251)
+    bars.append(_bar(bars[0].trade_date, amount=50_000_000.0))
+
+    result = evaluate_eligibility(_metadata(), bars, AS_OF_DATE)
+
+    assert result.eligible is False
+    assert result.history_session_count == 251
+    assert result.average_amount_20d == 12_000_000.0
+    assert "duplicate_trade_date" in result.rejection_reasons
+    assert "listing_history_lt_252" in result.rejection_reasons
 
 
 def test_structured_index_classification_records_metadata_provenance() -> None:
@@ -173,7 +238,7 @@ def test_history_liquidity_and_latest_tradability_rejections_are_explicit(
 def test_unclassified_fund_is_rejected_without_using_provenance_as_a_reason() -> None:
     result = evaluate_eligibility(
         _metadata("510999.SH", "科技行业ETF"),
-        _amount_bars(252),
+        _amount_bars(252, stock_code="510999.SH"),
         AS_OF_DATE,
     )
 

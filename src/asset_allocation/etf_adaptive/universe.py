@@ -10,7 +10,11 @@ from typing import Sequence
 from .contracts import DualPriceBar, ETFEligibility, ETFMetadata
 
 
-_EXCHANGE_ETF_CODE = re.compile(r"^(?:5\d{5}\.SH|15\d{4}\.SZ)$", re.IGNORECASE)
+_EXCHANGE_ETF_CODE = re.compile(
+    r"^(?:(?:510|511|512|513|515|516|517|518|560|561|562|563|588|589)"
+    r"\d{3}\.SH|159\d{3}\.SZ)$",
+    re.IGNORECASE,
+)
 
 _METADATA_EXCLUSION_TOKENS = (
     "债券",
@@ -25,6 +29,8 @@ _METADATA_EXCLUSION_TOKENS = (
     "QDII",
     "反向",
     "杠杆",
+    "港股",
+    "香港",
 )
 _INDEX_CODE_EXCLUSION_TOKENS = (
     "NDX",
@@ -128,14 +134,48 @@ def evaluate_eligibility(
 ) -> ETFEligibility:
     """Evaluate classification, history, liquidity, and tradability as of a date."""
 
-    observed = sorted(
+    available = sorted(
         (bar for bar in bars if bar.trade_date <= as_of_date),
-        key=lambda bar: bar.trade_date,
+        key=lambda bar: (
+            bar.trade_date,
+            bar.stock_code,
+            bar.amount,
+            bar.suspended,
+            bar.signal_open,
+            bar.signal_high,
+            bar.signal_low,
+            bar.signal_close,
+            bar.raw_open,
+            bar.raw_high,
+            bar.raw_low,
+            bar.raw_close,
+            bar.adjustment_ratio,
+        ),
     )
+    expected_code = metadata.stock_code.strip().upper()
+    has_foreign_bar = any(
+        bar.stock_code.strip().upper() != expected_code for bar in available
+    )
+    matching = [
+        bar for bar in available if bar.stock_code.strip().upper() == expected_code
+    ]
+    observed_by_date: dict[date, DualPriceBar] = {}
+    has_duplicate_date = False
+    for bar in matching:
+        if bar.trade_date in observed_by_date:
+            has_duplicate_date = True
+            continue
+        observed_by_date[bar.trade_date] = bar
+    observed = list(observed_by_date.values())
+
     category, provenance = _classification(metadata)
     reasons: list[str] = []
     if category is None:
         reasons.append("not_domestic_equity_etf")
+    if has_foreign_bar:
+        reasons.append("bar_stock_code_mismatch")
+    if has_duplicate_date:
+        reasons.append("duplicate_trade_date")
     if len(observed) < 252:
         reasons.append("listing_history_lt_252")
 
