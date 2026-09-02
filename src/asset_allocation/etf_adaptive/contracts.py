@@ -17,6 +17,26 @@ def _validate_optional_text(value: str | None, field_name: str) -> None:
         _require_non_empty_text(value, field_name)
 
 
+def _require_date(value: date, field_name: str) -> None:
+    if not isinstance(value, date):
+        raise ValueError(f"{field_name} must be a date")
+
+
+def _require_bool(value: bool, field_name: str) -> None:
+    if not isinstance(value, bool):
+        raise ValueError(f"{field_name} must be a bool")
+
+
+def _validate_finite_float(
+    value: float, field_name: str, *, allow_zero: bool
+) -> None:
+    if not isinstance(value, float) or not math.isfinite(value) or (
+        value < 0 if allow_zero else value <= 0
+    ):
+        qualifier = "non-negative" if allow_zero else "positive"
+        raise ValueError(f"{field_name} must be a {qualifier} finite number")
+
+
 def _validate_positive_decimal(value: Decimal, field_name: str) -> None:
     if not isinstance(value, Decimal) or not value.is_finite() or value <= 0:
         raise ValueError(f"{field_name} must be a positive finite Decimal")
@@ -39,6 +59,9 @@ class DualPriceBar:
     adjustment_ratio: float
 
     def __post_init__(self) -> None:
+        _require_non_empty_text(self.stock_code, "stock_code")
+        _require_date(self.trade_date, "trade_date")
+        _require_bool(self.suspended, "suspended")
         prices = (
             self.signal_open,
             self.signal_high,
@@ -49,12 +72,15 @@ class DualPriceBar:
             self.raw_low,
             self.raw_close,
         )
-        if any(not math.isfinite(value) or value <= 0 for value in prices):
+        if any(
+            not isinstance(value, float) or not math.isfinite(value) or value <= 0
+            for value in prices
+        ):
             raise ValueError("prices must be positive finite numbers")
-        if not math.isfinite(self.amount) or self.amount < 0:
-            raise ValueError("amount must be a non-negative finite number")
-        if not math.isfinite(self.adjustment_ratio) or self.adjustment_ratio <= 0:
-            raise ValueError("adjustment_ratio must be positive")
+        _validate_finite_float(self.amount, "amount", allow_zero=True)
+        _validate_finite_float(
+            self.adjustment_ratio, "adjustment_ratio", allow_zero=False
+        )
 
 
 @dataclass(frozen=True)
@@ -71,9 +97,12 @@ class ETFMetadata:
     def __post_init__(self) -> None:
         _require_non_empty_text(self.stock_code, "stock_code")
         _require_non_empty_text(self.fund_name, "fund_name")
+        _require_date(self.listing_date, "listing_date")
         _validate_optional_text(self.fund_type, "fund_type")
         _validate_optional_text(self.tracking_index_code, "tracking_index_code")
         _validate_optional_text(self.tracking_index_name, "tracking_index_name")
+        _require_bool(self.is_cross_border, "is_cross_border")
+        _require_bool(self.is_leveraged, "is_leveraged")
 
 
 class CorporateActionType(str, Enum):
@@ -91,6 +120,7 @@ class CorporateAction:
 
     def __post_init__(self) -> None:
         _require_non_empty_text(self.stock_code, "stock_code")
+        _require_date(self.effective_date, "effective_date")
         if not isinstance(self.action_type, CorporateActionType):
             raise ValueError("action_type must be a CorporateActionType")
         _validate_positive_decimal(self.share_multiplier, "share_multiplier")
@@ -111,6 +141,7 @@ class ETFEligibility:
     average_amount_20d: float | None
 
     def __post_init__(self) -> None:
+        _require_bool(self.eligible, "eligible")
         if not isinstance(self.rejection_reasons, tuple):
             raise ValueError("rejection_reasons must be a tuple")
         for reason in self.rejection_reasons:
@@ -120,12 +151,21 @@ class ETFEligibility:
         if not self.eligible and not self.rejection_reasons:
             raise ValueError("ineligible decisions must have rejection reasons")
         _validate_optional_text(self.exposure_group, "exposure_group")
-        if isinstance(self.history_session_count, bool) or self.history_session_count < 0:
+        if not isinstance(self.history_session_count, int) or isinstance(
+            self.history_session_count, bool
+        ) or self.history_session_count < 0:
             raise ValueError("history_session_count must be a non-negative integer")
-        if self.average_amount_20d is not None and (
-            not math.isfinite(self.average_amount_20d) or self.average_amount_20d < 0
-        ):
-            raise ValueError("average_amount_20d must be a non-negative finite number")
+        if self.average_amount_20d is not None:
+            _validate_finite_float(
+                self.average_amount_20d, "average_amount_20d", allow_zero=True
+            )
+        if self.eligible:
+            if self.history_session_count < 252:
+                raise ValueError("eligible decisions require at least 252 history sessions")
+            if self.average_amount_20d is None or self.average_amount_20d < 10_000_000:
+                raise ValueError(
+                    "eligible decisions require a 20-session average amount of at least 10000000"
+                )
 
 
 @dataclass(frozen=True)
@@ -136,9 +176,16 @@ class DataQualityIssue:
     message: str
 
     def __post_init__(self) -> None:
-        code = self.code.value if isinstance(self.code, Enum) else self.code
+        if isinstance(self.code, Enum):
+            code = self.code.value
+            if not isinstance(code, str):
+                raise ValueError("code enums must have string values")
+        else:
+            code = self.code
         _require_non_empty_text(code, "code")
         _require_non_empty_text(self.stock_code, "stock_code")
+        if self.trade_date is not None:
+            _require_date(self.trade_date, "trade_date")
         _require_non_empty_text(self.message, "message")
 
 
@@ -147,6 +194,7 @@ class DataQualityError(ValueError):
 
     def __init__(self, message: str, issues: tuple[DataQualityIssue, ...] = ()) -> None:
         super().__init__(message)
+        _require_non_empty_text(message, "message")
         if not isinstance(issues, tuple) or not all(
             isinstance(issue, DataQualityIssue) for issue in issues
         ):
