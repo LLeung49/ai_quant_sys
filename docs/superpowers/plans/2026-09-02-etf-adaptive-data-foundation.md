@@ -33,7 +33,7 @@
 - Produces: `DualPriceBar`, `CorporateAction`, `ETFMetadata`, `ETFEligibility`, and `DataQualityIssue` dataclasses plus `DataQualityError`.
 - Consumes: standard-library `date`, `Decimal`, and `Enum` only.
 
-- [ ] **Step 1: Write the failing contracts test**
+- [x] **Step 1: Write the failing contracts test**
 
 ```python
 from datetime import date
@@ -53,13 +53,13 @@ def test_dual_price_bar_rejects_non_positive_prices() -> None:
         )
 ```
 
-- [ ] **Step 2: Run the test and verify the missing module failure**
+- [x] **Step 2: Run the test and verify the missing module failure**
 
 Run: `$env:PYTHONPATH='src'; python -m pytest tests/asset_allocation/etf_adaptive/test_contracts.py -q`
 
 Expected: FAIL because `asset_allocation.etf_adaptive.contracts` does not exist.
 
-- [ ] **Step 3: Implement the immutable contracts**
+- [x] **Step 3: Implement the immutable contracts**
 
 ```python
 @dataclass(frozen=True)
@@ -91,13 +91,13 @@ class DualPriceBar:
 
 Add similarly validated frozen contracts for metadata, corporate actions, eligibility decisions, and structured quality issues. Export them from `etf_adaptive.__init__`.
 
-- [ ] **Step 4: Run the contracts tests**
+- [x] **Step 4: Run the contracts tests**
 
 Run: `$env:PYTHONPATH='src'; python -m pytest tests/asset_allocation/etf_adaptive/test_contracts.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the contracts**
+- [x] **Step 5: Commit the contracts**
 
 ```powershell
 git add src/asset_allocation tests/asset_allocation/etf_adaptive/test_contracts.py
@@ -114,7 +114,7 @@ git commit -m "feat: add adaptive ETF data contracts"
 - Consumes: `ETFMetadata`, daily amount/date sequences.
 - Produces: `classify_etf(metadata: ETFMetadata) -> str | None` and `evaluate_eligibility(metadata, bars, as_of_date) -> ETFEligibility`.
 
-- [ ] **Step 1: Write failing classification and point-in-time tests**
+- [x] **Step 1: Write failing classification and point-in-time tests**
 
 ```python
 def test_cross_border_and_bond_funds_are_excluded() -> None:
@@ -131,13 +131,13 @@ def test_eligibility_uses_only_bars_available_on_as_of_date() -> None:
     assert result.avg_amount_20 == 12_000_000.0
 ```
 
-- [ ] **Step 2: Run the universe tests and verify failure**
+- [x] **Step 2: Run the universe tests and verify failure**
 
 Run: `$env:PYTHONPATH='src'; python -m pytest tests/asset_allocation/etf_adaptive/test_universe.py -q`
 
 Expected: FAIL because `classify_etf` and `evaluate_eligibility` are absent.
 
-- [ ] **Step 3: Implement explicit classification and eligibility rules**
+- [x] **Step 3: Implement explicit classification and eligibility rules**
 
 ```python
 EXCLUDED_NAME_TOKENS = ("债", "货币", "现金", "黄金", "白银", "原油", "商品", "纳指", "标普", "恒生", "跨境", "QDII", "反向", "杠杆")
@@ -162,13 +162,13 @@ def evaluate_eligibility(metadata: ETFMetadata, bars: Sequence[DualPriceBar], as
 
 Use code prefixes only to identify exchange-listed funds; use metadata fields (`fund_type`, `tracking_index_code`, `tracking_index_name`, `is_cross_border`, `is_leveraged`) as authoritative exclusions. Name tokens are a fail-closed fallback and must add a provenance reason.
 
-- [ ] **Step 4: Run the universe tests**
+- [x] **Step 4: Run the universe tests**
 
 Run: `$env:PYTHONPATH='src'; python -m pytest tests/asset_allocation/etf_adaptive/test_universe.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the universe provider**
+- [x] **Step 5: Commit the universe provider**
 
 ```powershell
 git add src/asset_allocation/etf_adaptive/universe.py tests/asset_allocation/etf_adaptive/test_universe.py
@@ -185,7 +185,7 @@ git commit -m "feat: build point-in-time ETF universe"
 - Produces: `AdaptiveMarketDataProvider.load_bars(stock_code, start_date, end_date) -> tuple[DualPriceBar, ...]`, `load_metadata(as_of_date)`, and `load_actions(stock_code, start_date, end_date)`.
 - Consumes: injected `query(sql, params)` callable; `trade_stock_daily_raw`, `trade_stock_daily_qfq`, `trade_stock_status`, and corporate-action rows.
 
-- [ ] **Step 1: Write failing alignment and conversion tests**
+- [x] **Step 1: Write failing alignment and conversion tests**
 
 ```python
 def test_provider_rejects_dates_missing_from_either_price_coordinate() -> None:
@@ -200,13 +200,13 @@ def test_signal_coordinate_round_trip_uses_same_day_ratio() -> None:
     assert to_raw_distance(0.05, bar.adjustment_ratio) == pytest.approx(0.20)
 ```
 
-- [ ] **Step 2: Run the market-data tests and verify failure**
+- [x] **Step 2: Run the market-data tests and verify failure**
 
 Run: `$env:PYTHONPATH='src'; python -m pytest tests/asset_allocation/etf_adaptive/test_market_data.py -q`
 
 Expected: FAIL because the provider and conversion functions are absent.
 
-- [ ] **Step 3: Implement one-query-per-table loading and strict joins**
+- [x] **Step 3: Implement one-query-per-table loading and strict joins**
 
 ```python
 def to_signal_price(raw_price: float, adjustment_ratio: float) -> float:
@@ -227,13 +227,13 @@ def _align_rows(raw_rows: Sequence[Mapping[str, object]], qfq_rows: Sequence[Map
 
 Calculate the same-day adjustment ratio from valid raw and adjusted closes; require the OHLC ratios to agree within a configured numeric tolerance. Carry `suspend_flag`, `pre_close`, `amount`, and `adjustment_asof` provenance into the returned bar/quality metadata.
 
-- [ ] **Step 4: Run focused and existing projection tests**
+- [x] **Step 4: Run focused and existing projection tests**
 
 Run: `$env:PYTHONPATH='src'; python -m pytest tests/asset_allocation/etf_adaptive/test_market_data.py tests/test_price_projection_store.py tests/test_price_corporate_actions.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the market-data provider**
+- [x] **Step 5: Commit the market-data provider**
 
 ```powershell
 git add src/asset_allocation/etf_adaptive/market_data.py tests/asset_allocation/etf_adaptive/test_market_data.py
@@ -250,7 +250,7 @@ git commit -m "feat: add dual-price ETF market data provider"
 - Produces: `audit_universe(as_of_date, provider) -> AuditReport` and CLI arguments `--as-of-date`, `--output-json`.
 - Consumes: Tasks 1-3 providers; writes only the explicitly requested local JSON report.
 
-- [ ] **Step 1: Write the failing audit test**
+- [x] **Step 1: Write the failing audit test**
 
 ```python
 def test_audit_reports_eligible_and_rejected_counts(tmp_path: Path) -> None:
@@ -261,13 +261,13 @@ def test_audit_reports_eligible_and_rejected_counts(tmp_path: Path) -> None:
     assert json.loads(output.read_text(encoding="utf-8"))["as_of_date"] == "2026-09-01"
 ```
 
-- [ ] **Step 2: Run the audit test and verify failure**
+- [x] **Step 2: Run the audit test and verify failure**
 
 Run: `$env:PYTHONPATH='src'; python -m pytest tests/asset_allocation/etf_adaptive/test_run_data_audit.py -q`
 
 Expected: FAIL because `audit_universe` is absent.
 
-- [ ] **Step 3: Implement deterministic JSON output and fail-closed exit codes**
+- [x] **Step 3: Implement deterministic JSON output and fail-closed exit codes**
 
 ```python
 def main(argv: list[str] | None = None) -> int:
@@ -279,13 +279,13 @@ def main(argv: list[str] | None = None) -> int:
 
 Sort all codes and reason keys before serialization. Include date coverage, raw/qfq mismatch counts, stale adjustment versions, eligible counts by exposure group, rejection counts, and examples capped at ten codes per reason.
 
-- [ ] **Step 4: Run the complete data-foundation test slice**
+- [x] **Step 4: Run the complete data-foundation test slice**
 
 Run: `$env:PYTHONPATH='src'; python -m pytest tests/asset_allocation/etf_adaptive/test_contracts.py tests/asset_allocation/etf_adaptive/test_universe.py tests/asset_allocation/etf_adaptive/test_market_data.py tests/asset_allocation/etf_adaptive/test_run_data_audit.py -q`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit the audit CLI**
+- [x] **Step 5: Commit the audit CLI**
 
 ```powershell
 git add src/asset_allocation/etf_adaptive/run_data_audit.py tests/asset_allocation/etf_adaptive/test_run_data_audit.py
