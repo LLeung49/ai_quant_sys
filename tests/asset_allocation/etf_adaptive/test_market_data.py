@@ -372,6 +372,7 @@ def test_load_actions_converts_cash_and_share_events_without_date_substitution()
                 "stock_gift_per_share": Decimal("0.05"),
                 "rights_issue_per_share": Decimal("0"),
                 "rights_issue_price": None,
+                "share_reform_flag": 0,
             }
         ]
     )
@@ -411,6 +412,7 @@ def test_load_actions_rejects_entity_date_substitution_and_unsupported_rights(
         "stock_gift_per_share": Decimal("0"),
         "rights_issue_per_share": Decimal("0"),
         "rights_issue_price": None,
+        "share_reform_flag": 0,
     }
     row.update(overrides)
 
@@ -429,12 +431,37 @@ def test_load_actions_wraps_malformed_source_identity_as_data_quality_error() ->
         "stock_gift_per_share": Decimal("0"),
         "rights_issue_per_share": Decimal("0"),
         "rights_issue_price": None,
+        "share_reform_flag": 0,
     }
 
     with pytest.raises(DataQualityError, match="invalid corporate action stock_code"):
         AdaptiveMarketDataProvider(
             query=QueryFixture(actions=[row])
         ).load_actions(CODE, START, END)
+
+
+def test_load_actions_rejects_missing_share_reform_provenance() -> None:
+    row: dict[str, object] = {
+        "stock_code": CODE,
+        "ex_date": END,
+        "cash_dividend_per_share": Decimal("0.08"),
+        "stock_bonus_per_share": Decimal("0"),
+        "stock_gift_per_share": Decimal("0"),
+        "rights_issue_per_share": Decimal("0"),
+        "rights_issue_price": None,
+    }
+    provider = AdaptiveMarketDataProvider(query=QueryFixture(actions=[row]))
+
+    with pytest.raises(
+        DataQualityError,
+        match="missing corporate action value: share_reform_flag",
+    ) as raised:
+        provider.load_actions(CODE, START, END)
+
+    assert [issue.code for issue in raised.value.issues] == [
+        "invalid_corporate_action_value"
+    ]
+    assert provider.last_quality_issues == raised.value.issues
 
 
 @pytest.mark.parametrize(

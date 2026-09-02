@@ -589,9 +589,13 @@ class AdaptiveMarketDataProvider:
                         rights_price_value, "rights_issue_price"
                     )
                 )
+                share_reform_value = row.get("share_reform_flag")
+                if share_reform_value is None:
+                    raise ValueError(
+                        "missing corporate action value: share_reform_flag"
+                    )
                 share_reform = _as_bool(
-                    row.get("share_reform_flag", False),
-                    "share_reform_flag",
+                    share_reform_value, "share_reform_flag"
                 )
             except ValueError as exc:
                 self._fail("invalid_corporate_action_value", code, str(exc), effective_date)
