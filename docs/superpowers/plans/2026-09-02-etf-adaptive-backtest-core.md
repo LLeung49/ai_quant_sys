@@ -19,6 +19,8 @@
 - Commission is `max(notional * 0.0001, 5)` per side; baseline slippage is 3 bp with 0/1/5/10 bp scenarios.
 - GRID/TREND stops and the 10% hard stop never move down within a cycle.
 - Insufficient cash, lot size, eligibility, or stop-risk budget means no order.
+- Every execution-facing order intent/state payload must carry `signal_atr20` and the complete signal thresholds used to create the intent (including entry/exit/stop thresholds), plus the signal bar identity and intended side/quantity rationale. The execution simulator receives `next_bar` and is solely responsible for converting `signal_atr20` and all signal price thresholds to execution coordinates using `next_bar.adjustment_ratio` before raw lot sizing, stop-risk budgeting, slippage, or fills; signal-coordinate values must never be passed directly to raw sizing.
+- Add a future integration test that submits an intent with a deliberately distinct `signal_atr20` and `next_bar.adjustment_ratio`, then asserts raw lot/risk sizing uses the converted ATR (and fails if the signal ATR reaches sizing unconverted).
 
 ---
 
@@ -228,21 +230,23 @@ git commit -m "feat: implement adaptive grid decisions"
 - Test: `tests/asset_allocation/etf_adaptive/test_trend.py`
 
 **Interfaces:**
-- Produces: `trend_entry_allowed`, `calculate_unit_shares`, `evaluate_trend_close`, and `apply_trend_fill`.
+- Produces: `trend_entry_allowed`, signal-coordinate `OrderIntent` creation, `evaluate_trend_close`, and `apply_trend_fill`; TREND does not size raw lots.
 - Consumes: frozen config/state/snapshot contracts.
 
 - [ ] **Step 1: Write failing risk-size and exit-priority tests**
 
 ```python
-def test_unit_size_divides_by_complete_stop_distance_and_never_forces_one_lot() -> None:
-    assert calculate_unit_shares(120_000, 0.005, atr20_raw=0.20, stop_n=2.0) == 100
-    assert calculate_unit_shares(10_000, 0.0025, atr20_raw=2.0, stop_n=2.0) == 0
+def test_trend_intent_carries_signal_atr_until_execution() -> None:
+    intent = evaluate_trend_close(_trend_state(), _snapshot(atr20=0.05), eligible=True).orders[0]
+    assert intent.signal_atr20 == pytest.approx(0.05)
 
 
 def test_trend_exit_wins_over_add_signal() -> None:
     decision = evaluate_trend_close(_trend_state(), _snapshot(stop_hit=True, add_hit=True), eligible=True)
     assert decision.orders == (_full_exit(OrderReason.TREND_STOP),)
 ```
+
+Signal ATR `0.05` must never directly enter a raw-price order calculation; `IndicatorSnapshot.atr20` remains in signal coordinates until converted at T+1 using that execution bar's adjustment ratio.
 
 - [ ] **Step 2: Run TREND tests and verify failure**
 
@@ -253,19 +257,14 @@ Expected: FAIL because TREND functions are absent.
 - [ ] **Step 3: Implement entry, units, adds, and exits**
 
 ```python
-def calculate_unit_shares(budget: float, risk_per_unit: float, atr20_raw: float, stop_n: float) -> int:
-    stop_distance = stop_n * atr20_raw
-    if stop_distance <= 0:
-        return 0
-    return max(0, int((budget * risk_per_unit / stop_distance) // 100) * 100)
-
-
 def trend_entry_allowed(snapshot: IndicatorSnapshot, config: TrendConfig) -> bool:
     base = snapshot.adx > 25 and snapshot.close > snapshot.prior_high_20
     macd_ok = not config.require_macd_bullish or snapshot.dif > snapshot.dea
     amount_ok = config.amount_ratio_min is None or snapshot.amount_ratio >= config.amount_ratio_min
     return base and macd_ok and amount_ok
 ```
+
+TREND stores complete signal-coordinate thresholds, `signal_atr20`, target budget, risk fraction, and signal date in the pending intent. It does not receive `next_bar`, call conversion helpers, calculate shares, or construct raw stops. `ExecutionSimulator.execute(intents, next_bar, state)` is the sole owner of `to_raw_distance(signal_atr20, next_bar.adjustment_ratio)`, `to_raw_price(signal_threshold, next_bar.adjustment_ratio)`, raw lot sizing, raw stop construction, slippage, commission, and pre-fill risk validation.
 
 Store each unit's actual fill, signal-coordinate fill, signal-day ATR, shares, and next-add reference. Implement one-add-per-day, aggregate stop-risk cap `budget * risk_per_unit * max_units`, monotone stops, prior-10-low exit, and exact MACD dead-cross exit.
 
@@ -306,6 +305,19 @@ def test_signal_levels_rebase_without_changing_raw_cost_basis() -> None:
     rebased = rebase_signal_state(state, old_ratio=0.25, new_ratio=0.20)
     assert rebased.grid_anchor == pytest.approx(0.8)
     assert rebased.raw_average_cost == 4.0
+
+
+def test_execution_converts_signal_atr_and_rejects_missing_atr_payload() -> None:
+    intent = _trend_intent(signal_atr20=0.05, signal_date=date(2026, 9, 1))
+    next_bar = _bar(adjustment_ratio=0.25)
+    result = ExecutionSimulator(...).execute((intent,), next_bar, _state())
+    assert result.raw_atr20 == pytest.approx(0.20)
+    assert result.shares == 1_500  # budget=120_000, risk_per_unit=0.005, stop_n=2.0; 100-share flooring
+    assert result.stop_distance == pytest.approx(0.20 * 2.0)
+    assert result.risk_validation_distance == pytest.approx(0.20 * 2.0)
+    assert result.fills
+    missing = replace(intent, signal_atr20=None)
+    assert not ExecutionSimulator(...).execute((missing,), next_bar, _state()).fills
 ```
 
 - [ ] **Step 2: Run execution tests and verify failure**
@@ -326,7 +338,14 @@ def slipped_open(raw_open: float, side: Side, bps: float) -> float:
     return raw_open * multiplier
 ```
 
-Reject fills for suspension, zero amount, exchange-limit lock, insufficient cash/shares, and pre-fill risk failure. Credit explicit cash dividends and share adjustments exactly once using event identifiers.
+Reject fills for suspension, zero amount, exchange-limit lock, insufficient cash/shares, and pre-fill risk failure. De-duplicate corporate actions by event ID:
+
+```python
+if action.event_id not in applied_action_ids:
+    applied_action_ids.add(action.event_id)
+```
+
+Apply cash dividends and share multipliers exactly once, preserving exact `Decimal` arithmetic and an explicit fractional-entitlement policy; do not silently round or discard fractional entitlements. This plan specifies the contract only; no action-processing engine is implemented here.
 
 - [ ] **Step 4: Run execution plus data-coordinate tests**
 

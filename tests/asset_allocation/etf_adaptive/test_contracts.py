@@ -133,3 +133,11 @@ def test_metadata_corporate_action_and_data_quality_contracts_preserve_valid_val
     assert metadata.listing_date == date(2020, 1, 1)
     assert action.cash_per_share == Decimal("0.1")
     assert error.issues == (issue,)
+
+
+def test_corporate_action_event_ids_are_stable_and_distinguish_types() -> None:
+    cash = CorporateAction("510300.SH", date(2026, 9, 1), CorporateActionType.CASH_DIVIDEND, Decimal("0.10"), Decimal("1"))
+    split = CorporateAction("510300.SH", date(2026, 9, 1), CorporateActionType.SHARE_SPLIT, None, Decimal("1.10"))
+    assert cash.event_id == "510300.SH:2026-09-01:cash_dividend"
+    assert split.event_id == "510300.SH:2026-09-01:share_split"
+    assert cash.event_id != split.event_id

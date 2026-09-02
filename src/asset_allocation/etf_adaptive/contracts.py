@@ -121,6 +121,10 @@ class CorporateAction:
     cash_per_share: Decimal | None
     share_multiplier: Decimal
 
+    @property
+    def event_id(self) -> str:
+        return f"{self.stock_code}:{self.effective_date.isoformat()}:{self.action_type.value}"
+
     def __post_init__(self) -> None:
         _require_non_empty_text(self.stock_code, "stock_code")
         _require_date(self.effective_date, "effective_date")
