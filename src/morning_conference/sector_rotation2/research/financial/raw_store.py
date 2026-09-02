@@ -1,4 +1,4 @@
-﻿"""Persistence boundary for financial raw PIT and valuation tables."""
+"""Persistence boundary for financial raw PIT and valuation tables."""
 
 from __future__ import annotations
 
@@ -33,13 +33,13 @@ class FinancialRawStore:
         finally:
             connection.close()
 
-    def insert_raw(self, row: dict[str, Any]) -> None:
-        self._execute(
+    def insert_raw(self, row: dict[str, Any]) -> int:
+        return self._execute(
             """INSERT IGNORE INTO trade_stock_financial_raw_pit
                (stock_code, source_table, report_date, announcement_date, period_type,
                 revenue, net_profit, total_assets, total_equity, operating_cash_flow,
-                pit_status, source_updated_at, source_hash, is_restated, data_source)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
+                pit_status, source_updated_at, source_hash, is_restated, source_verified, data_source)
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (
                 row["stock_code"], row["source_table"], row["report_date"],
                 row.get("announcement_date"), row["period_type"],
@@ -48,12 +48,13 @@ class FinancialRawStore:
                 row.get("operating_cash_flow"),
                 row["pit_status"], row["source_updated_at"], row["source_hash"],
                 1 if row.get("is_restated") else 0,
+                1 if row.get("source_verified") else 0,
                 row.get("data_source", "miniqmt"),
             ),
         )
 
-    def insert_capital(self, row: dict[str, Any]) -> None:
-        self._execute(
+    def insert_capital(self, row: dict[str, Any]) -> int:
+        return self._execute(
             """INSERT IGNORE INTO trade_stock_capital_pit
                (stock_code, report_date, announcement_date, total_shares,
                 circulating_shares, pit_status, source_hash, data_source)
@@ -66,24 +67,13 @@ class FinancialRawStore:
             ),
         )
 
-    def insert_valuation(self, row: dict[str, Any]) -> None:
-        self._execute(
+    def insert_valuation(self, row: dict[str, Any]) -> int:
+        return self._execute(
             """INSERT INTO trade_stock_valuation_daily
                (as_of_date, stock_code, sector_name, pe, pb, ps, p_ocf, market_cap,
                 ttm_revenue, ttm_net_profit, pit_status, quality_flags,
                 model_version, config_hash, run_id)
-               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-               ON DUPLICATE KEY UPDATE
-                sector_name = VALUES(sector_name),
-                pe = VALUES(pe),
-                pb = VALUES(pb),
-                ps = VALUES(ps),
-                p_ocf = VALUES(p_ocf),
-                market_cap = VALUES(market_cap),
-                ttm_revenue = VALUES(ttm_revenue),
-                ttm_net_profit = VALUES(ttm_net_profit),
-                pit_status = VALUES(pit_status),
-                quality_flags = VALUES(quality_flags)""",
+               VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)""",
             (
                 row["as_of_date"], row["stock_code"], row.get("sector_name"),
                 row.get("pe"), row.get("pb"), row.get("ps"), row.get("p_ocf"),
@@ -94,12 +84,13 @@ class FinancialRawStore:
             ),
         )
 
-    def _execute(self, sql: str, params: tuple) -> None:
+    def _execute(self, sql: str, params: tuple) -> int:
         connection = self._connection_factory()
         cursor = connection.cursor()
         try:
             cursor.execute(sql, params)
             connection.commit()
+            return cursor.rowcount
         except Exception:
             connection.rollback()
             raise

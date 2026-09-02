@@ -1,4 +1,4 @@
-﻿"""SQL DDL and idempotent migrations for Repair Alpha persistence tables."""
+"""SQL DDL and idempotent migrations for Repair Alpha persistence tables."""
 
 from __future__ import annotations
 
@@ -23,6 +23,7 @@ RESEARCH_FINANCIAL_DDL = {
             source_updated_at DATETIME NOT NULL,
             source_hash CHAR(64) NOT NULL,
             is_restated TINYINT(1) NOT NULL DEFAULT 0,
+            source_verified TINYINT(1) NOT NULL DEFAULT 0,
             first_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             data_source VARCHAR(64) NOT NULL,
             PRIMARY KEY (id),
@@ -90,6 +91,16 @@ def apply_schema_ddl(connection: Any) -> None:
         for _name, ddl in RESEARCH_FINANCIAL_DDL.items():
             cursor.execute(ddl)
             connection.commit()
+
+        # Idempotently ensure source_verified column exists
+        try:
+            cursor.execute(
+                "ALTER TABLE trade_stock_financial_raw_pit "
+                "ADD COLUMN source_verified TINYINT(1) NOT NULL DEFAULT 0 AFTER is_restated"
+            )
+            connection.commit()
+        except Exception:
+            pass  # Column already exists or table not found
     finally:
         cursor.close()
 

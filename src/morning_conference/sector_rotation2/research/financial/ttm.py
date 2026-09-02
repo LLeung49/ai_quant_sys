@@ -15,7 +15,7 @@ from datetime import date
 from typing import Optional
 
 from .normalize import NormalizedFinancialRow
-from .pit import FinancialRawRow
+from .pit import FinancialRawRow, resolve_latest_visible
 from .normalize import normalize_row
 
 
@@ -77,15 +77,20 @@ def build_ttm(
     available, or when any of the underlying fields is missing.
     """
 
-    normalized = [normalize_row(row) for row in raw_rows]
+    raw_list = list(raw_rows)
+    # Resolve one point-in-time version per report period before deriving TTM.
+    by_period: dict[date, list[FinancialRawRow]] = {}
+    for row in raw_list:
+        by_period.setdefault(row.report_date, []).append(row)
+    resolved = [chosen for rows in by_period.values()
+                if (chosen := resolve_latest_visible(rows, as_of_date=as_of_date)) is not None]
+    normalized = [normalize_row(row) for row in resolved]
     if not normalized:
         return None
     # Filter rows that are PIT-visible at as_of_date.
-    visible = [n for n in normalized
-                if n.announcement_date is None or n.announcement_date <= as_of_date]
-    if not visible:
+    if not normalized:
         return None
-    trailing = _select_trailing(visible)
+    trailing = _select_trailing(normalized)
     n_quarters = len(trailing)
     if n_quarters < TTM_QUARTERS:
         return None

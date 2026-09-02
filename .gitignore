@@ -19,8 +19,7 @@ outputs/
 debug/
 *.log
 
-# MySQL / 数据库
-*.sql
+# 本地数据库文件（迁移 SQL 需要纳入版本控制）
 *.db
 *.sqlite
 *.sqlite3

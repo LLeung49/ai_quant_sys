@@ -1,18 +1,25 @@
-﻿"""Service layer for building PIT-safe Repair Alpha candidates."""
+"""Service layer for building PIT-safe Repair Alpha candidates."""
 
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
+from dataclasses import replace
 from datetime import date
 from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
 
+from data_ingestion.db_config import execute_query
+
 from ..config_hash import build_config_hash
 from ..contracts import CandidateSnapshot
-from ..snapshot import SnapshotStore, persist_backfill_snapshot, persist_live_shadow_snapshot
+from ..availability import AvailabilityMetadata
+from ..snapshot import (
+    SnapshotStore, persist_backfill_snapshot, persist_delayed_shadow_snapshot,
+    persist_live_shadow_snapshot,
+)
 from ..status import ExecutionStatus, ResearchStatus, SnapshotMode, ValidationStatus
 from .capital import resolve_capital
 from .providers import MiniQMTProvider
@@ -41,9 +48,12 @@ def load_repair_sectors(
     as_of_date: str,
     sector_level: int,
     snapshot_mode: SnapshotMode,
-    query: Callable[[str, tuple[object, ...]], list[dict[str, Any]]],
+    query: Callable = execute_query,
 ) -> list[Mapping[str, Any]]:
-    """Return canonical sector_opportunity snapshots whose playbook is a repair one."""
+    """Return canonical sector_opportunity snapshots in a repair playbook.
+
+    Playbook is stored in JSON, so filtering happens in Python.
+    """
 
     rows = query(
         """SELECT sector_name, candidate_status, model_version, config_hash, snapshot_mode, feature_json
@@ -60,6 +70,7 @@ def load_repair_sectors(
              ORDER BY sector_name ASC""",
         (as_of_date, sector_level, snapshot_mode.value),
     )
+
     repair_sectors: list[Mapping[str, Any]] = []
     for row in rows:
         feature_json = row.get("feature_json")
@@ -110,6 +121,7 @@ def _score_one_stock(
     sector_name: str,
     target: date,
     allow_estimated_pit: bool,
+    capital_rows_for_stock: list | None = None,
 ) -> dict[str, Any] | None:
     """Build a single Repair Alpha score row for ``stock_code``.
 
@@ -129,34 +141,29 @@ def _score_one_stock(
     )
     if latest is None:
         return None
+    capital_rows_for_stock = capital_rows_for_stock or []
+    capital = resolve_capital(capital_rows_for_stock, as_of_date=target)
     return _build_row_from_ttm(
         latest=latest, ttm=ttm, raw_close=raw_close, sector_name=sector_name,
+        capital=capital,
     )
 
 
-def _build_row_from_ttm(*, latest, ttm, raw_close: float, sector_name: str) -> dict[str, Any] | None:
+def _build_row_from_ttm(*, latest, ttm, raw_close: float, sector_name: str, capital=None) -> dict[str, Any] | None:
     """Build a score row from a TTM projection (shared with score_repair_sector)."""
 
     from .providers.base import CapitalRow
     from .capital import ResolvedCapital
-    capital = CapitalRow(
-        stock_code=latest.stock_code, report_date=ttm.period_end_date,
-        announcement_date=latest.announcement_date or ttm.period_end_date,
-        total_shares=None, circulating_shares=None,
-        source_hash=latest.source_hash, data_source=latest.data_source,
-    )
-    resolved = ResolvedCapital(
-        stock_code=capital.stock_code,
-        as_of_date=ttm.as_of_date,
-        report_date=capital.report_date,
-        announcement_date=capital.announcement_date,
-        total_shares=capital.total_shares,
-        circulating_shares=capital.circulating_shares,
-        source_hash=capital.source_hash,
-        data_source=capital.data_source,
-    )
+    if capital is None:
+        capital = ResolvedCapital(
+            stock_code=latest.stock_code, as_of_date=ttm.as_of_date,
+            report_date=ttm.period_end_date,
+            announcement_date=latest.announcement_date or ttm.period_end_date,
+            total_shares=None, circulating_shares=None,
+            source_hash=latest.source_hash, data_source=latest.data_source,
+        )
     valuation = build_valuation(
-        ttm=ttm, capital=resolved, raw_close=raw_close,
+        ttm=ttm, capital=capital, raw_close=raw_close,
         sector_name=sector_name, total_equity=latest.total_equity,
     )
     quality = score_quality(
@@ -208,18 +215,34 @@ def score_repair_sector(
     store: Any,
     query: Callable,
     allow_estimated_pit: bool = False,
+    availability: AvailabilityMetadata | None = None,
 ) -> list[CandidateSnapshot]:
     """Score one repair sector and (optionally) persist its snapshots."""
 
     target = date.fromisoformat(as_of_date)
     sector_name = str(sector["sector_name"])
     provider = _dispatch_provider(query)
-    raw_rows = list(provider.iter_raw_rows(as_of_date=target, stock_codes=[]))
+
+    from ..stock_alpha.common import load_sector_membership
+    membership = load_sector_membership([sector_name], level, target, query=query)
+    sector_stocks = set(membership.get(sector_name, []))
+
+    if sector_stocks:
+        raw_rows = list(provider.iter_raw_rows(as_of_date=target, stock_codes=sector_stocks))
+    else:
+        raw_rows = list(provider.iter_raw_rows(as_of_date=target, stock_codes=[]))
+
     if not raw_rows:
         return []
     by_stock: dict[str, list] = {}
     for raw in raw_rows:
+        if sector_stocks and raw.stock_code not in sector_stocks:
+            continue
         by_stock.setdefault(raw.stock_code, []).append(raw)
+    capital_rows = list(provider.iter_capital_rows(as_of_date=target, stock_codes=sector_stocks))
+    capital_by_stock: dict[str, list] = {}
+    for capital in capital_rows:
+        capital_by_stock.setdefault(capital.stock_code, []).append(capital)
     close_lookup = _raw_close_lookup(query, as_of_date)
     sect_ctx = RepairSectorContext(
         as_of_date=target,
@@ -237,12 +260,21 @@ def score_repair_sector(
             stock_code=stock_code, raw_close=raw_close,
             sector_name=sector_name, target=target,
             allow_estimated_pit=allow_estimated_pit,
+            capital_rows_for_stock=capital_by_stock.get(stock_code, []),
         )
         if row is None:
             continue
         snapshot = build_repair_candidate(
             row=row, sector_context=sect_ctx, config=config, run_id=run_id,
         )
+        if availability is not None:
+            snapshot = replace(
+                snapshot,
+                data_available_at=availability.data_available_at,
+                run_at=availability.run_at,
+                execution_eligible_at=availability.execution_eligible_at,
+                availability_basis=availability.availability_basis,
+            )
         if store is not None:
             persist_repair_candidates(store, [snapshot])
         snapshots.append(snapshot)
@@ -328,10 +360,12 @@ def persist_repair_candidates(
     for snapshot in snapshots:
         if snapshot.snapshot_mode is SnapshotMode.LIVE_SHADOW:
             persisted.append(persist_live_shadow_snapshot(store, snapshot))
+        elif snapshot.snapshot_mode is SnapshotMode.DELAYED_SHADOW:
+            persisted.append(persist_delayed_shadow_snapshot(store, snapshot))
         elif snapshot.snapshot_mode is SnapshotMode.BACKFILL:
             persisted.append(persist_backfill_snapshot(store, snapshot))
         else:
-            raise ValueError("Repair Alpha only supports LIVE_SHADOW or BACKFILL modes")
+            raise ValueError("Repair Alpha only supports LIVE_SHADOW or BACKFILL (or DELAYED_SHADOW) modes")
     return persisted
 
 

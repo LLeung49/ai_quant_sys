@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """
 财务数据采集 - 使用MiniQMT(xtquant)下载全量A股财务数据存入MySQL
 
@@ -40,6 +40,20 @@ from xtquant import xtdata
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from db_config import get_connection, execute_query
+
+# Phase 4 / Repair Alpha integration: dual-write to trade_stock_financial_raw_pit.
+# The legacy collector keeps writing to ``trade_stock_financial`` so that
+# downstream wide-table consumers continue to work; the new PIT table is
+# produced in parallel with the same source hash so PIT-aware components
+# (Repair Alpha V1) can consume the rows once the operator toggles
+# ``--allow-estimated-pit`` on the daily runner.
+import hashlib
+from datetime import datetime as _dt
+
+from morning_conference.sector_rotation2.research.financial.pit import PITStatus
+from morning_conference.sector_rotation2.research.financial.raw_store import FinancialRawStore
+
+
 
 if sys.platform == 'win32' and hasattr(sys.stdout, 'reconfigure'):
     try:
@@ -235,8 +249,55 @@ def extract_periods(data, stock_code):
     return records
 
 
+def _commit_records_to_pit(records_by_code):
+    """Dual-write the just-parsed records into ``trade_stock_financial_raw_pit``.
+
+    The legacy collector already persisted the rows to ``trade_stock_financial``;
+    this helper writes the same source rows to the PIT table with a deterministic
+    ``source_hash`` so :mod:`research.financial.pit` can dedupe across restated
+    batches.  ``pit_status`` is ``PIT_ESTIMATED`` because the legacy collector
+    does not capture ``announcement_date``; the Repair Alpha runner exposes
+    ``--allow-estimated-pit`` for interactive consumption.
+    """
+    store = FinancialRawStore()
+    rows_out = 0
+    for code, records in records_by_code.items():
+        for rec in records:
+            p = rec["report_date"]
+            if not p or len(p) != 8:
+                continue
+            report_date = p[:4] + "-" + p[4:6] + "-" + p[6:8]
+            revenue = rec.get("revenue")
+            net_profit = rec.get("net_profit")
+            revenue_part = revenue if revenue is not None else 0
+            net_profit_part = net_profit if net_profit is not None else 0
+            payload = str(code) + "|" + report_date + "|" + str(net_profit_part) + "|" + str(revenue_part)
+            source_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+            written = store.insert_raw({
+                "stock_code": code,
+                "source_table": "miniqmt",
+                "report_date": report_date,
+                "announcement_date": None,
+                "period_type": "quarterly",
+                "revenue": revenue,
+                "net_profit": net_profit,
+                "total_assets": rec.get("total_assets"),
+                "total_equity": rec.get("total_equity"),
+                "operating_cash_flow": rec.get("operating_cashflow"),
+                "pit_status": PITStatus.ESTIMATED.value,
+                "source_updated_at": _dt.now(),
+                "source_hash": source_hash,
+                "is_restated": 0,
+                "data_source": "qmt",
+            })
+            if written:
+                rows_out += written
+    return rows_out
+
+
 def process_batch(batch_codes):
     """批量下载 + 解析 + 写DB，返回 (写入总行数, 成功股票数)"""
+    records_by_code: dict = {}
     # 批量下载到本地缓存（一次调用覆盖整批所有报表）
     done = [False]
     def on_done(data):
@@ -297,6 +358,16 @@ def process_batch(batch_codes):
     conn.commit()
     cursor.close()
     conn.close()
+    # Phase 4 / PIT dual-write: helper writes the same rows to the
+    # ``trade_stock_financial_raw_pit`` table via the standard store so
+    # Repair Alpha can consume them.  ``INSERT IGNORE`` deduplicates on
+    # ``source_hash`` so restated batches are safe.
+    try:
+        _pit_rows = _commit_records_to_pit(records_by_code=records_by_code)
+        if _pit_rows:
+            print("  PIT rows written: " + str(_pit_rows))
+    except Exception as exc:
+        print("  WARN: PIT dual-write failed: " + str(exc))
     return batch_rows, batch_ok
 
 

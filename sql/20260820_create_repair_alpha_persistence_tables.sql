@@ -1,4 +1,4 @@
-﻿-- Phase 4 / Repair Alpha persistence layer.
+-- Phase 4 / Repair Alpha persistence layer.
 -- Existing schema migrations are not modified; this script adds new tables and
 -- idempotent migrations on ``trade_stock_financial`` (if it exists).
 -- Safe to run multiple times.
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS trade_stock_financial_raw_pit (
     period_type VARCHAR(16) NOT NULL,
     revenue DECIMAL(24, 4) NULL,
     net_profit DECIMAL(24, 4) NULL,
-    net_profit_deduced T T NULL,
+    net_profit_deduced DECIMAL(24, 4) NULL,
     total_assets DECIMAL(24, 4) NULL,
     total_equity DECIMAL(24, 4) NULL,
     operating_cash_flow DECIMAL(24, 4) NULL,
@@ -23,12 +23,31 @@ CREATE TABLE IF NOT EXISTS trade_stock_financial_raw_pit (
     source_updated_at DATETIME NOT NULL,
     source_hash CHAR(64) NOT NULL,
     is_restated TINYINT(1) NOT NULL DEFAULT 0,
+    source_verified TINYINT(1) NOT NULL DEFAULT 0,
     first_seen_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     data_source VARCHAR(64) NOT NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uk_financial_raw (stock_code, source_table, report_date, source_hash),
     KEY idx_financial_raw_lookup (stock_code, source_table, report_date, announcement_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='PIT-safe financial statement raw history';
+
+-- Idempotent column addition if table already exists without source_verified:
+SET @dbname = DATABASE();
+SET @tablename = "trade_stock_financial_raw_pit";
+SET @columnname = "source_verified";
+SET @preparedStatement = (SELECT IF(
+  (
+    SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = @dbname
+      AND TABLE_NAME = @tablename
+      AND COLUMN_NAME = @columnname
+  ) > 0,
+  "SELECT 1",
+  "ALTER TABLE trade_stock_financial_raw_pit ADD COLUMN source_verified TINYINT(1) NOT NULL DEFAULT 0 AFTER is_restated;"
+));
+PREPARE alterIfNotExists FROM @preparedStatement;
+EXECUTE alterIfNotExists;
+DEALLOCATE PREPARE alterIfNotExists;
 
 -- Capital structure: PIT-aware share count snapshots.
 CREATE TABLE IF NOT EXISTS trade_stock_capital_pit (

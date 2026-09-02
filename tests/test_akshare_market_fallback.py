@@ -99,3 +99,57 @@ def test_fetch_valid_rows_falls_back_to_sina_when_eastmoney_cannot_supply_every_
     assert sina_calls[0]["adjust"] == "hfq"
     assert set(rows) == {"2026-08-14", "2026-08-15"}
     assert failures == {}
+
+
+def test_fetch_valid_rows_uses_etf_eastmoney_endpoint_for_etf_codes(monkeypatch):
+    fallback = load_fallback_module()
+    calls = []
+
+    monkeypatch.setattr(
+        fallback.ak,
+        "fund_etf_hist_em",
+        lambda **kwargs: calls.append(kwargs)
+        or eastmoney_frame([("2026-08-20", 1, 1.1, 0.9, 1.05, 100, 1000)]),
+    )
+    monkeypatch.setattr(
+        fallback.ak,
+        "stock_zh_a_hist",
+        lambda **kwargs: pytest.fail("ETF fallback must not use stock endpoint"),
+    )
+
+    rows, failures = fallback.fetch_valid_rows(
+        "515443.SH", "none", {"2026-08-20"}
+    )
+
+    assert calls == [{
+        "symbol": "515443",
+        "period": "daily",
+        "start_date": "20260820",
+        "end_date": "20260820",
+        "adjust": "",
+    }]
+    assert rows["2026-08-20"]["close"] == 1.05
+    assert failures == {}
+
+
+def test_fetch_valid_rows_uses_etf_sina_endpoint_and_normalizes_english_columns(monkeypatch):
+    fallback = load_fallback_module()
+    monkeypatch.setattr(
+        fallback.ak,
+        "fund_etf_hist_em",
+        lambda **kwargs: eastmoney_frame([]),
+    )
+    monkeypatch.setattr(
+        fallback.ak,
+        "fund_etf_hist_sina",
+        lambda **kwargs: sina_frame(
+            [("2026-08-20", 2, 2.1, 1.9, 2.05, 200, 2000)]
+        ),
+    )
+
+    rows, failures = fallback.fetch_valid_rows(
+        "159025.SZ", "none", {"2026-08-20"}
+    )
+
+    assert rows["2026-08-20"]["open"] == 2.0
+    assert failures == {}

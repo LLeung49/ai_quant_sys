@@ -30,6 +30,11 @@ class ResolvedCapital:
     source_hash: str
     data_source: str
 
+    @property
+    def is_available(self) -> bool:
+        """Whether PIT shares are sufficient for market-cap valuation."""
+        return self.total_shares is not None and self.total_shares > 0
+
     def market_cap(self, raw_close: float) -> Optional[float]:
         """Return ``raw_close * total_shares`` if both are available."""
 

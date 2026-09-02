@@ -1,4 +1,4 @@
-﻿"""PIT status and the strict resolver used by Repair Alpha V1.
+"""PIT status and the strict resolver used by Repair Alpha V1.
 
 Three PIT states are exposed:
 
@@ -18,7 +18,7 @@ the caller explicitly opts in via ``allow_estimated_pit``.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from enum import Enum
 from typing import Iterable, Mapping
 
@@ -35,6 +35,19 @@ class PITStatus(str, Enum):
 
 
 _STRICT_STATUSES = frozenset({PITStatus.EXACT, PITStatus.VERIFIED})
+
+
+def _to_date(value: object) -> date | None:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except (ValueError, TypeError):
+        return None
 
 
 def _get(row: object, key: str) -> object:
@@ -97,6 +110,7 @@ def resolve_latest_visible(
     - rows with ``is_restated=True`` lose to a non-restated sibling.
     """
 
+    target_date = _to_date(as_of_date) or as_of_date
     eligible: list[FinancialRawRow] = []
     for row in rows:
         pit_value = _get(row, "pit_status")
@@ -111,8 +125,8 @@ def resolve_latest_visible(
             continue
         if not allow_estimated_pit and pit is PITStatus.ESTIMATED:
             continue
-        availability = row.announcement_date or row.first_seen_at
-        if availability is None or availability > as_of_date:
+        availability = _to_date(row.announcement_date or row.first_seen_at)
+        if availability is None or availability > target_date:
             continue
         eligible.append(row)
     if not eligible:
@@ -121,7 +135,7 @@ def resolve_latest_visible(
     # original records (is_restated=False) and the earliest source_hash.
     eligible.sort(
         key=lambda row: (
-            -(row.announcement_date or row.first_seen_at).toordinal(),
+            -((_to_date(row.announcement_date or row.first_seen_at) or date.min).toordinal()),
             1 if row.is_restated else 0,
             row.source_hash,
         )
