@@ -82,6 +82,8 @@ class ExecutionResult:
     fills: tuple[Fill, ...]
     state: StrategyState
     rejected_reasons: tuple[str, ...] = ()
+    raw_atr20: float | None = None
+    stop_distance: float | None = None
 
 
 @dataclass(frozen=True)
