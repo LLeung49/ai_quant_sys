@@ -109,7 +109,6 @@ def apply_trend_fill(state: StrategyState, fill: Fill, config: TrendConfig) -> S
     new_stop = fill.signal_price - config.stop_n * signal_atr20
     return replace(
         state,
-        position_shares=state.position_shares + fill.shares,
         units=state.units + (unit,),
         trend_stop_price=max(state.trend_stop_price or new_stop, new_stop),
     )

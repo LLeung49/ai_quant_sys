@@ -60,5 +60,4 @@ def apply_grid_fill(state: StrategyState, fill: Fill) -> StrategyState:
         return state
     if fill.signal_price is None:
         raise ValueError("grid fill requires signal_price")
-    signed = fill.shares if fill.side is Side.BUY else -fill.shares
-    return replace(state, grid_anchor=fill.signal_price, position_shares=state.position_shares + signed)
+    return replace(state, grid_anchor=fill.signal_price)

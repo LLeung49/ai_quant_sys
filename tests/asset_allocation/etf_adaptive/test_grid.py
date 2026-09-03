@@ -34,8 +34,12 @@ def test_grid_anchor_moves_only_after_fill_and_gap_creates_one_order() -> None:
     assert len(decision.orders) == 1
     assert decision.orders[0].signal_date == date(2026, 9, 2)
     assert decision.state.grid_anchor == 1.0
-    filled = apply_grid_fill(decision.state, Fill(date(2026, 9, 3), Side.BUY, 100, 0.94, Decimal("5"), OrderReason.GRID_BUY, signal_price=0.94))
+    executed_state = StrategyState(
+        regime=Regime.GRID, grid_anchor=1.0, position_shares=1_100, cash=Decimal("9000"),
+    )
+    filled = apply_grid_fill(executed_state, Fill(date(2026, 9, 3), Side.BUY, 100, 0.94, Decimal("5"), OrderReason.GRID_BUY, signal_price=0.94))
     assert filled.grid_anchor == 0.94
+    assert filled.position_shares == 1_100
 
 
 def test_grid_does_not_buy_below_lower_band_but_can_sell() -> None:

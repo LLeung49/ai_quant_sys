@@ -84,7 +84,10 @@ def test_trend_adds_at_most_one_unit_and_advances_only_after_fill() -> None:
     assert decision.orders[0].reason is OrderReason.TREND_ADD
     assert decision.state.units == state.units
     filled = apply_trend_fill(
-        decision.state,
+        StrategyState(
+            regime=Regime.TREND, cash=Decimal("117000"), position_shares=1_500,
+            units=decision.state.units,
+        ),
         Fill(
             date(2026, 9, 3), decision.orders[0].side, 500, 4.1,
             Decimal("5"), decision.orders[0].reason, signal_price=1.13,
@@ -93,4 +96,5 @@ def test_trend_adds_at_most_one_unit_and_advances_only_after_fill() -> None:
         TrendConfig(),
     )
     assert len(filled.units) == 2
+    assert filled.position_shares == 1_500
     assert filled.units[-1].next_add_signal_price == pytest.approx(1.155)
