@@ -345,7 +345,7 @@ if action.event_id not in applied_action_ids:
     applied_action_ids.add(action.event_id)
 ```
 
-Apply cash dividends and share multipliers exactly once, preserving exact `Decimal` arithmetic and an explicit fractional-entitlement policy; do not silently round or discard fractional entitlements. This plan specifies the contract only; no action-processing engine is implemented here.
+Apply cash dividends and share multipliers exactly once in the execution ledger, preserving exact `Decimal` arithmetic. The 100-share rule applies to new buy/add orders only, not to company-action-adjusted holdings. Keep resulting odd-lot holdings as actual inventory; if an action would create a fractional entitlement and the source does not supply an authoritative allocation or cash-in-lieu amount, fail closed rather than inventing a value. This task implements the modeled cash-dividend and share-multiplier ledger handling; unsupported action types remain fail-closed.
 
 - [ ] **Step 4: Run execution plus data-coordinate tests**
 
