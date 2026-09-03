@@ -15,12 +15,14 @@ from .contracts import (
     DataQualityIssue,
     DualPriceBar,
     ETFMetadata,
+    ExecutionAvailability,
 )
 
 
 Query = Callable[[str, tuple[object, ...]], Sequence[Mapping[str, object]]]
 CalendarLoader = Callable[[date, date], Sequence[date]]
 AdjustmentProvenanceLoader = Callable[[str, date], Mapping[str, object]]
+ExecutionAvailabilityLoader = Callable[[Mapping[str, object]], ExecutionAvailability]
 
 _ETF_CANDIDATE_CODE = re.compile(
     r"^(?:(?:510|511|512|513|515|516|517|518|560|561|562|563|588|589)"
@@ -194,6 +196,7 @@ class AdaptiveMarketDataProvider:
         ratio_tolerance: float = 1e-6,
         calendar_loader: CalendarLoader | None = None,
         adjustment_provenance_loader: AdjustmentProvenanceLoader | None = None,
+        execution_availability_loader: ExecutionAvailabilityLoader | None = None,
     ) -> None:
         if not callable(query):
             raise ValueError("query must be callable")
@@ -214,6 +217,11 @@ class AdaptiveMarketDataProvider:
         ):
             raise ValueError("adjustment_provenance_loader must be callable")
         self._adjustment_provenance_loader = adjustment_provenance_loader
+        if execution_availability_loader is not None and not callable(
+            execution_availability_loader
+        ):
+            raise ValueError("execution_availability_loader must be callable")
+        self._execution_availability_loader = execution_availability_loader
         self.last_quality_issues: tuple[DataQualityIssue, ...] = ()
 
     def _fail(
@@ -512,6 +520,11 @@ class AdaptiveMarketDataProvider:
                             )
                         )
 
+            try:
+                raw_pre_close = _positive_finite(pre_close_value, "raw_pre_close")
+            except ValueError as exc:
+                self._fail("invalid_bar_value", code, str(exc), day)
+
             adjustment_value = qfq_row.get("adjustment_asof")
             if adjustment_value is None:
                 adjustment_asof = None
@@ -542,6 +555,14 @@ class AdaptiveMarketDataProvider:
                     day,
                 )
             prior_raw_close = raw_prices["close"]
+            availability = ExecutionAvailability(True, True, "unavailable")
+            if self._execution_availability_loader is not None:
+                try:
+                    availability = self._execution_availability_loader(raw_row)
+                except Exception:
+                    pass
+            if not isinstance(availability, ExecutionAvailability):
+                availability = ExecutionAvailability(True, True, "unavailable")
             bars.append(
                 DualPriceBar(
                     stock_code=code,
@@ -554,9 +575,11 @@ class AdaptiveMarketDataProvider:
                     raw_high=raw_prices["high"],
                     raw_low=raw_prices["low"],
                     raw_close=raw_prices["close"],
+                    raw_pre_close=raw_pre_close,
                     amount=amount,
                     suspended=suspended,
                     adjustment_ratio=ratio,
+                    execution_availability=availability,
                 )
             )
 

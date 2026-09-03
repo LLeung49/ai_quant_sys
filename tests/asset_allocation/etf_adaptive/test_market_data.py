@@ -9,6 +9,7 @@ import pytest
 from asset_allocation.etf_adaptive.contracts import (
     CorporateActionType,
     DataQualityError,
+    ExecutionAvailability,
 )
 from asset_allocation.etf_adaptive.market_data import (
     METADATA_SQL,
@@ -132,6 +133,32 @@ def test_provider_loads_one_row_per_coordinate_and_uses_same_day_ratio() -> None
     assert "FROM trade_stock_daily_qfq" in query.calls[1][0]
     assert query.calls[0][1] == (CODE, START, END)
     assert query.calls[1][1] == (CODE, START, END)
+
+
+def test_provider_without_availability_loader_fails_closed() -> None:
+    bars = QueryFixture().provider().load_bars(CODE, START, END)
+
+    assert bars[0].execution_availability == ExecutionAvailability(
+        True, True, "unavailable"
+    )
+
+
+def test_provider_propagates_availability_from_its_raw_row() -> None:
+    raw_row = _raw_row()
+    seen_rows: list[object] = []
+
+    def availability_loader(row: object) -> ExecutionAvailability:
+        seen_rows.append(row)
+        return ExecutionAvailability(True, False, "exchange")
+
+    bars = QueryFixture(raw=[raw_row]).provider(
+        execution_availability_loader=availability_loader
+    ).load_bars(CODE, START, END)
+
+    assert seen_rows == [raw_row]
+    assert bars[0].execution_availability == ExecutionAvailability(
+        True, False, "exchange"
+    )
 
 
 def test_signal_coordinate_round_trip_uses_same_day_ratio() -> None:
@@ -263,7 +290,7 @@ def test_provider_rejects_unknown_suspend_flag_instead_of_assuming_tradable() ->
         query.provider().load_bars(CODE, START, END)
 
 
-def test_provider_reports_pre_close_and_adjustment_provenance_deterministically() -> None:
+def test_provider_rejects_missing_raw_pre_close() -> None:
     raw = [
         _raw_row(
             START,
@@ -290,17 +317,8 @@ def test_provider_reports_pre_close_and_adjustment_provenance_deterministically(
         raw=raw, qfq=qfq, latest_action=date(2026, 8, 15)
     ).provider()
 
-    bars = provider.load_bars(CODE, START, END)
-
-    assert len(bars) == 2
-    assert [issue.code for issue in provider.last_quality_issues] == [
-        "missing_pre_close",
-        "inconsistent_pre_close",
-    ]
-    assert [issue.trade_date for issue in provider.last_quality_issues] == [
-        START,
-        END,
-    ]
+    with pytest.raises(DataQualityError, match="invalid raw_pre_close"):
+        provider.load_bars(CODE, START, END)
 
 
 def test_provider_rejects_adjustment_version_after_historical_end_date() -> None:
