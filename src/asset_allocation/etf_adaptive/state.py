@@ -85,10 +85,18 @@ class Fill:
 
 
 @dataclass(frozen=True)
+class RejectedOrder:
+    intent: OrderIntent
+    side: Side
+    reason: str
+
+
+@dataclass(frozen=True)
 class ExecutionResult:
     fills: tuple[Fill, ...]
     state: StrategyState
     rejected_reasons: tuple[str, ...] = ()
+    rejected_orders: tuple[RejectedOrder, ...] = ()
     raw_atr20: float | None = None
     stop_distance: float | None = None
     raw_thresholds: tuple[tuple[str, float], ...] = ()

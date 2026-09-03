@@ -4,19 +4,23 @@ from decimal import Decimal
 import pytest
 
 from asset_allocation.etf_adaptive.config import CostConfig, TrendConfig
-from asset_allocation.etf_adaptive.contracts import DualPriceBar
+from asset_allocation.etf_adaptive.contracts import DualPriceBar, ExecutionAvailability
 from asset_allocation.etf_adaptive.contracts import CorporateAction, CorporateActionType
 from asset_allocation.etf_adaptive.execution import ExecutionSimulator, apply_corporate_actions, rebase_signal_state
 from asset_allocation.etf_adaptive.state import OrderIntent, OrderReason, Side, StrategyState, TrendUnit
 
 
-def _bar(*, raw_open: float = 4.0, adjustment_ratio: float = 0.25) -> DualPriceBar:
+def _bar(
+    *, raw_open: float = 4.0, adjustment_ratio: float = 0.25,
+    buy_locked: bool = False, sell_locked: bool = False,
+) -> DualPriceBar:
     return DualPriceBar(
         stock_code="510300.SH", trade_date=date(2026, 9, 3),
         signal_open=raw_open * adjustment_ratio, signal_high=raw_open * adjustment_ratio,
         signal_low=raw_open * adjustment_ratio, signal_close=raw_open * adjustment_ratio,
         raw_open=raw_open, raw_high=raw_open, raw_low=raw_open, raw_close=raw_open,
         amount=20_000_000.0, suspended=False, adjustment_ratio=adjustment_ratio,
+        execution_availability=ExecutionAvailability(buy_locked, sell_locked, "exchange"),
     )
 
 
@@ -48,6 +52,16 @@ def test_execution_rejects_missing_signal_atr_payload() -> None:
 
     assert result.fills == ()
     assert "missing signal_atr20" in result.rejected_reasons
+
+
+def test_locked_buy_rejects_before_slippage_and_fee() -> None:
+    result = ExecutionSimulator(CostConfig(), TrendConfig()).execute(
+        (_intent(),), _bar(buy_locked=True), StrategyState(cash=Decimal("120000")),
+    )
+
+    assert result.fills == ()
+    assert result.state == StrategyState(cash=Decimal("120000"))
+    assert result.rejected_reasons == ("buy_locked",)
 
 
 def test_corporate_actions_are_applied_once_in_raw_accounting_space() -> None:
@@ -129,3 +143,20 @@ def test_grid_to_trend_rebalance_buys_only_the_missing_first_unit_shares() -> No
 
     assert result.fills[0].side is Side.BUY
     assert result.fills[0].shares == 500
+
+
+def test_locked_rebalance_rejects_using_its_resolved_buy_side() -> None:
+    intent = OrderIntent(
+        date(2026, 9, 2), Side.REBALANCE, OrderReason.GRID_TO_TREND_REBALANCE,
+        0.05, (("entry", 1.0), ("trend_stop", 0.9)),
+        120_000.0, 0.005, "rebalance",
+    )
+
+    result = ExecutionSimulator(CostConfig(), TrendConfig()).execute(
+        (intent,), _bar(buy_locked=True), StrategyState(cash=Decimal("120000"), position_shares=1_000),
+    )
+
+    assert result.fills == ()
+    assert result.rejected_reasons == ("buy_locked",)
+    assert result.rejected_orders[0].side is Side.BUY
+    assert result.rejected_orders[0].reason == "buy_locked"

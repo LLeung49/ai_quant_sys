@@ -7,7 +7,16 @@ from .config import CostConfig, TrendConfig
 from .contracts import DualPriceBar
 from .contracts import CorporateAction, CorporateActionType
 from .market_data import to_raw_distance, to_raw_price, to_signal_price
-from .state import ExecutionResult, Fill, OrderIntent, OrderReason, Side, StrategyState
+from .state import ExecutionResult, Fill, OrderIntent, OrderReason, RejectedOrder, Side, StrategyState
+
+
+def is_protective_exit(reason: OrderReason) -> bool:
+    """Whether a rejected order must remain active until it can be sold."""
+    return reason in {
+        OrderReason.GRID_STOP,
+        OrderReason.TREND_STOP,
+        OrderReason.HARD_STOP,
+    }
 
 
 def commission(notional: Decimal, config: CostConfig) -> Decimal:
@@ -83,18 +92,23 @@ class ExecutionSimulator:
     ) -> ExecutionResult:
         fills: list[Fill] = []
         rejected: list[str] = []
+        rejected_orders: list[RejectedOrder] = []
         current = state
         raw_atr: float | None = None
         stop_distance: float | None = None
         raw_thresholds: tuple[tuple[str, float], ...] = ()
+        def reject(intent: OrderIntent, side: Side, reason: str) -> None:
+            rejected.append(reason)
+            rejected_orders.append(RejectedOrder(intent, side, reason))
+
         for intent in intents:
             side = intent.side
             if next_bar.suspended or next_bar.amount <= 0:
-                rejected.append("unexecutable next bar")
+                reject(intent, side, "unexecutable next bar")
                 continue
             if intent.reason in {OrderReason.TREND_ENTRY, OrderReason.TREND_ADD, OrderReason.GRID_TO_TREND_REBALANCE}:
                 if intent.signal_atr20 is None:
-                    rejected.append("missing signal_atr20")
+                    reject(intent, side, "missing signal_atr20")
                     continue
                 raw_atr = to_raw_distance(intent.signal_atr20, next_bar.adjustment_ratio)
                 stop_distance = self.trend.stop_n * raw_atr
@@ -115,12 +129,18 @@ class ExecutionSimulator:
                 shares = int(unit_notional / Decimal(str(next_bar.raw_open)) // 100) * 100
             else:
                 shares = current.position_shares
+            if side is Side.BUY and next_bar.execution_availability.buy_locked:
+                reject(intent, side, "buy_locked")
+                continue
+            if side is Side.SELL and next_bar.execution_availability.sell_locked:
+                reject(intent, side, "sell_locked")
+                continue
             raw_thresholds = tuple(
                 (name, to_raw_price(value, next_bar.adjustment_ratio))
                 for name, value in intent.signal_thresholds
             )
             if shares < 100:
-                rejected.append("insufficient lot size")
+                reject(intent, side, "insufficient lot size")
                 continue
             price = slipped_open(next_bar.raw_open, side, self.cost.slippage_bps)
             notional = Decimal(str(price)) * shares
@@ -131,13 +151,15 @@ class ExecutionSimulator:
                     notional = Decimal(str(price)) * shares
                     fee = commission(notional, self.cost)
                 if shares < 100:
-                    rejected.append("insufficient cash")
+                    reject(intent, side, "insufficient cash")
                     continue
                 current = replace(current, cash=current.cash - notional - fee, position_shares=current.position_shares + shares)
             else:
                 if shares > current.position_shares:
-                    rejected.append("insufficient shares")
+                    reject(intent, side, "insufficient shares")
                     continue
                 current = replace(current, cash=current.cash + notional - fee, position_shares=current.position_shares - shares)
             fills.append(Fill(next_bar.trade_date, side, shares, price, fee, intent.reason, to_signal_price(price, next_bar.adjustment_ratio), intent.signal_atr20))
-        return ExecutionResult(tuple(fills), current, tuple(rejected), raw_atr, stop_distance, raw_thresholds)
+        return ExecutionResult(
+            tuple(fills), current, tuple(rejected), tuple(rejected_orders), raw_atr, stop_distance, raw_thresholds,
+        )

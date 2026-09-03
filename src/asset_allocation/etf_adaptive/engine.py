@@ -13,7 +13,7 @@ from .regime import next_regime
 from .state import Decision, OrderReason, Regime, Side, StrategyState
 from .state import BacktestEvent, BacktestRequest, BacktestResult, DailyNav, OrderIntent
 from .execution import ExecutionSimulator
-from .execution import apply_corporate_actions, rebase_signal_state
+from .execution import apply_corporate_actions, is_protective_exit, rebase_signal_state
 from .grid import apply_grid_fill
 from .trend import evaluate_trend_close
 from .trend import apply_trend_fill
@@ -188,6 +188,26 @@ class AdaptiveBacktestEngine:
             if pending:
                 outcome = self._execution.execute(pending, bar, state)
                 state = outcome.state
+                retried: list[OrderIntent] = []
+                for rejected_order in outcome.rejected_orders:
+                    events.append(
+                        BacktestEvent(
+                            bar.trade_date,
+                            "rejected_order",
+                            (
+                                ("side", rejected_order.side.value),
+                                ("signal_date", rejected_order.intent.signal_date.isoformat()),
+                                ("execution_date", bar.trade_date.isoformat()),
+                                ("reason", rejected_order.reason),
+                            ),
+                        )
+                    )
+                    if (
+                        is_protective_exit(rejected_order.intent.reason)
+                        and state.position_shares > 0
+                        and rejected_order.intent not in retried
+                    ):
+                        retried.append(rejected_order.intent)
                 for fill in outcome.fills:
                     if fill.reason.name.startswith("GRID"):
                         state = apply_grid_fill(state, fill)
@@ -199,10 +219,12 @@ class AdaptiveBacktestEngine:
                         state = apply_trend_fill(state, fill, self._config.trend)
                     state = apply_exit_fill(state, fill)
                     events.append(BacktestEvent(fill.fill_date, "fill", (("reason", fill.reason.value), ("shares", str(fill.shares)))))
-                pending = ()
+                pending = tuple(retried)
             if snapshot is not None:
                 decision = process_close(state, snapshot, eligibility_by_date[bar.trade_date], self._config)
-                state, pending = decision.state, decision.orders
+                state = decision.state
+                if not pending:
+                    pending = decision.orders
             nav.append(DailyNav(bar.trade_date, state.cash, Decimal(str(bar.raw_close)) * state.position_shares))
             previous_ratio = bar.adjustment_ratio
         return BacktestResult(request, tuple(events), tuple(nav))
