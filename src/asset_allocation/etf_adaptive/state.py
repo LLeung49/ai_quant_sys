@@ -72,6 +72,7 @@ class Fill:
     raw_price: float
     commission: Decimal
     reason: OrderReason
+    signal_price: float | None = None
 
 
 @dataclass(frozen=True)

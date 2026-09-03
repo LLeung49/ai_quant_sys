@@ -1,6 +1,7 @@
 """Signal-coordinate daily-bar indicator snapshots."""
 
 from dataclasses import dataclass
+from datetime import date
 from math import log, sqrt
 from typing import Sequence
 
@@ -21,6 +22,7 @@ class IndicatorSnapshot:
     amount_ratio: float | None = None
     price_percentile_252: float | None = None
     hurst: float | None = None
+    signal_date: date | None = None
 
 
 def _population_std(values: Sequence[float]) -> float:
@@ -143,5 +145,6 @@ def compute_indicators(bars: Sequence[DualPriceBar]) -> tuple[IndicatorSnapshot 
                 sum(value <= bar.signal_close for value in prior252) / len(prior252)
             ),
             hurst=_hurst(prior252),
+            signal_date=bar.trade_date,
         ))
     return tuple(snapshots)
