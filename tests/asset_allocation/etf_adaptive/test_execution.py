@@ -6,7 +6,12 @@ import pytest
 from asset_allocation.etf_adaptive.config import CostConfig, TrendConfig
 from asset_allocation.etf_adaptive.contracts import DualPriceBar, ExecutionAvailability
 from asset_allocation.etf_adaptive.contracts import CorporateAction, CorporateActionType
-from asset_allocation.etf_adaptive.execution import ExecutionSimulator, apply_corporate_actions, rebase_signal_state
+from asset_allocation.etf_adaptive.execution import (
+    ExecutionSimulator,
+    aggregate_trend_risk,
+    apply_corporate_actions,
+    rebase_signal_state,
+)
 from asset_allocation.etf_adaptive.state import OrderIntent, OrderReason, Side, StrategyState, TrendUnit
 
 
@@ -160,3 +165,96 @@ def test_locked_rebalance_rejects_using_its_resolved_buy_side() -> None:
     assert result.rejected_reasons == ("buy_locked",)
     assert result.rejected_orders[0].side is Side.BUY
     assert result.rejected_orders[0].reason == "buy_locked"
+
+
+def _state_with_existing_raw_risk(existing_shares: int = 2_300) -> StrategyState:
+    return StrategyState(
+        cash=Decimal("120000"),
+        position_shares=existing_shares,
+        trend_stop_price=1.0,
+        units=(TrendUnit(5.0, 1.25, 0.05, existing_shares, 1.275),),
+    )
+
+
+def _trend_intent(reason: OrderReason) -> OrderIntent:
+    return OrderIntent(
+        signal_date=date(2026, 9, 2),
+        side=Side.REBALANCE if reason is OrderReason.GRID_TO_TREND_REBALANCE else Side.BUY,
+        reason=reason,
+        signal_atr20=0.05,
+        signal_thresholds=(("entry", 1.0), ("trend_stop", 1.0)),
+        target_budget=120_000.0,
+        risk_per_unit=0.005,
+        quantity_rationale="trend ATR risk unit",
+    )
+
+
+def test_aggregate_trend_risk_uses_current_raw_coordinate_stop() -> None:
+    state = _state_with_existing_raw_risk()
+
+    assert aggregate_trend_risk(state, raw_stop=4.0, adjustment_ratio=0.25) == Decimal("2300.00")
+
+
+@pytest.mark.parametrize("reason", (OrderReason.TREND_ENTRY, OrderReason.TREND_ADD))
+def test_trend_entry_or_add_is_trimmed_to_remaining_stop_risk(reason: OrderReason) -> None:
+    result = ExecutionSimulator(CostConfig(), TrendConfig()).execute(
+        (_trend_intent(reason),), _bar(), _state_with_existing_raw_risk(),
+    )
+
+    assert result.fills[0].shares == 700
+
+
+def test_trend_add_below_one_lot_remaining_risk_is_rejected() -> None:
+    result = ExecutionSimulator(CostConfig(), TrendConfig()).execute(
+        (_trend_intent(OrderReason.TREND_ADD),), _bar(), _state_with_existing_raw_risk(2_600),
+    )
+
+    assert "aggregate_risk_budget" in result.rejected_reasons
+
+
+def test_grid_to_trend_rebalance_reduces_to_aggregate_raw_risk_cap() -> None:
+    result = ExecutionSimulator(CostConfig(), TrendConfig()).execute(
+        (_trend_intent(OrderReason.GRID_TO_TREND_REBALANCE),), _bar(), _state_with_existing_raw_risk(),
+    )
+
+    assert result.fills[0].side is Side.SELL
+    assert result.fills[0].shares == 1_600
+
+
+def test_trend_batch_reserves_remaining_risk_after_each_fill() -> None:
+    result = ExecutionSimulator(CostConfig(), TrendConfig()).execute(
+        (_trend_intent(OrderReason.TREND_ADD), _trend_intent(OrderReason.TREND_ADD)),
+        _bar(),
+        _state_with_existing_raw_risk(),
+    )
+
+    assert tuple(fill.shares for fill in result.fills) == (700,)
+    assert result.rejected_reasons == ("aggregate_risk_budget",)
+
+
+def test_trend_add_caps_gapped_fill_risk_after_adjustment_ratio_change() -> None:
+    old_basis = StrategyState(
+        cash=Decimal("100000"),
+        position_shares=1_200,
+        trend_stop_price=0.9,
+        units=(
+            TrendUnit(5.0, 1.25, 0.05, 1_000, 1.275),
+            TrendUnit(6.0, 1.50, 0.05, 200, 1.525),
+        ),
+    )
+    state = rebase_signal_state(old_basis, old_ratio=0.25, new_ratio=0.20)
+    bar = _bar(raw_open=5.5, adjustment_ratio=0.20)
+    result = ExecutionSimulator(CostConfig(), TrendConfig()).execute(
+        (_trend_intent(OrderReason.TREND_ADD),), bar, state,
+    )
+
+    fill = result.fills[0]
+    raw_stop = 3.6
+    post_fill_risk = aggregate_trend_risk(state, raw_stop, bar.adjustment_ratio) + (
+        Decimal(str(fill.raw_price - raw_stop)) * fill.shares
+    )
+    raw_equity = state.cash + Decimal(str(bar.raw_open)) * state.position_shares
+    risk_cap = raw_equity * Decimal("0.005") * 4
+
+    assert fill.shares == 100
+    assert post_fill_risk <= risk_cap

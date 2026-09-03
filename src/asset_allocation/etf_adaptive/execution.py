@@ -19,6 +19,18 @@ def is_protective_exit(reason: OrderReason) -> bool:
     }
 
 
+def aggregate_trend_risk(
+    state: StrategyState, raw_stop: float, adjustment_ratio: float,
+) -> Decimal:
+    """Return open TREND-unit loss to the current stop in raw-price space."""
+    raw_stop_decimal = Decimal(str(raw_stop))
+    risk = Decimal("0")
+    for unit in state.units:
+        raw_entry = Decimal(str(to_raw_price(unit.signal_fill_price, adjustment_ratio)))
+        risk += max(Decimal("0"), raw_entry - raw_stop_decimal) * unit.shares
+    return risk
+
+
 def commission(notional: Decimal, config: CostConfig) -> Decimal:
     charged = max(notional * Decimal(str(config.commission_rate)), Decimal(str(config.minimum_commission)))
     return charged.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
@@ -97,6 +109,7 @@ class ExecutionSimulator:
         raw_atr: float | None = None
         stop_distance: float | None = None
         raw_thresholds: tuple[tuple[str, float], ...] = ()
+        reserved_trend_risk = Decimal("0")
         def reject(intent: OrderIntent, side: Side, reason: str) -> None:
             rejected.append(reason)
             rejected_orders.append(RejectedOrder(intent, side, reason))
@@ -113,6 +126,38 @@ class ExecutionSimulator:
                 raw_atr = to_raw_distance(intent.signal_atr20, next_bar.adjustment_ratio)
                 stop_distance = self.trend.stop_n * raw_atr
                 target_shares = int(intent.target_budget * intent.risk_per_unit / stop_distance // 100) * 100
+                signal_stop = state.trend_stop_price
+                if signal_stop is None:
+                    signal_stop = next(
+                        (value for name, value in intent.signal_thresholds if name == "trend_stop"),
+                        None,
+                    )
+                if signal_stop is None:
+                    raw_stop = next_bar.raw_open - stop_distance
+                else:
+                    raw_stop = to_raw_price(signal_stop, next_bar.adjustment_ratio)
+                raw_equity = current.cash + Decimal(str(next_bar.raw_open)) * current.position_shares
+                risk_cap = (
+                    raw_equity
+                    * Decimal(str(intent.risk_per_unit))
+                    * self.trend.max_units
+                )
+                remaining_risk = max(
+                    Decimal("0"),
+                    risk_cap
+                    - aggregate_trend_risk(current, raw_stop, next_bar.adjustment_ratio)
+                    - reserved_trend_risk,
+                )
+                candidate_price = Decimal(str(slipped_open(
+                    next_bar.raw_open, Side.BUY, self.cost.slippage_bps,
+                )))
+                risk_per_share = max(
+                    Decimal(str(stop_distance)), candidate_price - Decimal(str(raw_stop)),
+                )
+                risk_limited_shares = int(
+                    (remaining_risk / risk_per_share) // 100
+                ) * 100
+                target_shares = min(target_shares, risk_limited_shares)
                 shares = (
                     abs(target_shares - current.position_shares)
                     if intent.reason is OrderReason.GRID_TO_TREND_REBALANCE
@@ -140,7 +185,17 @@ class ExecutionSimulator:
                 for name, value in intent.signal_thresholds
             )
             if shares < 100:
-                reject(intent, side, "insufficient lot size")
+                reject(
+                    intent,
+                    side,
+                    "aggregate_risk_budget"
+                    if intent.reason in {
+                        OrderReason.TREND_ENTRY,
+                        OrderReason.TREND_ADD,
+                        OrderReason.GRID_TO_TREND_REBALANCE,
+                    }
+                    else "insufficient lot size",
+                )
                 continue
             price = slipped_open(next_bar.raw_open, side, self.cost.slippage_bps)
             notional = Decimal(str(price)) * shares
@@ -159,6 +214,15 @@ class ExecutionSimulator:
                     reject(intent, side, "insufficient shares")
                     continue
                 current = replace(current, cash=current.cash + notional - fee, position_shares=current.position_shares - shares)
+            if (
+                side is Side.BUY
+                and intent.reason in {
+                    OrderReason.TREND_ENTRY,
+                    OrderReason.TREND_ADD,
+                    OrderReason.GRID_TO_TREND_REBALANCE,
+                }
+            ):
+                reserved_trend_risk += risk_per_share * shares
             fills.append(Fill(next_bar.trade_date, side, shares, price, fee, intent.reason, to_signal_price(price, next_bar.adjustment_ratio), intent.signal_atr20))
         return ExecutionResult(
             tuple(fills), current, tuple(rejected), tuple(rejected_orders), raw_atr, stop_distance, raw_thresholds,
