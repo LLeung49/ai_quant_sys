@@ -106,6 +106,8 @@ class ExecutionResult:
 class BacktestRequest:
     stock_code: str
     initial_cash: Decimal
+    start_date: date | None = None
+    end_date: date | None = None
 
 
 @dataclass(frozen=True)

@@ -192,7 +192,14 @@ def test_daily_engine_marks_nav_with_raw_close() -> None:
     eligibility = ETFEligibility(True, (), "broad", 252, 20_000_000.0)
     engine = AdaptiveBacktestEngine(AdaptiveConfig.default(), ExecutionSimulator(AdaptiveConfig.default().cost, AdaptiveConfig.default().trend))
 
-    result = engine.run(BacktestRequest("510300.SH", Decimal("1000")), bars, {bar.trade_date: eligibility for bar in bars})
+    result = engine.run_with_data(
+        BacktestRequest(
+            "510300.SH", Decimal("1000"),
+            start_date=bars[0].trade_date, end_date=bars[-1].trade_date,
+        ),
+        bars,
+        {bar.trade_date: eligibility for bar in bars},
+    )
 
     assert len(result.nav) == 253
     assert result.nav[-1].market_value == Decimal("0")
@@ -213,11 +220,14 @@ def test_daily_engine_records_company_action_before_processing_the_session() -> 
     config = AdaptiveConfig.default()
     engine = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend))
 
-    result = engine.run(
-        BacktestRequest("510300.SH", Decimal("1000")),
+    result = engine.run_with_data(
+        BacktestRequest(
+            "510300.SH", Decimal("1000"),
+            start_date=bar.trade_date, end_date=bar.trade_date,
+        ),
         (bar,),
         {bar.trade_date: eligibility},
-        {bar.trade_date: (action, action)},
+        (action, action),
     )
 
     assert len(result.events) == 1
@@ -249,8 +259,10 @@ def test_locked_stop_is_retried_but_locked_entry_expires(monkeypatch: pytest.Mon
     )
     monkeypatch.setattr(engine_module, "process_close", lambda *_: next(decisions))
     config = AdaptiveConfig.default()
-    result = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend)).run(
-        BacktestRequest("510300.SH", Decimal("120000")), bars,
+    result = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend)).run_with_data(
+        BacktestRequest(
+            "510300.SH", Decimal("120000"), start_date=dates[0], end_date=dates[-1],
+        ), bars,
         {bar.trade_date: ETFEligibility(True, (), "broad", 252, 20_000_000.0) for bar in bars},
     )
 
@@ -285,8 +297,10 @@ def test_protective_stop_retries_after_an_unexecutable_session(
     monkeypatch.setattr(engine_module, "process_close", lambda *_: next(decisions))
     config = AdaptiveConfig.default()
 
-    result = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend)).run(
-        BacktestRequest("510300.SH", Decimal("120000")), bars,
+    result = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend)).run_with_data(
+        BacktestRequest(
+            "510300.SH", Decimal("120000"), start_date=dates[0], end_date=dates[-1],
+        ), bars,
         {bar.trade_date: ETFEligibility(True, (), "broad", 252, 20_000_000.0) for bar in bars},
     )
 
@@ -320,8 +334,10 @@ def test_locked_rebalance_emits_resolved_side_in_rejection_event(
     monkeypatch.setattr(engine_module, "process_close", lambda *_: next(decisions))
     config = AdaptiveConfig.default()
 
-    result = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend)).run(
-        BacktestRequest("510300.SH", Decimal("120000")), bars,
+    result = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend)).run_with_data(
+        BacktestRequest(
+            "510300.SH", Decimal("120000"), start_date=dates[0], end_date=dates[-1],
+        ), bars,
         {bar.trade_date: ETFEligibility(True, (), "broad", 252, 20_000_000.0) for bar in bars},
     )
 
@@ -351,8 +367,10 @@ def test_consecutive_locked_sessions_keep_one_protective_exit(monkeypatch: pytes
     monkeypatch.setattr(engine_module, "process_close", lambda *_: next(decisions))
     config = AdaptiveConfig.default()
 
-    result = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend)).run(
-        BacktestRequest("510300.SH", Decimal("120000")), bars,
+    result = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend)).run_with_data(
+        BacktestRequest(
+            "510300.SH", Decimal("120000"), start_date=dates[0], end_date=dates[-1],
+        ), bars,
         {bar.trade_date: ETFEligibility(True, (), "broad", 252, 20_000_000.0) for bar in bars},
     )
 

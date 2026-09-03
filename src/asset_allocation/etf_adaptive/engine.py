@@ -1,11 +1,13 @@
 """Daily coordinator for the adaptive ETF state machine."""
 
 from dataclasses import replace
+from datetime import date
 from decimal import Decimal
 from typing import Mapping
 
+from .backtest_provider import AdaptiveBacktestDataProvider
 from .config import AdaptiveConfig
-from .contracts import CorporateAction, ETFEligibility
+from .contracts import CorporateAction, DualPriceBar, ETFEligibility
 from .grid import evaluate_grid_close, next_grid_stop
 from .grid import initial_grid_target_pct
 from .indicators import IndicatorSnapshot
@@ -143,19 +145,51 @@ def process_close(
 class AdaptiveBacktestEngine:
     """Deterministic daily runner; all fills happen before that day's close."""
 
-    def __init__(self, config: AdaptiveConfig, execution: ExecutionSimulator) -> None:
+    def __init__(
+        self,
+        config: AdaptiveConfig,
+        execution: ExecutionSimulator,
+        provider: AdaptiveBacktestDataProvider | None = None,
+    ) -> None:
         self._config = config
         self._execution = execution
+        self._provider = provider
 
     def run(
         self,
         request: BacktestRequest,
-        bars: tuple,
-        eligibility_by_date: Mapping,
-        actions_by_date: Mapping | None = None,
     ) -> BacktestResult:
+        """Load all point-in-time inputs from the configured production boundary."""
+
+        start_date, end_date = _request_range(request)
+        if self._provider is None:
+            raise ValueError("backtest provider is required for run")
+        bars = tuple(
+            self._provider.load_bars(request.stock_code, start_date, end_date)
+        )
+        actions = tuple(
+            self._provider.load_actions(request.stock_code, start_date, end_date)
+        )
+        eligibility_by_date = self._provider.load_eligibility(
+            request.stock_code, bars
+        )
+        return self.run_with_data(request, bars, eligibility_by_date, actions)
+
+    def run_with_data(
+        self,
+        request: BacktestRequest,
+        bars: tuple[DualPriceBar, ...],
+        eligibility_by_date: Mapping[date, ETFEligibility],
+        actions: tuple[CorporateAction, ...] = (),
+    ) -> BacktestResult:
+        """Run against explicit immutable inputs for tests and research."""
+
         from .indicators import compute_indicators
 
+        _validate_run_inputs(request, bars, eligibility_by_date, actions)
+        actions_by_date: dict[date, list[CorporateAction]] = {}
+        for action in actions:
+            actions_by_date.setdefault(action.effective_date, []).append(action)
         state = StrategyState(cash=request.initial_cash)
         pending: tuple[OrderIntent, ...] = ()
         events: list[BacktestEvent] = []
@@ -163,16 +197,16 @@ class AdaptiveBacktestEngine:
         snapshots = compute_indicators(bars)
         previous_ratio: float | None = None
         for bar, snapshot in zip(bars, snapshots):
-            actions = () if actions_by_date is None else actions_by_date.get(bar.trade_date, ())
+            session_actions = tuple(actions_by_date.get(bar.trade_date, ()))
             previously_applied = set(state.applied_action_ids)
             state = apply_session_actions(
                 state,
-                actions,
+                session_actions,
                 old_ratio=bar.adjustment_ratio if previous_ratio is None else previous_ratio,
                 new_ratio=bar.adjustment_ratio,
             )
             recorded_action_ids: set[str] = set()
-            for action in actions:
+            for action in session_actions:
                 if (
                     action.event_id not in previously_applied
                     and action.event_id not in recorded_action_ids
@@ -228,3 +262,51 @@ class AdaptiveBacktestEngine:
             nav.append(DailyNav(bar.trade_date, state.cash, Decimal(str(bar.raw_close)) * state.position_shares))
             previous_ratio = bar.adjustment_ratio
         return BacktestResult(request, tuple(events), tuple(nav))
+
+
+def _request_range(request: BacktestRequest) -> tuple[date, date]:
+    if request.start_date is None or request.end_date is None:
+        raise ValueError("backtest request requires start_date and end_date")
+    if type(request.start_date) is not date:
+        raise ValueError("start_date must be a date")
+    if type(request.end_date) is not date:
+        raise ValueError("end_date must be a date")
+    if request.start_date > request.end_date:
+        raise ValueError("start_date must not be after end_date")
+    return request.start_date, request.end_date
+
+
+def _validate_run_inputs(
+    request: BacktestRequest,
+    bars: tuple[DualPriceBar, ...],
+    eligibility_by_date: Mapping[date, ETFEligibility],
+    actions: tuple[CorporateAction, ...],
+) -> None:
+    start_date, end_date = _request_range(request)
+    if not bars:
+        raise ValueError("bar coverage must include the requested start and end dates")
+    if any(bar.stock_code != request.stock_code for bar in bars):
+        raise ValueError("bar stock code must exactly match the request")
+    sessions = tuple(bar.trade_date for bar in bars)
+    if sessions != tuple(sorted(sessions)) or len(sessions) != len(set(sessions)):
+        raise ValueError("bars must contain ordered unique sessions")
+    if sessions[0] != start_date or sessions[-1] != end_date:
+        raise ValueError("bar coverage must include the requested start and end dates")
+
+    session_set = set(sessions)
+    for action in actions:
+        if action.stock_code != request.stock_code:
+            raise ValueError("corporate action stock code must exactly match the request")
+        if action.effective_date < start_date or action.effective_date > end_date:
+            raise ValueError("corporate action date must be within the requested range")
+        if action.effective_date not in session_set:
+            raise ValueError("corporate action date must match a bar session")
+
+    eligibility_dates = set(eligibility_by_date)
+    if eligibility_dates != session_set:
+        raise ValueError("eligibility coverage must exactly match bar sessions")
+    if any(
+        not isinstance(eligibility_by_date[session], ETFEligibility)
+        for session in sessions
+    ):
+        raise ValueError("eligibility values must be ETFEligibility instances")
