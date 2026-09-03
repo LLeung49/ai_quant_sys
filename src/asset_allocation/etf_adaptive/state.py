@@ -9,6 +9,7 @@ from enum import Enum
 class Side(str, Enum):
     BUY = "buy"
     SELL = "sell"
+    REBALANCE = "rebalance"
 
 
 class Regime(str, Enum):
@@ -17,11 +18,15 @@ class Regime(str, Enum):
 
 
 class OrderReason(str, Enum):
+    GRID_INITIALIZE = "grid_initialize"
     GRID_BUY = "grid_buy"
     GRID_SELL = "grid_sell"
+    GRID_STOP = "grid_stop"
+    GRID_TO_TREND_REBALANCE = "grid_to_trend_rebalance"
     TREND_ENTRY = "trend_entry"
     TREND_ADD = "trend_add"
     TREND_STOP = "trend_stop"
+    HARD_STOP = "hard_stop"
 
 
 @dataclass(frozen=True)
@@ -55,6 +60,8 @@ class StrategyState:
     trend_stop_price: float | None = None
     highest_close: float | None = None
     units: tuple[TrendUnit, ...] = ()
+    cooldown_remaining: int = 0
+    applied_action_ids: tuple[str, ...] = ()
     position_shares: int = 0
     cash: Decimal = Decimal("0")
 
@@ -84,6 +91,7 @@ class ExecutionResult:
     rejected_reasons: tuple[str, ...] = ()
     raw_atr20: float | None = None
     stop_distance: float | None = None
+    raw_thresholds: tuple[tuple[str, float], ...] = ()
 
 
 @dataclass(frozen=True)

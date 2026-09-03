@@ -1,6 +1,8 @@
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from asset_allocation.etf_adaptive.config import GridConfig
 from asset_allocation.etf_adaptive.grid import (
     apply_grid_fill,
@@ -33,13 +35,26 @@ def test_grid_anchor_moves_only_after_fill_and_gap_creates_one_order() -> None:
 
     assert len(decision.orders) == 1
     assert decision.orders[0].signal_date == date(2026, 9, 2)
+    assert decision.orders[0].target_budget == GridConfig().unit_pct
     assert decision.state.grid_anchor == 1.0
     executed_state = StrategyState(
         regime=Regime.GRID, grid_anchor=1.0, position_shares=1_100, cash=Decimal("9000"),
     )
-    filled = apply_grid_fill(executed_state, Fill(date(2026, 9, 3), Side.BUY, 100, 0.94, Decimal("5"), OrderReason.GRID_BUY, signal_price=0.94))
+    filled = apply_grid_fill(executed_state, Fill(date(2026, 9, 3), Side.BUY, 100, 0.94, Decimal("5"), OrderReason.GRID_BUY, signal_price=0.94, signal_atr20=0.1))
     assert filled.grid_anchor == 0.94
     assert filled.position_shares == 1_100
+
+
+def test_grid_initial_fill_starts_cycle_and_initializes_monotone_stop() -> None:
+    filled = apply_grid_fill(
+        StrategyState(regime=Regime.GRID, position_shares=14_900, cash=Decimal("60000")),
+        Fill(date(2026, 9, 3), Side.BUY, 14_900, 4.0, Decimal("5"), OrderReason.GRID_INITIALIZE, signal_price=1.0, signal_atr20=0.1),
+    )
+
+    assert filled.grid_anchor == 1.0
+    assert filled.cycle_entry_price == 1.0
+    assert filled.highest_close == 1.0
+    assert filled.grid_stop_price == pytest.approx(0.7)
 
 
 def test_grid_does_not_buy_below_lower_band_but_can_sell() -> None:

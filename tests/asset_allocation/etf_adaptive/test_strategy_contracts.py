@@ -43,6 +43,12 @@ def test_state_and_config_reject_unsafe_contract_values() -> None:
         TrendConfig(max_units=0)
 
 
+def test_state_persists_applied_corporate_action_event_ids_for_replay() -> None:
+    state = StrategyState(applied_action_ids=("510300.SH:2026-09-03:cash_dividend",))
+
+    assert state.applied_action_ids == ("510300.SH:2026-09-03:cash_dividend",)
+
+
 def test_fill_and_backtest_result_preserve_auditable_daily_records() -> None:
     fill = Fill(
         fill_date=date(2026, 9, 3), side=Side.BUY, shares=100,

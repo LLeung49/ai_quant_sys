@@ -94,21 +94,29 @@ def evaluate_trend_close(
 
 def apply_trend_fill(state: StrategyState, fill: Fill, config: TrendConfig) -> StrategyState:
     """Record a real fill; never advance TREND units on an unfilled intent."""
-    if fill.reason not in {OrderReason.TREND_ENTRY, OrderReason.TREND_ADD}:
+    if fill.reason not in {
+        OrderReason.TREND_ENTRY,
+        OrderReason.TREND_ADD,
+        OrderReason.GRID_TO_TREND_REBALANCE,
+    }:
         return state
-    if fill.side is not Side.BUY or fill.signal_price is None or fill.signal_atr20 is None:
-        raise ValueError("trend buy fills require signal_price and signal_atr20")
+    if (
+        (fill.reason is not OrderReason.GRID_TO_TREND_REBALANCE and fill.side is not Side.BUY)
+        or fill.signal_price is None
+        or fill.signal_atr20 is None
+    ):
+        raise ValueError("trend fills require signal_price and signal_atr20")
     signal_atr20 = fill.signal_atr20
     unit = TrendUnit(
         raw_fill_price=fill.raw_price,
         signal_fill_price=fill.signal_price,
         signal_atr20=signal_atr20,
-        shares=fill.shares,
+        shares=(state.position_shares if fill.reason is OrderReason.GRID_TO_TREND_REBALANCE else fill.shares),
         next_add_signal_price=fill.signal_price + config.add_n * signal_atr20,
     )
     new_stop = fill.signal_price - config.stop_n * signal_atr20
     return replace(
         state,
-        units=state.units + (unit,),
+        units=(unit,) if fill.reason is OrderReason.GRID_TO_TREND_REBALANCE else state.units + (unit,),
         trend_stop_price=max(state.trend_stop_price or new_stop, new_stop),
     )

@@ -32,14 +32,17 @@ def initial_grid_target_pct(snapshot: IndicatorSnapshot, config: GridConfig) -> 
     return min(1.0, max(0.0, target))
 
 
-def _intent(side: Side, reason: OrderReason, snapshot: IndicatorSnapshot) -> OrderIntent:
+def _intent(
+    side: Side, reason: OrderReason, snapshot: IndicatorSnapshot, config: GridConfig,
+) -> OrderIntent:
     if snapshot.signal_date is None:
         raise ValueError("grid intent requires a signal_date")
     return OrderIntent(
         signal_date=snapshot.signal_date, side=side, reason=reason,
         signal_atr20=snapshot.atr20,
         signal_thresholds=(("grid_anchor", snapshot.close),),
-        target_budget=0.0, risk_per_unit=0.0, quantity_rationale="grid step",
+        target_budget=config.unit_pct, risk_per_unit=0.0,
+        quantity_rationale="one GRID unit as a fraction of raw portfolio equity",
     )
 
 
@@ -49,15 +52,25 @@ def evaluate_grid_close(state: StrategyState, snapshot: IndicatorSnapshot, confi
         return Decision(state, ())
     lower = snapshot.ma20 - 2.0 * snapshot.std20
     if snapshot.close <= anchor * (1.0 - config.step_pct) and snapshot.close >= lower and eligible:
-        return Decision(state, (_intent(Side.BUY, OrderReason.GRID_BUY, snapshot),))
+        return Decision(state, (_intent(Side.BUY, OrderReason.GRID_BUY, snapshot, config),))
     if snapshot.close >= anchor * (1.0 + config.step_pct) and state.position_shares:
-        return Decision(state, (_intent(Side.SELL, OrderReason.GRID_SELL, snapshot),))
+        return Decision(state, (_intent(Side.SELL, OrderReason.GRID_SELL, snapshot, config),))
     return Decision(state, ())
 
 
 def apply_grid_fill(state: StrategyState, fill: Fill) -> StrategyState:
-    if fill.reason not in {OrderReason.GRID_BUY, OrderReason.GRID_SELL}:
+    if fill.reason not in {OrderReason.GRID_INITIALIZE, OrderReason.GRID_BUY, OrderReason.GRID_SELL}:
         return state
     if fill.signal_price is None:
         raise ValueError("grid fill requires signal_price")
+    if fill.reason is OrderReason.GRID_INITIALIZE:
+        if fill.signal_atr20 is None:
+            raise ValueError("grid initialization fill requires signal_atr20")
+        return replace(
+            state,
+            grid_anchor=fill.signal_price,
+            cycle_entry_price=fill.signal_price,
+            highest_close=fill.signal_price,
+            grid_stop_price=next_grid_stop(None, fill.signal_price, fill.signal_atr20),
+        )
     return replace(state, grid_anchor=fill.signal_price)

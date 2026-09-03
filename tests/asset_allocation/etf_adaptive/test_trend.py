@@ -5,7 +5,7 @@ import pytest
 
 from asset_allocation.etf_adaptive.config import TrendConfig
 from asset_allocation.etf_adaptive.indicators import IndicatorSnapshot
-from asset_allocation.etf_adaptive.state import Fill, OrderReason, Regime, StrategyState, TrendUnit
+from asset_allocation.etf_adaptive.state import Fill, OrderReason, Regime, Side, StrategyState, TrendUnit
 from asset_allocation.etf_adaptive.trend import apply_trend_fill, evaluate_trend_close, trend_entry_allowed
 
 
@@ -98,3 +98,30 @@ def test_trend_adds_at_most_one_unit_and_advances_only_after_fill() -> None:
     assert len(filled.units) == 2
     assert filled.position_shares == 1_500
     assert filled.units[-1].next_add_signal_price == pytest.approx(1.155)
+
+
+def test_grid_to_trend_rebalance_fill_creates_the_first_trend_unit() -> None:
+    state = StrategyState(regime=Regime.TREND, position_shares=1_500, cash=Decimal("114000"))
+    fill = Fill(
+        date(2026, 9, 3), Side.BUY, 500, 4.0, Decimal("5"),
+        OrderReason.GRID_TO_TREND_REBALANCE, signal_price=1.0, signal_atr20=0.05,
+    )
+
+    transitioned = apply_trend_fill(state, fill, TrendConfig())
+
+    assert len(transitioned.units) == 1
+    assert transitioned.units[0].shares == 1_500
+    assert transitioned.trend_stop_price == pytest.approx(0.9)
+
+
+def test_grid_to_trend_trim_fill_also_creates_the_first_trend_unit() -> None:
+    state = StrategyState(regime=Regime.TREND, position_shares=1_500, cash=Decimal("126000"))
+    fill = Fill(
+        date(2026, 9, 3), Side.SELL, 500, 4.0, Decimal("5"),
+        OrderReason.GRID_TO_TREND_REBALANCE, signal_price=1.0, signal_atr20=0.05,
+    )
+
+    transitioned = apply_trend_fill(state, fill, TrendConfig())
+
+    assert len(transitioned.units) == 1
+    assert transitioned.units[0].shares == 1_500

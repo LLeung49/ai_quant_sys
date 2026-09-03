@@ -6,7 +6,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from .config import CostConfig, TrendConfig
 from .contracts import DualPriceBar
 from .contracts import CorporateAction, CorporateActionType
-from .market_data import to_raw_distance, to_signal_price
+from .market_data import to_raw_distance, to_raw_price, to_signal_price
 from .state import ExecutionResult, Fill, OrderIntent, OrderReason, Side, StrategyState
 
 
@@ -45,6 +45,34 @@ def apply_corporate_actions(
     return current, tuple(sorted(applied))
 
 
+def rebase_signal_state(
+    state: StrategyState, old_ratio: float, new_ratio: float,
+) -> StrategyState:
+    """Keep persistent signal levels continuous when the adjustment basis changes."""
+    if old_ratio <= 0 or new_ratio <= 0:
+        raise ValueError("adjustment ratios must be positive")
+    scale = new_ratio / old_ratio
+    def level(value: float | None) -> float | None:
+        return None if value is None else value * scale
+    return replace(
+        state,
+        grid_anchor=level(state.grid_anchor),
+        cycle_entry_price=level(state.cycle_entry_price),
+        grid_stop_price=level(state.grid_stop_price),
+        trend_stop_price=level(state.trend_stop_price),
+        highest_close=level(state.highest_close),
+        units=tuple(
+            replace(
+                unit,
+                signal_fill_price=unit.signal_fill_price * scale,
+                signal_atr20=unit.signal_atr20 * scale,
+                next_add_signal_price=unit.next_add_signal_price * scale,
+            )
+            for unit in state.units
+        ),
+    )
+
+
 class ExecutionSimulator:
     def __init__(self, cost: CostConfig, trend: TrendConfig) -> None:
         self.cost = cost
@@ -58,26 +86,46 @@ class ExecutionSimulator:
         current = state
         raw_atr: float | None = None
         stop_distance: float | None = None
+        raw_thresholds: tuple[tuple[str, float], ...] = ()
         for intent in intents:
+            side = intent.side
             if next_bar.suspended or next_bar.amount <= 0:
                 rejected.append("unexecutable next bar")
                 continue
-            if intent.reason in {OrderReason.TREND_ENTRY, OrderReason.TREND_ADD}:
+            if intent.reason in {OrderReason.TREND_ENTRY, OrderReason.TREND_ADD, OrderReason.GRID_TO_TREND_REBALANCE}:
                 if intent.signal_atr20 is None:
                     rejected.append("missing signal_atr20")
                     continue
                 raw_atr = to_raw_distance(intent.signal_atr20, next_bar.adjustment_ratio)
                 stop_distance = self.trend.stop_n * raw_atr
-                shares = int(intent.target_budget * intent.risk_per_unit / stop_distance // 100) * 100
+                target_shares = int(intent.target_budget * intent.risk_per_unit / stop_distance // 100) * 100
+                shares = (
+                    abs(target_shares - current.position_shares)
+                    if intent.reason is OrderReason.GRID_TO_TREND_REBALANCE
+                    else target_shares
+                )
+                if intent.reason is OrderReason.GRID_TO_TREND_REBALANCE:
+                    side = Side.BUY if target_shares >= current.position_shares else Side.SELL
+            elif intent.reason is OrderReason.GRID_INITIALIZE:
+                candidate_price = slipped_open(next_bar.raw_open, intent.side, self.cost.slippage_bps)
+                shares = int(intent.target_budget / candidate_price // 100) * 100
+            elif intent.reason in {OrderReason.GRID_BUY, OrderReason.GRID_SELL}:
+                raw_equity = current.cash + Decimal(str(next_bar.raw_open)) * current.position_shares
+                unit_notional = raw_equity * Decimal(str(intent.target_budget))
+                shares = int(unit_notional / Decimal(str(next_bar.raw_open)) // 100) * 100
             else:
                 shares = current.position_shares
+            raw_thresholds = tuple(
+                (name, to_raw_price(value, next_bar.adjustment_ratio))
+                for name, value in intent.signal_thresholds
+            )
             if shares < 100:
                 rejected.append("insufficient lot size")
                 continue
-            price = slipped_open(next_bar.raw_open, intent.side, self.cost.slippage_bps)
+            price = slipped_open(next_bar.raw_open, side, self.cost.slippage_bps)
             notional = Decimal(str(price)) * shares
             fee = commission(notional, self.cost)
-            if intent.side is Side.BUY:
+            if side is Side.BUY:
                 while shares >= 100 and notional + fee > current.cash:
                     shares -= 100
                     notional = Decimal(str(price)) * shares
@@ -91,5 +139,5 @@ class ExecutionSimulator:
                     rejected.append("insufficient shares")
                     continue
                 current = replace(current, cash=current.cash + notional - fee, position_shares=current.position_shares - shares)
-            fills.append(Fill(next_bar.trade_date, intent.side, shares, price, fee, intent.reason, to_signal_price(price, next_bar.adjustment_ratio), intent.signal_atr20))
-        return ExecutionResult(tuple(fills), current, tuple(rejected), raw_atr, stop_distance)
+            fills.append(Fill(next_bar.trade_date, side, shares, price, fee, intent.reason, to_signal_price(price, next_bar.adjustment_ratio), intent.signal_atr20))
+        return ExecutionResult(tuple(fills), current, tuple(rejected), raw_atr, stop_distance, raw_thresholds)
