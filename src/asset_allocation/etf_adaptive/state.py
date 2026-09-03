@@ -20,6 +20,7 @@ class OrderReason(str, Enum):
     GRID_BUY = "grid_buy"
     GRID_SELL = "grid_sell"
     TREND_ENTRY = "trend_entry"
+    TREND_ADD = "trend_add"
     TREND_STOP = "trend_stop"
 
 
@@ -73,6 +74,7 @@ class Fill:
     commission: Decimal
     reason: OrderReason
     signal_price: float | None = None
+    signal_atr20: float | None = None
 
 
 @dataclass(frozen=True)

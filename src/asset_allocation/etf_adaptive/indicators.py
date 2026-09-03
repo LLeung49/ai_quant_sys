@@ -23,6 +23,8 @@ class IndicatorSnapshot:
     price_percentile_252: float | None = None
     hurst: float | None = None
     signal_date: date | None = None
+    prior_dif: float | None = None
+    prior_dea: float | None = None
 
 
 def _population_std(values: Sequence[float]) -> float:
@@ -146,5 +148,7 @@ def compute_indicators(bars: Sequence[DualPriceBar]) -> tuple[IndicatorSnapshot 
             ),
             hurst=_hurst(prior252),
             signal_date=bar.trade_date,
+            prior_dif=difs[index - 1],
+            prior_dea=deas[index - 1],
         ))
     return tuple(snapshots)
