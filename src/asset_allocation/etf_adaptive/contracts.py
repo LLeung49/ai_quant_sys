@@ -43,6 +43,18 @@ def _validate_positive_decimal(value: Decimal, field_name: str) -> None:
 
 
 @dataclass(frozen=True)
+class ExecutionAvailability:
+    buy_locked: bool
+    sell_locked: bool
+    provenance: str
+
+    def __post_init__(self) -> None:
+        _require_bool(self.buy_locked, "buy_locked")
+        _require_bool(self.sell_locked, "sell_locked")
+        _require_non_empty_text(self.provenance, "provenance")
+
+
+@dataclass(frozen=True)
 class DualPriceBar:
     stock_code: str
     trade_date: date
@@ -57,6 +69,10 @@ class DualPriceBar:
     amount: float
     suspended: bool
     adjustment_ratio: float
+    raw_pre_close: float = 1.0
+    execution_availability: ExecutionAvailability = ExecutionAvailability(
+        True, True, "unavailable"
+    )
 
     def __post_init__(self) -> None:
         _require_non_empty_text(self.stock_code, "stock_code")
@@ -77,10 +93,15 @@ class DualPriceBar:
             for value in prices
         ):
             raise ValueError("prices must be positive finite numbers")
+        _validate_finite_float(
+            self.raw_pre_close, "raw_pre_close", allow_zero=False
+        )
         _validate_finite_float(self.amount, "amount", allow_zero=True)
         _validate_finite_float(
             self.adjustment_ratio, "adjustment_ratio", allow_zero=False
         )
+        if not isinstance(self.execution_availability, ExecutionAvailability):
+            raise ValueError("execution_availability must be an ExecutionAvailability")
 
 
 @dataclass(frozen=True)

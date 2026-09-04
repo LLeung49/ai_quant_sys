@@ -9,9 +9,45 @@ from asset_allocation.etf_adaptive.contracts import (
     DataQualityError,
     DataQualityIssue,
     DualPriceBar,
+    ExecutionAvailability,
     ETFEligibility,
     ETFMetadata,
 )
+
+
+def _bar(**overrides: object) -> DualPriceBar:
+    values: dict[str, object] = {
+        "stock_code": "510300.SH",
+        "trade_date": date(2026, 9, 1),
+        "signal_open": 1.0,
+        "signal_high": 1.1,
+        "signal_low": 0.9,
+        "signal_close": 1.0,
+        "raw_open": 4.0,
+        "raw_high": 4.1,
+        "raw_low": 3.9,
+        "raw_close": 4.0,
+        "raw_pre_close": 3.9,
+        "amount": 20_000_000.0,
+        "suspended": False,
+        "adjustment_ratio": 0.25,
+        "execution_availability": ExecutionAvailability(False, False, "exchange"),
+    }
+    availability = overrides.pop("availability", None)
+    if availability is not None:
+        values["execution_availability"] = availability
+    values.update(overrides)
+    return DualPriceBar(**values)  # type: ignore[arg-type]
+
+
+def test_bar_carries_validated_raw_pre_close_and_availability() -> None:
+    bar = _bar(
+        availability=ExecutionAvailability(True, False, "exchange")
+    )
+
+    assert bar.execution_availability.buy_locked is True
+    with pytest.raises(ValueError, match="raw_pre_close"):
+        _bar(raw_pre_close=0.0)
 
 
 def test_dual_price_bar_rejects_non_positive_prices() -> None:

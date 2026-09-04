@@ -4,15 +4,19 @@ from decimal import Decimal
 import pytest
 
 from asset_allocation.etf_adaptive.config import AdaptiveConfig
-from asset_allocation.etf_adaptive.contracts import ETFEligibility
+from asset_allocation.etf_adaptive.contracts import ETFEligibility, ExecutionAvailability
 from asset_allocation.etf_adaptive.engine import AdaptiveBacktestEngine, apply_exit_fill, process_close
+from asset_allocation.etf_adaptive import engine as engine_module
 from asset_allocation.etf_adaptive.execution import ExecutionSimulator
 from asset_allocation.etf_adaptive.contracts import CorporateAction, CorporateActionType, DualPriceBar
 from asset_allocation.etf_adaptive.engine import apply_session_actions
 from asset_allocation.etf_adaptive.indicators import IndicatorSnapshot
 from asset_allocation.etf_adaptive.state import (
     BacktestRequest,
+    BacktestEvent,
+    Decision,
     Fill,
+    OrderIntent,
     OrderReason,
     Regime,
     Side,
@@ -188,7 +192,14 @@ def test_daily_engine_marks_nav_with_raw_close() -> None:
     eligibility = ETFEligibility(True, (), "broad", 252, 20_000_000.0)
     engine = AdaptiveBacktestEngine(AdaptiveConfig.default(), ExecutionSimulator(AdaptiveConfig.default().cost, AdaptiveConfig.default().trend))
 
-    result = engine.run(BacktestRequest("510300.SH", Decimal("1000")), bars, {bar.trade_date: eligibility for bar in bars})
+    result = engine.run_with_data(
+        BacktestRequest(
+            "510300.SH", Decimal("1000"),
+            start_date=bars[0].trade_date, end_date=bars[-1].trade_date,
+        ),
+        bars,
+        {bar.trade_date: eligibility for bar in bars},
+    )
 
     assert len(result.nav) == 253
     assert result.nav[-1].market_value == Decimal("0")
@@ -209,13 +220,166 @@ def test_daily_engine_records_company_action_before_processing_the_session() -> 
     config = AdaptiveConfig.default()
     engine = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend))
 
-    result = engine.run(
-        BacktestRequest("510300.SH", Decimal("1000")),
+    result = engine.run_with_data(
+        BacktestRequest(
+            "510300.SH", Decimal("1000"),
+            start_date=bar.trade_date, end_date=bar.trade_date,
+        ),
         (bar,),
         {bar.trade_date: eligibility},
-        {bar.trade_date: (action, action)},
+        (action, action),
     )
 
     assert len(result.events) == 1
     assert result.events[0].kind == "corporate_action"
     assert result.events[0].payload == (("event_id", action.event_id),)
+
+
+def test_locked_stop_is_retried_but_locked_entry_expires(monkeypatch: pytest.MonkeyPatch) -> None:
+    dates = tuple(date(2026, 9, 1 + offset) for offset in range(3))
+    bars = tuple(
+        DualPriceBar(
+            "510300.SH", trade_date, 1.0, 1.1, 0.9, 1.0, 4.0, 4.4, 3.6, 4.0,
+            20_000_000.0, False, 0.25, 4.0,
+            ExecutionAvailability(offset == 1, offset == 1, "exchange"),
+        )
+        for offset, trade_date in enumerate(dates)
+    )
+    stop = OrderIntent(dates[0], Side.SELL, OrderReason.GRID_STOP, 0.05, (), 0.0, 0.0, "stop")
+    entry = OrderIntent(dates[0], Side.BUY, OrderReason.TREND_ENTRY, 0.05, (), 120_000.0, 0.005, "entry")
+    attempted_entry = OrderIntent(dates[1], Side.BUY, OrderReason.GRID_INITIALIZE, 0.05, (), 60_000.0, 0.0, "suppressed")
+    decisions = iter((
+        Decision(StrategyState(cash=Decimal("116000"), position_shares=1_000), (stop, entry)),
+        Decision(StrategyState(cash=Decimal("116000"), position_shares=1_000), (attempted_entry,)),
+        Decision(StrategyState(cash=Decimal("116000"), position_shares=1_000), ()),
+    ))
+    monkeypatch.setattr(
+        "asset_allocation.etf_adaptive.indicators.compute_indicators",
+        lambda values: (object(),) * len(values),
+    )
+    monkeypatch.setattr(engine_module, "process_close", lambda *_: next(decisions))
+    config = AdaptiveConfig.default()
+    result = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend)).run_with_data(
+        BacktestRequest(
+            "510300.SH", Decimal("120000"), start_date=dates[0], end_date=dates[-1],
+        ), bars,
+        {bar.trade_date: ETFEligibility(True, (), "broad", 252, 20_000_000.0) for bar in bars},
+    )
+
+    assert [event.payload[-1][1] for event in result.events if event.kind == "rejected_order"] == [
+        "sell_locked", "buy_locked",
+    ]
+    assert [(event.kind, event.payload[0][1]) for event in result.events if event.kind == "fill"] == [
+        ("fill", "grid_stop"),
+    ]
+
+
+@pytest.mark.parametrize("suspended, amount", ((True, 20_000_000.0), (False, 0.0)))
+def test_protective_stop_retries_after_an_unexecutable_session(
+    monkeypatch: pytest.MonkeyPatch, suspended: bool, amount: float,
+) -> None:
+    dates = tuple(date(2026, 9, 1 + offset) for offset in range(3))
+    bars = tuple(
+        DualPriceBar(
+            "510300.SH", trade_date, 1.0, 1.1, 0.9, 1.0, 4.0, 4.4, 3.6, 4.0,
+            amount if offset == 1 else 20_000_000.0, suspended if offset == 1 else False, 0.25,
+            4.0, ExecutionAvailability(False, False, "exchange"),
+        )
+        for offset, trade_date in enumerate(dates)
+    )
+    stop = OrderIntent(dates[0], Side.SELL, OrderReason.GRID_STOP, 0.05, (), 0.0, 0.0, "stop")
+    decisions = iter((
+        Decision(StrategyState(cash=Decimal("116000"), position_shares=1_000), (stop,)),
+        Decision(StrategyState(cash=Decimal("116000"), position_shares=1_000), ()),
+        Decision(StrategyState(cash=Decimal("116000"), position_shares=1_000), ()),
+    ))
+    monkeypatch.setattr("asset_allocation.etf_adaptive.indicators.compute_indicators", lambda values: (object(),) * len(values))
+    monkeypatch.setattr(engine_module, "process_close", lambda *_: next(decisions))
+    config = AdaptiveConfig.default()
+
+    result = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend)).run_with_data(
+        BacktestRequest(
+            "510300.SH", Decimal("120000"), start_date=dates[0], end_date=dates[-1],
+        ), bars,
+        {bar.trade_date: ETFEligibility(True, (), "broad", 252, 20_000_000.0) for bar in bars},
+    )
+
+    assert [(event.kind, dict(event.payload)["reason"]) for event in result.events] == [
+        ("rejected_order", "unexecutable next bar"), ("fill", "grid_stop"),
+    ]
+    assert dict(result.events[-1].payload)["shares"] == "1000"
+
+
+@pytest.mark.parametrize(
+    ("initial_shares", "buy_locked", "sell_locked", "expected_side"),
+    ((1_000, True, False, "buy"), (2_000, False, True, "sell")),
+)
+def test_locked_rebalance_emits_resolved_side_in_rejection_event(
+    monkeypatch: pytest.MonkeyPatch, initial_shares: int, buy_locked: bool, sell_locked: bool, expected_side: str,
+) -> None:
+    dates = (date(2026, 9, 1), date(2026, 9, 2))
+    bars = tuple(
+        DualPriceBar(
+            "510300.SH", trade_date, 1.0, 1.1, 0.9, 1.0, 4.0, 4.4, 3.6, 4.0,
+            20_000_000.0, False, 0.25, 4.0,
+            ExecutionAvailability(buy_locked if offset else False, sell_locked if offset else False, "exchange"),
+        )
+        for offset, trade_date in enumerate(dates)
+    )
+    rebalance = OrderIntent(dates[0], Side.REBALANCE, OrderReason.GRID_TO_TREND_REBALANCE, 0.05, (), 120_000.0, 0.005, "rebalance")
+    decisions = iter((
+        Decision(StrategyState(cash=Decimal("120000"), position_shares=initial_shares), (rebalance,)),
+        Decision(StrategyState(cash=Decimal("120000"), position_shares=initial_shares), ()),
+    ))
+    monkeypatch.setattr("asset_allocation.etf_adaptive.indicators.compute_indicators", lambda values: (object(),) * len(values))
+    monkeypatch.setattr(engine_module, "process_close", lambda *_: next(decisions))
+    config = AdaptiveConfig.default()
+
+    result = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend)).run_with_data(
+        BacktestRequest(
+            "510300.SH", Decimal("120000"), start_date=dates[0], end_date=dates[-1],
+        ), bars,
+        {bar.trade_date: ETFEligibility(True, (), "broad", 252, 20_000_000.0) for bar in bars},
+    )
+
+    rejected = next(event for event in result.events if event.kind == "rejected_order")
+    assert rejected.payload == (
+        ("side", expected_side), ("signal_date", dates[0].isoformat()),
+        ("execution_date", dates[1].isoformat()), ("reason", f"{expected_side}_locked"),
+    )
+
+
+def test_consecutive_locked_sessions_keep_one_protective_exit(monkeypatch: pytest.MonkeyPatch) -> None:
+    dates = tuple(date(2026, 9, 1 + offset) for offset in range(4))
+    bars = tuple(
+        DualPriceBar(
+            "510300.SH", trade_date, 1.0, 1.1, 0.9, 1.0, 4.0, 4.4, 3.6, 4.0,
+            20_000_000.0, False, 0.25, 4.0,
+            ExecutionAvailability(False, offset in {1, 2}, "exchange"),
+        )
+        for offset, trade_date in enumerate(dates)
+    )
+    stop = OrderIntent(dates[0], Side.SELL, OrderReason.GRID_STOP, 0.05, (), 0.0, 0.0, "stop")
+    decisions = iter(tuple(
+        Decision(StrategyState(cash=Decimal("116000"), position_shares=1_000), (stop,))
+        for _ in dates
+    ))
+    monkeypatch.setattr("asset_allocation.etf_adaptive.indicators.compute_indicators", lambda values: (object(),) * len(values))
+    monkeypatch.setattr(engine_module, "process_close", lambda *_: next(decisions))
+    config = AdaptiveConfig.default()
+
+    result = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend)).run_with_data(
+        BacktestRequest(
+            "510300.SH", Decimal("120000"), start_date=dates[0], end_date=dates[-1],
+        ), bars,
+        {bar.trade_date: ETFEligibility(True, (), "broad", 252, 20_000_000.0) for bar in bars},
+    )
+
+    assert [event.payload[-1][1] for event in result.events if event.kind == "rejected_order"] == ["sell_locked", "sell_locked"]
+    assert [event for event in result.events if event.kind == "fill"] == [
+        BacktestEvent(
+            dates[3],
+            "fill",
+            (("reason", "grid_stop"), ("shares", "1000"), ("raw_price", "3.9988")),
+        ),
+    ]
