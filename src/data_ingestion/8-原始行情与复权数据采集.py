@@ -14,6 +14,7 @@
 import argparse
 import math
 import sys
+import threading
 import time
 from datetime import date, timedelta
 
@@ -39,7 +40,10 @@ DIVIDEND_TYPES = ("none", "front", "back")  # QMT 原始、前复权、后复权
 # 每日重复读取最近窗口：即使权益公告在之后被修订/撤回，也能被快照比较发现。
 ACTION_LOOKBACK_DAYS = 10
 # QMT 一次返回过多 DataFrame 会占用大量内存；按固定批次限制峰值并便于失败重试。
-MARKET_BATCH_SIZE = 20
+MARKET_BATCH_SIZE = 5
+# 单只代码 download_history_data 的最长等待时间；超时则跳过下载、继续读已有本地缓存。
+# xtdata 对部分新上市代码的请求可能无限挂起，需要此保护。
+DOWNLOAD_TIMEOUT_SECONDS = 45
 MARKET_FIELDS = (
     "open", "high", "low", "close", "volume", "amount", "preClose", "suspendFlag",
 )
@@ -285,21 +289,116 @@ def download_and_save_all_modes(
     return counts
 
 
-def _download_history_batch(stock_codes: list[str], start_date: str) -> None:
-    """下载一个同起点代码批次的日线缓存，优先使用新版 QMT 批量接口。
+def _download_one_with_timeout(stock_code: str, start_date: str) -> bool:
+    """在独立守护线程中下载单只代码历史缓存，超时后返回 False 并继续主流程。
 
-    ``download_history_data2`` 在本机 xtquant 已可用；保留逐股票回退，以兼容较旧的
-    QMT 安装。下载只与原始日线缓存有关，不能为 none/front/back 重复下载三次。
+    ``download_history_data`` 对部分新上市代码会无限阻塞（xtdata 服务端不返回）；
+    此函数把阻塞隔离在守护线程内，主线程最多等待 ``DOWNLOAD_TIMEOUT_SECONDS`` 秒。
+    超时后线程继续在后台运行（daemon），不会阻止进程退出；下次运行可能已完成写盘。
     """
-    if len(stock_codes) == 1:
-        xtdata.download_history_data(stock_codes[0], "1d", start_date, "")
-        return
-    batch_download = getattr(xtdata, "download_history_data2", None)
-    if callable(batch_download):
-        batch_download(stock_codes, "1d", start_date, "")
-        return
+    done = threading.Event()
+    exc_holder: list[BaseException | None] = [None]
+
+    def _run() -> None:
+        try:
+            xtdata.download_history_data(stock_code, "1d", start_date, "")
+        except Exception as exc:
+            exc_holder[0] = exc
+        finally:
+            done.set()
+
+    t = threading.Thread(target=_run, daemon=True, name=f"dl-{stock_code}")
+    t.start()
+    completed = done.wait(timeout=DOWNLOAD_TIMEOUT_SECONDS)
+    if not completed:
+        _progress(
+            f"[下载超时] {stock_code} start={start_date} "
+            f"超过 {DOWNLOAD_TIMEOUT_SECONDS}s，跳过等待、继续读已有本地缓存"
+        )
+    elif exc_holder[0] is not None:
+        _progress(
+            f"[下载异常] {stock_code}: "
+            f"{type(exc_holder[0]).__name__}: {exc_holder[0]}"
+        )
+    return completed
+
+
+def _download_history_batch(stock_codes: list[str], start_date: str) -> set[str]:
+    """逐只代码下载日线缓存，每只都有独立超时保护；返回超时代码集合。
+
+    原先使用 ``download_history_data2`` 批量接口，但该接口对部分新上市代码会无限
+    挂起（xtdata 服务端对这些代码的请求永不返回）。改为逐只调用并隔离超时，单只代码
+    挂起不会阻塞整批。下载只与原始日线缓存有关，不需要为三种 dividend_type 重复执行。
+    返回超时代码集合，供上层对这些代码触发 AkShare 降级采集。
+    """
+    timed_out: set[str] = set()
     for stock_code in stock_codes:
-        xtdata.download_history_data(stock_code, "1d", start_date, "")
+        completed = _download_one_with_timeout(stock_code, start_date)
+        if not completed:
+            timed_out.add(stock_code)
+    return timed_out
+
+
+def _akshare_fallback_for_timeout(
+    stock_code: str,
+    start_date: str,
+    adjustment_asof: date | None,
+    counts: dict[str, int],
+    failed_codes: set[str],
+) -> None:
+    """对 xtdata 下载超时的代码，逐模式从 AkShare 拉取全量日线并写库。
+
+    start_date 到今天的全部日期都是"目标日期"；AkShare 返回哪天就写哪天，
+    不强制要求每天都在。写入成功（任意模式有行）则从失败集合移除该代码，
+    三个模式全部失败才保留为失败。
+    日志前缀 ``[QMT超时→AkShare降级]`` 便于日志聚合过滤。
+    """
+    today_str = date.today().isoformat()
+    # 生成 start_date 到 today 的所有日期作为目标（AkShare 会忽略非交易日）
+    start_dt = date(int(start_date[:4]), int(start_date[4:6]), int(start_date[6:8]))
+    all_dates: set[str] = set()
+    cur = start_dt
+    while cur <= date.today():
+        all_dates.add(cur.isoformat())
+        cur += timedelta(days=1)
+
+    any_written = False
+    for dividend_type in DIVIDEND_TYPES:
+        try:
+            fallback_rows, failures = fetch_valid_rows(stock_code, dividend_type, all_dates)
+            rows = _rows_from_fallback(stock_code, fallback_rows, dividend_type)
+            if not rows:
+                reason_sample = list(failures.values())[:2] if failures else ["no rows returned"]
+                _progress(
+                    f"[QMT超时→AkShare降级] {stock_code} mode={dividend_type} "
+                    f"AkShare 无数据：{reason_sample}"
+                )
+                continue
+            write_daily_rows(dividend_type, rows, adjustment_asof)
+            counts[dividend_type] = counts.get(dividend_type, 0) + len(rows)
+            any_written = True
+            # 统计有多少日期真正被 AkShare 填入
+            filled = len(fallback_rows)
+            pending_today = today_str in failures
+            hard_fail_count = sum(
+                1 for d, r in failures.items() if d != today_str
+            )
+            _progress(
+                f"[QMT超时→AkShare降级] {stock_code} mode={dividend_type} "
+                f"已写入={len(rows)} 日期={filled} "
+                f"今日待发布={int(pending_today)} 永久失败={hard_fail_count}"
+            )
+        except Exception as exc:
+            _progress(
+                f"[QMT超时→AkShare降级] {stock_code} mode={dividend_type} "
+                f"异常 {type(exc).__name__}: {exc}"
+            )
+    if any_written:
+        failed_codes.discard(stock_code)
+    else:
+        _progress(
+            f"[QMT超时→AkShare降级] {stock_code} 三种模式均无数据，保留为失败"
+        )
 
 
 def download_and_save_batch(
@@ -312,6 +411,8 @@ def download_and_save_batch(
     QMT 对每种 ``dividend_type`` 接受一组代码并返回 ``{代码: DataFrame}``。每种模式
     只查询一次、每批日线只下载一次，再把所有有效行一次写入目标表。某一股票缺少任一
     模式时，只将该股票加入失败列表，其他股票与其他模式仍可正常落库。
+    QMT 下载超时的代码会自动降级到 AkShare 全量拉取；三种模式均无 AkShare 数据时
+    才最终标记为失败。
     """
     if not stock_codes:
         return {mode: 0 for mode in DIVIDEND_TYPES}, []
@@ -320,10 +421,11 @@ def download_and_save_batch(
         f"[行情批次] start={start_date} codes={len(stock_codes)} "
         "阶段=开始下载历史缓存"
     )
-    _download_history_batch(stock_codes, start_date)
+    xtdata_timed_out = _download_history_batch(stock_codes, start_date)
     _progress(
         f"[行情批次] start={start_date} codes={len(stock_codes)} "
         f"阶段=历史缓存下载完成 elapsed={time.monotonic() - started_at:.1f}s"
+        + (f" 超时={len(xtdata_timed_out)}" if xtdata_timed_out else "")
     )
     counts = {mode: 0 for mode in DIVIDEND_TYPES}
     failed_codes = set()
@@ -343,6 +445,9 @@ def download_and_save_batch(
         )
         rows = []
         for stock_code in stock_codes:
+            if stock_code in xtdata_timed_out:
+                # 超时代码不在此处处理，统一由后面的降级逻辑负责
+                continue
             dataframe = data.get(stock_code) if data else None
             if dataframe is None or len(dataframe) == 0:
                 failed_codes.add(stock_code)
@@ -360,9 +465,8 @@ def download_and_save_batch(
         missing = sum(
             1
             for code in stock_codes
-            if data is None
-            or data.get(code) is None
-            or len(data.get(code)) == 0
+            if code not in xtdata_timed_out
+            and (data is None or data.get(code) is None or len(data.get(code)) == 0)
         )
         _progress(
             f"[行情批次] start={start_date} codes={len(stock_codes)} "
@@ -373,7 +477,20 @@ def download_and_save_batch(
         if rows:
             write_daily_rows_batch(dividend_type, rows, adjustment_asofs)
             counts[dividend_type] = len(rows)
+
+    # QMT 超时代码：逐只触发 AkShare 降级采集
+    for stock_code in xtdata_timed_out:
+        failed_codes.add(stock_code)  # 先标记失败，akshare 成功后会移除
+        _akshare_fallback_for_timeout(
+            stock_code,
+            start_date,
+            adjustment_asofs.get(stock_code),
+            counts,
+            failed_codes,
+        )
+
     return counts, sorted(failed_codes)
+
 
 
 def get_adjustment_asof(stock_code: str) -> date | None:
@@ -439,15 +556,61 @@ def get_all_codes() -> list[str]:
     return get_code_universe()[0]
 
 
-def _earliest_start(latest_dates: dict[str, dict[str, str]], stock_code: str) -> str:
-    """取三张投影表中最早游标，缺任意一种则从 ``DATA_START`` 回补。
+_EPOCH_OPEN_DATE = {"0", "19700101"}  # xtdata 对「上市日期未同步」的占位值。
+_NEW_CODE_FALLBACK_YEARS = 2          # OpenDate 无效时的安全回退跨度（年）。
 
-    这里宁愿多拉少量重叠数据，也不让原始、前复权、后复权的起始日产生不可解释的缺口；
+
+def _new_code_start(stock_code: str, today: date) -> str:
+    """为从未入库的代码计算合理的下载起点。
+
+    优先使用 xtdata instrument detail 中的 ``OpenDate``（格式 ``YYYYMMDD``）；
+    如果 OpenDate 是占位值（0 / 19700101）或晚于今天，则回退到今天往前
+    ``_NEW_CODE_FALLBACK_YEARS`` 年，保证不会从 DATA_START(2015) 拉 11 年的数据。
+    最终结果被 DATA_START 下限截断，确保不超出数据库已有最早边界。
+    """
+    detail = xtdata.get_instrument_detail(stock_code) or {}
+    open_date_str = str(detail.get("OpenDate", "0")).strip()
+    if open_date_str not in _EPOCH_OPEN_DATE and len(open_date_str) == 8:
+        try:
+            open_date = date(
+                int(open_date_str[:4]),
+                int(open_date_str[4:6]),
+                int(open_date_str[6:8]),
+            )
+            if DATA_START_DATE <= open_date <= today:
+                _progress(
+                    f"[新代码起点] {stock_code} OpenDate={open_date_str} "
+                    "→ 使用上市日作为下载起点"
+                )
+                return open_date_str
+        except ValueError:
+            pass
+    # OpenDate 无效：从近 N 年开始，避免从 2015 年起拉全量
+    fallback = max(
+        DATA_START_DATE,
+        date(today.year - _NEW_CODE_FALLBACK_YEARS, today.month, today.day),
+    )
+    _progress(
+        f"[新代码起点] {stock_code} OpenDate={open_date_str!r} 无效 "
+        f"→ 回退至 {fallback.strftime('%Y%m%d')}"
+    )
+    return fallback.strftime("%Y%m%d")
+
+
+def _earliest_start(
+    latest_dates: dict[str, dict[str, str]],
+    stock_code: str,
+    today: date | None = None,
+) -> str:
+    """取三张投影表中最早游标；代码从未入库时用上市日（而非 DATA_START）作起点。
+
+    对已有游标的代码，仍选三表中最早游标，保证 raw/qfq/bfq 日期对齐；
     存储层的 UPSERT 使重叠写入安全。
+    对全新代码，调用 ``_new_code_start`` 避免从 2015 年发起不必要的全量下载。
     """
     starts = [latest_dates[mode].get(stock_code) for mode in DIVIDEND_TYPES]
     if any(value is None for value in starts):
-        return DATA_START
+        return _new_code_start(stock_code, today or date.today())
     return min(starts)
 
 
@@ -482,7 +645,7 @@ def main(skip_equity_snapshot: bool = False) -> int:
                 for change in plan.changes:
                     action_counts[change.kind] += 1
                 action_counts["tasks"] += len(plan.refresh_tasks)
-            start_date = _earliest_start(latest_dates, stock_code)
+            start_date = _earliest_start(latest_dates, stock_code, today)
             codes_by_start.setdefault(start_date, []).append(stock_code)
         except Exception as exc:
             failures.append(stock_code)
