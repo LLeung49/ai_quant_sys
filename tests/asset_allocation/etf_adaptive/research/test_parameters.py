@@ -1,0 +1,143 @@
+﻿"""Deterministic parameter families and stable-neighborhood selection."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Mapping
+
+from asset_allocation.etf_adaptive.config import AdaptiveConfig, GridConfig
+from asset_allocation.etf_adaptive.research.parameters import (
+    ParameterCandidate,
+    grid_candidates,
+    stable_parameter_neighborhood,
+    trend_candidates,
+)
+
+
+@dataclass(frozen=True)
+class SurfacePoint:
+    """Test-only marker for a single (config, axis_values, window-returns) record."""
+
+    config_hash: str
+    axis_values: Mapping[str, float]
+    oos_returns: tuple[float, ...]
+    positive_windows: tuple[bool, ...]
+
+    @property
+    def positive_window_share(self) -> float:
+        if not self.positive_windows:
+            return 0.0
+        return sum(1 for value in self.positive_windows if value) / len(self.positive_windows)
+
+
+def _surface(*, center_return: float, neighbor_returns: tuple[float, ...] = ()) -> dict[str, SurfacePoint]:
+    """Build a 3x3 GRID surface where only the center has a positive return."""
+
+    points: dict[str, SurfacePoint] = {}
+    for step in (0.010, 0.015, 0.020):
+        for unit in (0.05, 0.10, 0.15):
+            candidate = ParameterCandidate(
+                config=AdaptiveConfig(grid=GridConfig(step_pct=step, unit_pct=unit)),
+            )
+            if step == 0.015 and unit == 0.10:
+                returns = (center_return, 0.10, 0.05)
+                positives = (center_return > 0.0, True, True)
+            else:
+                returns = neighbor_returns + (-0.03,)
+                positives = tuple(value > 0.0 for value in returns)
+            points[candidate.config_hash] = SurfacePoint(
+                config_hash=candidate.config_hash,
+                axis_values={"step_pct": step, "unit_pct": unit},
+                oos_returns=returns,
+                positive_windows=positives,
+            )
+    return points
+
+
+def test_grid_candidates_cover_exact_approved_space() -> None:
+    candidates = grid_candidates()
+
+    assert {candidate.config.grid.step_pct for candidate in candidates} == {
+        value / 1000 for value in range(10, 65, 5)
+    }
+    assert {candidate.config.grid.unit_pct for candidate in candidates} == {0.05, 0.10, 0.15, 0.20}
+
+
+def test_trend_candidates_cover_risk_grid() -> None:
+    candidates = trend_candidates()
+
+    assert {candidate.config.trend.risk_per_unit for candidate in candidates} == {
+        0.0025, 0.0050, 0.0075, 0.0100
+    }
+    assert {candidate.config.trend.max_units for candidate in candidates} == {2, 3, 4}
+    assert {candidate.config.trend.amount_ratio_min for candidate in candidates} == {None, 1.0, 1.2, 1.5}
+
+
+def test_candidate_ids_are_deterministic_and_stable_under_reorder() -> None:
+    first = grid_candidates()
+    second = grid_candidates()
+
+    ids_first = tuple(candidate.config_hash for candidate in first)
+    ids_second = tuple(candidate.config_hash for candidate in second)
+
+    assert ids_first == ids_second
+    assert len(set(ids_first)) == len(ids_first)
+
+
+def test_isolated_best_parameter_is_not_stable() -> None:
+    results = _surface(center_return=0.20, neighbor_returns=(-0.01, -0.02))
+
+    assert stable_parameter_neighborhood(
+        results, axes=("step_pct", "unit_pct"), min_positive_window_share=0.60,
+    ) == ()
+
+
+def test_full_positive_neighborhood_returns_middle_candidate() -> None:
+    points: dict[str, SurfacePoint] = {}
+    for step in (0.010, 0.015, 0.020):
+        for unit in (0.05, 0.10, 0.15):
+            candidate = ParameterCandidate(
+                config=AdaptiveConfig(grid=GridConfig(step_pct=step, unit_pct=unit)),
+            )
+            points[candidate.config_hash] = SurfacePoint(
+                config_hash=candidate.config_hash,
+                axis_values={"step_pct": step, "unit_pct": unit},
+                oos_returns=(0.05, 0.04, 0.03),
+                positive_windows=(True, True, True),
+            )
+
+    selected = stable_parameter_neighborhood(
+        points, axes=("step_pct", "unit_pct"), min_positive_window_share=0.60,
+    )
+
+    assert len(selected) == 1
+    assert selected[0].config.grid.step_pct == 0.015
+    assert selected[0].config.grid.unit_pct == 0.10
+
+
+def test_plateau_picks_more_conservative_risk_when_even_cardinality() -> None:
+    candidates = trend_candidates()
+
+    points: dict[str, SurfacePoint] = {}
+    for candidate in candidates:
+        points[candidate.config_hash] = SurfacePoint(
+            config_hash=candidate.config_hash,
+            axis_values={
+                "risk_per_unit": candidate.config.trend.risk_per_unit,
+                "add_n": candidate.config.trend.add_n,
+                "max_units": float(candidate.config.trend.max_units),
+            },
+            oos_returns=(0.10, 0.10),
+            positive_windows=(True, True),
+        )
+
+    selected = stable_parameter_neighborhood(
+        points,
+        axes=("risk_per_unit", "add_n", "max_units"),
+        min_positive_window_share=0.50,
+    )
+
+    assert len(selected) == 1
+    assert selected[0].config.trend.risk_per_unit == 0.0050
+    assert selected[0].config.trend.add_n == 0.75
+    assert selected[0].config.trend.max_units == 3
