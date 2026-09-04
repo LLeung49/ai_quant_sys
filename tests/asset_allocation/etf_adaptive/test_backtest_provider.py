@@ -182,7 +182,9 @@ def test_provider_action_is_applied_to_inventory_before_pending_fill(
     result = _engine(provider).run(_request())
 
     fills = [event for event in result.events if event.kind == "fill"]
-    assert fills[-1].payload == (("reason", "hard_stop"), ("shares", "110"))
+    assert fills[-1].payload == (
+        ("reason", "hard_stop"), ("shares", "110"), ("raw_price", "3.9988"),
+    )
     assert result.nav[-1].cash == Decimal("1029.748")
     assert result.nav[-1].market_value == Decimal("0.0")
 
