@@ -304,9 +304,10 @@ def test_protective_stop_retries_after_an_unexecutable_session(
         {bar.trade_date: ETFEligibility(True, (), "broad", 252, 20_000_000.0) for bar in bars},
     )
 
-    assert [(event.kind, event.payload[-1][1]) for event in result.events] == [
-        ("rejected_order", "unexecutable next bar"), ("fill", "1000"),
+    assert [(event.kind, dict(event.payload)["reason"]) for event in result.events] == [
+        ("rejected_order", "unexecutable next bar"), ("fill", "grid_stop"),
     ]
+    assert dict(result.events[-1].payload)["shares"] == "1000"
 
 
 @pytest.mark.parametrize(
@@ -376,5 +377,9 @@ def test_consecutive_locked_sessions_keep_one_protective_exit(monkeypatch: pytes
 
     assert [event.payload[-1][1] for event in result.events if event.kind == "rejected_order"] == ["sell_locked", "sell_locked"]
     assert [event for event in result.events if event.kind == "fill"] == [
-        BacktestEvent(dates[3], "fill", (("reason", "grid_stop"), ("shares", "1000"))),
+        BacktestEvent(
+            dates[3],
+            "fill",
+            (("reason", "grid_stop"), ("shares", "1000"), ("raw_price", "3.9988")),
+        ),
     ]

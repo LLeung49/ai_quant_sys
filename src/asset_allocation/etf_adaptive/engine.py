@@ -252,7 +252,17 @@ class AdaptiveBacktestEngine:
                     } and (fill.side is Side.BUY or fill.reason is OrderReason.GRID_TO_TREND_REBALANCE):
                         state = apply_trend_fill(state, fill, self._config.trend)
                     state = apply_exit_fill(state, fill)
-                    events.append(BacktestEvent(fill.fill_date, "fill", (("reason", fill.reason.value), ("shares", str(fill.shares)))))
+                    events.append(
+                        BacktestEvent(
+                            fill.fill_date,
+                            "fill",
+                            (
+                                ("reason", fill.reason.value),
+                                ("shares", str(fill.shares)),
+                                ("raw_price", str(fill.raw_price)),
+                            ),
+                        )
+                    )
                 pending = tuple(retried)
             if snapshot is not None:
                 decision = process_close(state, snapshot, eligibility_by_date[bar.trade_date], self._config)
