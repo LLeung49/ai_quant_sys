@@ -11,7 +11,7 @@ constant 50% allocation with rebalancing only on the first session.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date
 from decimal import Decimal
 from enum import Enum
@@ -72,21 +72,22 @@ def _trend_only(base: AdaptiveConfig) -> AdaptiveConfig:
     )
 
 
-def _buy_and_hold(request: BacktestRequest, provider: AdaptiveBacktestDataProvider) -> BacktestResult:
+def _buy_and_hold(
+    request: BacktestRequest,
+    provider: AdaptiveBacktestDataProvider,
+    config: AdaptiveConfig,
+) -> BacktestResult:
     """Replay bars once, holding the initial position until the terminal session."""
-
-    from dataclasses import replace as _replace
 
     from ..state import (
         BacktestEvent,
         DailyNav,
-        Decision,
-        Fill,
         OrderIntent,
         OrderReason,
         Side,
         StrategyState,
     )
+    from ..execution import ExecutionSimulator, apply_corporate_actions
 
     bars = provider.load_bars(request.stock_code, request.start_date, request.end_date)
     if not bars:
@@ -95,43 +96,48 @@ def _buy_and_hold(request: BacktestRequest, provider: AdaptiveBacktestDataProvid
     actions = provider.load_actions(request.stock_code, request.start_date, request.end_date)
     actions = tuple(action for action in actions if request.start_date <= action.effective_date <= request.end_date)
 
-    first_bar = bars[0]
-    cash_after_fill = request.initial_cash
-    shares = 0
+    state = StrategyState(cash=request.initial_cash)
+    execution = ExecutionSimulator(config.cost, config.trend)
     events: list[BacktestEvent] = []
     nav: list[DailyNav] = []
     decision_made = False
+    actions_by_date: dict[date, list] = {}
+    for action in actions:
+        actions_by_date.setdefault(action.effective_date, []).append(action)
 
-    for index, bar in enumerate(bars):
+    for bar in bars:
+        state, applied_action_ids = apply_corporate_actions(
+            state,
+            tuple(actions_by_date.get(bar.trade_date, ())),
+            state.applied_action_ids,
+        )
+        state = replace(state, applied_action_ids=applied_action_ids)
         eligibility = eligibility_map[bar.trade_date]
         if not decision_made and eligibility.eligible:
-            notional = cash_after_fill
-            if notional > 0:
-                shares = int(notional // Decimal(str(bar.raw_open)))
-                if shares > 0:
-                    raw_price = bar.raw_open
-                    fill = Fill(
-                        fill_date=bar.trade_date,
-                        side=Side.BUY,
-                        shares=shares,
-                        raw_price=raw_price,
-                        commission=Decimal("0"),
-                        reason=OrderReason.GRID_INITIALIZE,
-                        signal_price=bar.signal_open,
-                        signal_atr20=None,
-                    )
-                    cash_after_fill = notional - Decimal(str(raw_price)) * shares
-                    events.append(BacktestEvent(
-                        fill.fill_date, "fill",
-                        (
-                            ("reason", fill.reason.value),
-                            ("shares", str(fill.shares)),
-                            ("raw_price", str(fill.raw_price)),
-                        ),
-                    ))
+            intent = OrderIntent(
+                signal_date=bar.trade_date,
+                side=Side.BUY,
+                reason=OrderReason.GRID_INITIALIZE,
+                signal_atr20=None,
+                signal_thresholds=(),
+                target_budget=float(state.cash),
+                risk_per_unit=0.0,
+                quantity_rationale="buy-and-hold initial entry using shared execution model",
+            )
+            outcome = execution.execute((intent,), bar, state)
+            state = outcome.state
+            for fill in outcome.fills:
+                events.append(BacktestEvent(
+                    fill.fill_date, "fill",
+                    (
+                        ("reason", fill.reason.value),
+                        ("shares", str(fill.shares)),
+                        ("raw_price", str(fill.raw_price)),
+                    ),
+                ))
             decision_made = True
-        market_value = Decimal(str(bar.raw_close)) * shares
-        nav.append(DailyNav(bar.trade_date, cash_after_fill, market_value))
+        market_value = Decimal(str(bar.raw_close)) * state.position_shares
+        nav.append(DailyNav(bar.trade_date, state.cash, market_value))
     return BacktestResult(request=request, events=tuple(events), nav=tuple(nav))
 
 
@@ -193,7 +199,7 @@ def run_baselines(
     runs[BaselineKind.BUY_AND_HOLD] = BaselineRun(
         kind=BaselineKind.BUY_AND_HOLD,
         config=base_config,
-        result=_buy_and_hold(request, provider),
+        result=_buy_and_hold(request, provider, base_config),
         notes=("buy_and_hold ignores regime and rebalances only on entry",),
     )
     runs[BaselineKind.FIXED_HALF_HOLD] = BaselineRun(
