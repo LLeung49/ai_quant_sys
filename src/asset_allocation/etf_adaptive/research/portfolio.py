@@ -3,8 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal
 from math import sqrt
-from typing import Mapping, Sequence
+from typing import TYPE_CHECKING, Mapping, Sequence
+
+from ..contracts import SubLayerBudget
+
+if TYPE_CHECKING:
+    from .selection import ProductMetrics
 
 
 DEFAULT_INVERSE_VOLATILITY_CAP: float = 0.50
@@ -57,28 +63,130 @@ def build_inverse_volatility(
     filtered = {key: float(value) for key, value in volatilities.items() if value > 0}
     if not filtered:
         raise ValueError("build_inverse_volatility requires at least one positive volatility")
+    if len(filtered) * cap < 1.0 - 1e-12:
+        raise ValueError("inverse volatility cap is infeasible for this basket")
 
+    # Water-fill the inverse-volatility scores.  Unlike normalising a fully
+    # clipped vector, this proves both conservation and the cap at every step.
     inverse = {key: 1.0 / value for key, value in filtered.items()}
-    weights = _normalise_weights(inverse)
-    if max(weights.values()) <= cap + 1e-12:
-        return weights
-    clipped = dict(weights)
-    while max(clipped.values()) > cap + 1e-12:
-        largest = max(clipped, key=clipped.get)
-        excess = clipped[largest] - cap
-        clipped[largest] = cap
-        remaining_total = sum(value for key, value in clipped.items() if key != largest)
-        if remaining_total <= 0:
+    remaining = set(inverse)
+    remaining_weight = 1.0
+    weights: dict[str, float] = {}
+    while remaining:
+        total_inverse = sum(inverse[key] for key in remaining)
+        provisional = {
+            key: remaining_weight * inverse[key] / total_inverse for key in remaining
+        }
+        clipped = [key for key, value in provisional.items() if value > cap + 1e-12]
+        if not clipped:
+            weights.update(provisional)
             break
-        scale = (remaining_total + excess) / remaining_total
         for key in clipped:
-            if key == largest:
-                continue
-            clipped[key] = min(cap, clipped[key] * scale)
-    total = sum(clipped.values())
-    if total <= 0:
-        raise ValueError("inverse volatility weighting collapsed to zero total")
-    return {key: value / total for key, value in clipped.items()}
+            weights[key] = cap
+            remaining.remove(key)
+            remaining_weight -= cap
+        if remaining_weight < -1e-12 or (
+            remaining and len(remaining) * cap < remaining_weight - 1e-12
+        ):
+            raise ValueError("inverse volatility cap is infeasible for this basket")
+    return weights
+
+
+@dataclass(frozen=True)
+class SubLayerPortfolio:
+    """One fully-funded, cap-compliant weight construction."""
+
+    weights: Mapping[str, float]
+    allocations: Mapping[str, Decimal]
+
+
+@dataclass(frozen=True)
+class SubLayerPortfolioEvaluation:
+    """Comparable equal-weight and capped inverse-volatility baskets."""
+
+    equal_weight: SubLayerPortfolio
+    capped_inverse_volatility: SubLayerPortfolio
+
+
+def _validate_portfolio_inputs(
+    products: Sequence[ProductMetrics],
+    returns: Mapping[str, Sequence[float]],
+    budget: SubLayerBudget,
+    cap: float,
+    minimum_tradable_budget: Decimal,
+) -> tuple[str, ...]:
+    if not isinstance(budget, SubLayerBudget):
+        raise ValueError("budget must be a SubLayerBudget")
+    if not 0.0 < cap <= 1.0:
+        raise ValueError("per_product_cap must be in (0, 1]")
+    if (
+        not isinstance(minimum_tradable_budget, Decimal)
+        or not minimum_tradable_budget.is_finite()
+        or minimum_tradable_budget < 0
+    ):
+        raise ValueError("minimum_tradable_budget must be a non-negative finite Decimal")
+    ids = tuple(product.product_id for product in products)
+    if not ids:
+        raise ValueError("evaluate_sub_layer_portfolios requires at least one product")
+    if len(set(ids)) != len(ids):
+        raise ValueError("evaluate_sub_layer_portfolios requires unique product ids")
+    if any(product.sub_layer is not budget.sub_layer for product in products):
+        raise ValueError("products must belong to the budget sub-layer")
+    if len(ids) * cap < 1.0 - 1e-12:
+        raise ValueError("per-product cap is infeasible for this basket")
+    if any(product_id not in returns for product_id in ids):
+        raise ValueError("returns must include every selected product")
+    return ids
+
+
+def _fund_portfolio(
+    weights: Mapping[str, float],
+    budget: Decimal,
+    minimum_tradable_budget: Decimal,
+) -> SubLayerPortfolio:
+    if abs(sum(weights.values()) - 1.0) > 1e-10:
+        raise ValueError("portfolio weights must conserve the sub-layer budget")
+    allocations: dict[str, Decimal] = {}
+    product_ids = tuple(weights)
+    for product_id in product_ids[:-1]:
+        allocations[product_id] = budget * Decimal(str(weights[product_id]))
+    allocations[product_ids[-1]] = budget - sum(allocations.values(), Decimal("0"))
+    if any(value < minimum_tradable_budget for value in allocations.values()):
+        raise ValueError("basket cannot fund every product at the minimum tradable budget")
+    return SubLayerPortfolio(weights=dict(weights), allocations=allocations)
+
+
+def evaluate_sub_layer_portfolios(
+    products: Sequence[ProductMetrics],
+    returns: Mapping[str, Sequence[float]],
+    budget: SubLayerBudget,
+    *,
+    per_product_cap: float = DEFAULT_INVERSE_VOLATILITY_CAP,
+    minimum_tradable_budget: Decimal = Decimal("0"),
+) -> SubLayerPortfolioEvaluation:
+    """Build comparable, fully funded baskets for one selected sub-layer.
+
+    No allocation is silently re-normalised above a cap.  Infeasible cap,
+    volatility, return-series, or minimum-trade constraints fail explicitly so
+    freezing can refuse an untradeable basket.
+    """
+
+    ids = _validate_portfolio_inputs(
+        products, returns, budget, per_product_cap, minimum_tradable_budget
+    )
+    equal = build_equal_weight(ids)
+    if max(equal.values()) > per_product_cap + 1e-12:
+        raise ValueError("per-product cap is infeasible for equal-weight basket")
+    volatilities = {product_id: _pop_std(returns[product_id]) for product_id in ids}
+    if any(volatility <= 0 for volatility in volatilities.values()):
+        raise ValueError("returns must produce positive volatility for every product")
+    inverse = build_inverse_volatility(volatilities, cap=per_product_cap)
+    return SubLayerPortfolioEvaluation(
+        equal_weight=_fund_portfolio(equal, budget.budget, minimum_tradable_budget),
+        capped_inverse_volatility=_fund_portfolio(
+            inverse, budget.budget, minimum_tradable_budget
+        ),
+    )
 
 
 def _mean(values: Sequence[float]) -> float:
