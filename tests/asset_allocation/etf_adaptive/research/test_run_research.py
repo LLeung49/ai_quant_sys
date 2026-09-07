@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import math
 import shutil
 import uuid
 from dataclasses import dataclass
@@ -17,6 +18,7 @@ from asset_allocation.etf_adaptive.research.run_research import (
     ResearchRunConfig,
     build_parser,
     run_research,
+    _explicit_evidence,
 )
 from asset_allocation.etf_adaptive.contracts import (
     DualPriceBar,
@@ -292,6 +294,20 @@ def test_run_research_rejects_walk_forward_product_without_selection_policy(repo
     run_research(config, provider=EvidenceOnlyProvider())
     manifest = json.loads((config.output_dir / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["frozen_selection"]["targets"] == []
+
+
+@pytest.mark.parametrize("bad_return", (True, math.nan, math.inf, -math.inf))
+def test_explicit_evidence_rejects_non_finite_or_boolean_oos_returns(bad_return: float) -> None:
+    as_of = date(2026, 9, 1)
+    instrument = LayeredInstrument("513500.SH", as_of, InstrumentType.ETF, "broad", "nasdaq_or_sp500", True)
+    raw = {
+        "product": ProductMetrics("513500.SH", "NDX", 0.9, 20_000_000.0, 0.98, 0.02, 0.1, SubLayer.OVERSEAS_MATURE),
+        "candidate": CandidateMetrics("513500.SH", 0.1, 0.1, 0.5, 0.02),
+        "oos_returns": (0.01, bad_return),
+    }
+
+    with pytest.raises(ValueError, match="invalid_walk_forward_evidence"):
+        _explicit_evidence(raw, instrument, SubLayer.OVERSEAS_MATURE)
 
 
 def _research_bar(stock_code: str, trade_date: date, close: float) -> DualPriceBar:

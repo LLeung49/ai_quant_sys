@@ -10,6 +10,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
+import math
 from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from decimal import Decimal
@@ -246,9 +247,19 @@ def _explicit_evidence(
         raise ValueError("walk_forward_evidence_identity_mismatch")
     if product.sub_layer is not sub_layer or not isinstance(returns, tuple) or len(returns) < 2:
         raise ValueError("invalid_walk_forward_evidence")
-    if any(not isinstance(value, (int, float)) for value in returns):
+    if any(not _finite_number(value) for value in returns):
+        raise ValueError("invalid_walk_forward_evidence")
+    if not all(_finite_number(value) for value in (
+        product.history_confidence, product.average_amount, product.data_quality_score,
+        product.cost_sensitivity, product.oos_evidence, candidate.annual_return,
+        candidate.max_drawdown_abs, candidate.positive_window_share, candidate.cost_ratio,
+    )):
         raise ValueError("invalid_walk_forward_evidence")
     return product, candidate, tuple(float(value) for value in returns)
+
+
+def _finite_number(value: object) -> bool:
+    return type(value) in (int, float) and math.isfinite(float(value))
 
 
 def _selection_rejections(
