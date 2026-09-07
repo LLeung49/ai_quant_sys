@@ -121,6 +121,8 @@ class FrozenSelection:
             declared_hash = ""
         if declared_hash:
             base_config = _rebuild_config(payload)
+        if "layer_budgets" in payload:
+            _validate_layered_portfolio(targets, payload["layer_budgets"])
         return cls(
             selection_id=str(payload["selection_id"]),
             config_hash=manifest_hash,
@@ -195,6 +197,29 @@ def _validate_max_single_weight(targets: Sequence[FrozenTarget]) -> None:
                 f"target {target.stock_code} weight {target.weight} exceeds the "
                 f"{MAX_SINGLE_TARGET_WEIGHT} cap"
             )
+
+
+def _validate_layered_portfolio(
+    targets: Sequence[FrozenTarget], layer_budgets: Any,
+) -> None:
+    """Validate the production defensive/broad-beta portfolio contract."""
+    if not isinstance(layer_budgets, Mapping):
+        raise FrozenSelectionError("layer_budgets must be a mapping")
+    grouped: dict[str, list[FrozenTarget]] = {}
+    for target in targets:
+        grouped.setdefault(target.layer, []).append(target)
+    for layer, members in grouped.items():
+        if layer not in {"defensive", "broad_beta"}:
+            raise FrozenSelectionError(f"unsupported production layer: {layer}")
+        if not 2 <= len(members) <= 4:
+            raise FrozenSelectionError(f"layer {layer!r} requires 2 to 4 targets")
+        if abs(sum(member.weight for member in members) - 1.0) > LAYER_WEIGHT_SUM_TOLERANCE:
+            raise FrozenSelectionError(f"layer {layer!r} target weights must sum to 1.0")
+        budget = layer_budgets.get(layer)
+        if not isinstance(budget, (int, float)) or not 0.0 < float(budget) <= 1.0:
+            raise FrozenSelectionError(f"layer {layer!r} requires a budget in (0, 1]")
+    if set(layer_budgets) != set(grouped):
+        raise FrozenSelectionError("layer_budgets must match selected target layers")
 
 
 def _canonical_hash(payload: Mapping[str, Any]) -> str:

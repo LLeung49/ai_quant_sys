@@ -89,6 +89,22 @@ def test_frozen_selection_round_trips_valid_payload() -> None:
     assert {target.stock_code for target in selection.targets} == {"510300.SH", "510500.SH"}
 
 
+def test_layered_selection_requires_two_to_four_targets_per_supported_layer() -> None:
+    payload = _payload(
+        config_hash="irrelevant",
+        targets=(
+            {"stock_code": "510300.SH", "layer": "defensive", "weight": 0.5,
+             "tracking_index_code": "000922.SH"},
+        ),
+        layer_weights={"defensive": 1.0},
+    )
+    payload["layer_budgets"] = {"defensive": 0.40}
+    payload["config_hash"] = _canonical_hash(payload)
+
+    with pytest.raises(FrozenSelectionError, match="2 to 4 targets"):
+        FrozenSelection.from_payload(payload)
+
+
 def test_frozen_selection_rejects_duplicate_stock_codes() -> None:
     payload = _payload(
         config_hash="irrelevant",
