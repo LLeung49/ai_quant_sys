@@ -10,7 +10,7 @@ Usage::
 from __future__ import annotations
 
 import argparse
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -22,7 +22,7 @@ from ..config import AdaptiveConfig
 from ..contracts import DualPriceBar, LayeredInstrument, SubLayer, SubLayerBudget, asset_layer_for
 from ..layers import validate_sub_layer
 from ..frozen_selection import _canonical_hash
-from .portfolio import evaluate_sub_layer_portfolios, pairwise_risk
+from .portfolio import evaluate_sub_layer_portfolios
 from .report import ResearchArtifact, write_research_report
 from .selection import (
     CandidateMetrics,
@@ -47,6 +47,14 @@ class _LayeredResearchProvider(Protocol):
     def load_bars(
         self, stock_code: str, start_date: date, end_date: date,
     ) -> Sequence[DualPriceBar]: ...
+
+    def load_research_evidence(
+        self, as_of_date: date, stock_code: str,
+    ) -> Mapping[str, object]: ...
+
+    def load_selection_evidence(
+        self, as_of_date: date, sub_layer: SubLayer, budget: SubLayerBudget,
+    ) -> SubLayerSelectionEvidence: ...
 
 
 def run_research(
@@ -84,48 +92,37 @@ def _default_artifact_factory(provider: _LayeredResearchProvider, run_config: Re
             if budget is None:
                 audit_rows.append({"stock_code": instrument.stock_code, "accepted": False, "reason": "no_budget"})
                 continue
-            bars = tuple(provider.load_bars(instrument.stock_code, date(2020, 1, 1), config.as_of_date))
-            metrics = _research_metrics(bars, instrument.stock_code, config.as_of_date)
-            if metrics is None:
+            evidence_loader = getattr(provider, "load_research_evidence", None)
+            if not callable(evidence_loader):
                 audit_rows.append({
                     "stock_code": instrument.stock_code, "sub_layer": sub_layer.value,
-                    "accepted": False, "reason": "insufficient_return_evidence",
+                    "accepted": False, "reason": "missing_walk_forward_evidence",
                 })
                 continue
-            returns, annual_return, max_drawdown_abs, positive_window_share = metrics
-            product = ProductMetrics(
-                product_id=instrument.stock_code,
-                tracking_index_code=instrument.stock_code,
-                history_confidence=min(len(bars) / 252.0, 1.0),
-                average_amount=sum(bar.amount for bar in bars) / len(bars),
-                data_quality_score=1.0,
-                cost_sensitivity=0.0,
-                oos_evidence=annual_return,
-                sub_layer=sub_layer,
-            )
-            candidate = CandidateMetrics(
-                candidate_id=instrument.stock_code,
-                annual_return=annual_return,
-                max_drawdown_abs=max_drawdown_abs,
-                positive_window_share=positive_window_share,
-                cost_ratio=product.cost_sensitivity,
-            )
+            try:
+                product, candidate, returns = _explicit_evidence(
+                    evidence_loader(config.as_of_date, instrument.stock_code), instrument, sub_layer,
+                )
+            except ValueError as exc:
+                audit_rows.append({"stock_code": instrument.stock_code, "sub_layer": sub_layer.value,
+                                   "accepted": False, "reason": str(exc)})
+                continue
             candidates.setdefault(sub_layer, []).append((instrument, product, candidate, returns))
         for sub_layer, layer_candidates in candidates.items():
             budget = configured_budgets[sub_layer]
+            selection_loader = getattr(provider, "load_selection_evidence", None)
+            if not callable(selection_loader):
+                audit_rows.extend(_selection_rejections(layer_candidates, "missing_selection_evidence"))
+                continue
+            evidence = selection_loader(config.as_of_date, sub_layer, SubLayerBudget(sub_layer, budget))
+            if not isinstance(evidence, SubLayerSelectionEvidence) or evidence.budget != SubLayerBudget(sub_layer, budget):
+                audit_rows.extend(_selection_rejections(layer_candidates, "invalid_selection_evidence"))
+                continue
             pareto = pareto_front(candidate for _, _, candidate, _ in layer_candidates)
             pareto_ids = frozenset(candidate.candidate_id for candidate in pareto)
             products = tuple(product for _, product, _, _ in layer_candidates)
             returns = {product.product_id: series for _, product, _, series in layer_candidates}
-            evidence = SubLayerSelectionEvidence(
-                budget=SubLayerBudget(sub_layer, budget),
-                pareto_product_ids=pareto_ids,
-                maximum_cost_sensitivity=0.05,
-                minimum_tradable_budget=Decimal("0"),
-                per_product_cap=1.0,
-                minimum_diversification_gain=0.30,
-                pairwise_risk=pairwise_risk(returns),
-            )
+            evidence = replace(evidence, pareto_product_ids=pareto_ids)
             selected = select_sub_layer_products(products, evidence)
             if not selected:
                 audit_rows.extend(_selection_rejections(layer_candidates, "selection_gate"))
@@ -153,10 +150,11 @@ def _default_artifact_factory(provider: _LayeredResearchProvider, run_config: Re
             sub_layers[sub_layer.value] = entry
             weights = portfolio.capped_inverse_volatility.weights
             instruments = {instrument.stock_code: instrument for instrument, _, _, _ in layer_candidates}
+            products_by_id = {product.product_id: product for _, product, _, _ in layer_candidates}
             for stock_code in sorted(selected_ids):
                 instrument = instruments[stock_code]
                 targets.append({
-                    "stock_code": stock_code, "tracking_index_code": stock_code,
+                    "stock_code": stock_code, "tracking_index_code": products_by_id[stock_code].tracking_index_code,
                     "layer": asset_layer_for(sub_layer).value, "sub_layer": sub_layer.value,
                     "sub_layer_budget": entry["budget"], "instrument_type": instrument.instrument_type.value,
                     "weight": _decimal_text(weights[stock_code]),
@@ -232,6 +230,25 @@ def _research_metrics(
         max_drawdown_abs,
         sum(value > 0.0 for value in returns) / len(returns),
     )
+
+
+def _explicit_evidence(
+    raw: object, instrument: LayeredInstrument, sub_layer: SubLayer,
+) -> tuple[ProductMetrics, CandidateMetrics, tuple[float, ...]]:
+    """Validate externally produced cost-adjusted walk-forward evidence."""
+
+    if not isinstance(raw, Mapping):
+        raise ValueError("missing_walk_forward_evidence")
+    product, candidate, returns = raw.get("product"), raw.get("candidate"), raw.get("oos_returns")
+    if not isinstance(product, ProductMetrics) or not isinstance(candidate, CandidateMetrics):
+        raise ValueError("invalid_walk_forward_evidence")
+    if product.product_id != instrument.stock_code or candidate.candidate_id != instrument.stock_code:
+        raise ValueError("walk_forward_evidence_identity_mismatch")
+    if product.sub_layer is not sub_layer or not isinstance(returns, tuple) or len(returns) < 2:
+        raise ValueError("invalid_walk_forward_evidence")
+    if any(not isinstance(value, (int, float)) for value in returns):
+        raise ValueError("invalid_walk_forward_evidence")
+    return product, candidate, tuple(float(value) for value in returns)
 
 
 def _selection_rejections(

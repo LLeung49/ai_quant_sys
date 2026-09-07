@@ -13,6 +13,7 @@ from asset_allocation.etf_adaptive.research.report import (
     ResearchArtifact,
     write_research_report,
 )
+import asset_allocation.etf_adaptive.research.report as report_module
 from asset_allocation.etf_adaptive.frozen_selection import FrozenSelection, _canonical_hash
 
 
@@ -111,6 +112,29 @@ def test_report_republishes_nested_sub_layer_artifacts(output_dir: Path) -> None
     write_research_report(layered, output_dir)
 
     assert (output_dir / "sub_layers" / "broad_overseas_mature" / "oos.json").exists()
+
+
+def test_publish_directory_retries_transient_windows_permission_error(tmp_path, monkeypatch) -> None:
+    staging = tmp_path / "staging"
+    destination = tmp_path / "destination"
+    staging.mkdir()
+    (staging / "artifact.txt").write_text("ready", encoding="utf-8")
+    real_replace = report_module.os.replace
+    attempts = 0
+
+    def flaky_replace(source, target):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise PermissionError(5, "access denied")
+        return real_replace(source, target)
+
+    monkeypatch.setattr(report_module.os, "replace", flaky_replace)
+
+    report_module.publish_directory(staging, destination)
+
+    assert attempts == 2
+    assert (destination / "artifact.txt").read_text(encoding="utf-8") == "ready"
 
 
 def test_report_rejects_unsafe_sub_layer_path(output_dir: Path) -> None:

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import time
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -36,6 +37,8 @@ REPORT_FILES: tuple[str, ...] = (
     "portfolio_comparisons.json",
     "executive_report.md",
 )
+PUBLISH_RETRY_ATTEMPTS = 3
+PUBLISH_RETRY_DELAY_SECONDS = 0.05
 
 
 @dataclass(frozen=True)
@@ -69,7 +72,14 @@ def publish_directory(staging: Path, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
         shutil.rmtree(destination)
-    os.replace(staging, destination)
+    for attempt in range(PUBLISH_RETRY_ATTEMPTS):
+        try:
+            os.replace(staging, destination)
+            return
+        except PermissionError:
+            if attempt == PUBLISH_RETRY_ATTEMPTS - 1:
+                raise
+            time.sleep(PUBLISH_RETRY_DELAY_SECONDS)
 
 
 def _stage_directory(output_dir: Path) -> Path:

@@ -205,6 +205,10 @@ def load_fill_observations(path: Path) -> tuple[FillObservation, ...]:
             raise ValueError("each observation must include every FillObservation field")
         if not all(isinstance(item[field], str) and item[field] for field in ("stock_code", "config_hash")):
             raise ValueError("observation stock_code and config_hash must be non-empty strings")
+        if not isinstance(item["execution_eligible_date"], str):
+            raise ValueError("observation execution_eligible_date must be an ISO date string")
+        if item["notes"] is not None and not isinstance(item["notes"], str):
+            raise ValueError("observation notes must be a string or null")
         if type(item["fill_complete"]) is not bool:
             raise ValueError("observation fill_complete must be a boolean")
         for field_name in ("raw_open", "raw_close", "slippage_bps"):
@@ -212,7 +216,7 @@ def load_fill_observations(path: Path) -> tuple[FillObservation, ...]:
             if value is not None and (type(value) not in (int, float) or not math.isfinite(float(value))):
                 raise ValueError(f"observation {field_name} must be a finite number or null")
         observations.append(FillObservation(
-            execution_eligible_date=date.fromisoformat(str(item["execution_eligible_date"])),
+            execution_eligible_date=date.fromisoformat(item["execution_eligible_date"]),
             stock_code=str(item["stock_code"]), config_hash=str(item["config_hash"]),
             raw_open=item["raw_open"], raw_close=item["raw_close"],
             slippage_bps=item["slippage_bps"], fill_complete=bool(item["fill_complete"]),
