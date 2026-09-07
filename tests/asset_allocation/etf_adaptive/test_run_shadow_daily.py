@@ -23,6 +23,7 @@ from asset_allocation.etf_adaptive.run_shadow_daily import (
     NonTradingDateError,
     TargetSpec,
     cost_boundary_for,
+    execution_cost_config_for,
     next_trading_session,
     require_after_market_data_cutoff,
     require_fresh_bar,
@@ -111,6 +112,7 @@ def _store_with_selection() -> InMemoryShadowStore:
                     "sub_layer": "broad_domestic_core",
                     "sub_layer_budget": "100000",
                     "instrument_type": "etf",
+                    "config_hash": "cfg-shadow-1",
                 },
             ],
         },
@@ -134,11 +136,13 @@ def _store_with_layered_target_budgets() -> InMemoryShadowStore:
                     "stock_code": "510300.SH", "tracking_index_code": "000300.SH",
                     "layer": "broad_beta", "sub_layer": "broad_domestic_core",
                     "sub_layer_budget": "42000", "instrument_type": "etf", "weight": "0.6",
+                    "config_hash": "cfg-layered-budget",
                 },
                 {
                     "stock_code": "510500.SH", "tracking_index_code": "000905.SH",
                     "layer": "broad_beta", "sub_layer": "broad_domestic_core",
                     "sub_layer_budget": "42000", "instrument_type": "etf", "weight": "0.4",
+                    "config_hash": "cfg-layered-budget",
                 },
             ],
         },
@@ -261,6 +265,43 @@ def test_cost_boundary_dispatches_etf_and_china_a_stock_schedules() -> None:
     assert isinstance(stock_cost, ChinaAStockCostBoundary)
     assert stock_cost.stamp_duty_sell_rate == Decimal("0.0005")
     assert stock_cost.transfer_fee_rate == Decimal("0.00001")
+    stock_execution_cost = execution_cost_config_for(stock, TARGET, AdaptiveConfig.default())
+    assert stock_execution_cost.sell_tax_rate == pytest.approx(0.0005)
+    assert stock_execution_cost.transfer_fee_rate == pytest.approx(0.00001)
+
+
+def test_active_selection_rejects_missing_or_mismatched_target_config_hash() -> None:
+    frozen = FrozenConfigRecord(
+        config_hash="parent-hash",
+        config=AdaptiveConfig.default(),
+        selection_payload={
+            "targets": [{
+                "stock_code": "510300.SH", "tracking_index_code": "000300.SH",
+                "layer": "broad_beta", "sub_layer": "broad_domestic_core",
+                "sub_layer_budget": "42000", "instrument_type": "etf", "weight": "1",
+            }],
+        },
+        data_cutoff=DATA_CUTOFF,
+        activation_date=date(2026, 8, 1),
+        review_date=date(2027, 2, 1),
+        activated_at=datetime(2026, 8, 1, 17, 0),
+    )
+
+    with pytest.raises(ValueError, match="config_hash"):
+        shadow_module._build_active_selection(frozen)
+
+    mismatched = FrozenConfigRecord(
+        **{
+            **frozen.__dict__,
+            "selection_payload": {
+                "targets": [{
+                    **frozen.selection_payload["targets"][0], "config_hash": "another-hash",
+                }],
+            },
+        },
+    )
+    with pytest.raises(ValueError, match="config_hash"):
+        shadow_module._build_active_selection(mismatched)
 
 
 def test_shadow_runner_requires_active_frozen_selection() -> None:

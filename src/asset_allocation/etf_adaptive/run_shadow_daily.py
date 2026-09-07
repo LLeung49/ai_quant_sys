@@ -192,6 +192,23 @@ def cost_boundary_for(
     raise ValueError(f"unsupported instrument type for {target.stock_code!r}")
 
 
+def execution_cost_config_for(
+    target: TargetSpec, trade_date: date, config: AdaptiveConfig,
+) -> CostConfig:
+    """Translate the target-specific boundary into the simulator's cost contract."""
+
+    boundary = cost_boundary_for(target, trade_date, config)
+    if isinstance(boundary, ETFCostBoundary):
+        return boundary.cost
+    return CostConfig(
+        commission_rate=float(boundary.commission_rate),
+        minimum_commission=float(boundary.minimum_commission),
+        slippage_bps=config.cost.slippage_bps,
+        sell_tax_rate=float(boundary.stamp_duty_sell_rate),
+        transfer_fee_rate=float(boundary.transfer_fee_rate),
+    )
+
+
 @dataclass(frozen=True)
 class ActiveSelection:
     """Lightweight view of the active frozen selection."""
@@ -383,7 +400,10 @@ def process_target_close(
     state = _build_prior_state(prior, strategy_budget)
     snapshot = _latest_snapshot(bars)
     bar = bars[-1]
-    decision = process_close(state, snapshot, _eligibility_for(bar), selection.config)
+    target_config = replace(selection.config, cost=execution_cost_config_for(
+        target, bar.trade_date, selection.config,
+    ))
+    decision = process_close(state, snapshot, _eligibility_for(bar), target_config)
     state = decision.state
     identity = ShadowRunIdentity(
         as_of_date=bar.trade_date,
@@ -496,12 +516,16 @@ def _build_active_selection(frozen) -> ActiveSelection:
     for item in raw_targets:
         if not isinstance(item, Mapping):
             raise ValueError("frozen selection target must be a mapping")
-        required = {"stock_code", "sub_layer", "sub_layer_budget", "instrument_type", "weight"}
+        required = {
+            "stock_code", "sub_layer", "sub_layer_budget", "instrument_type", "weight", "config_hash",
+        }
         missing = required.difference(item)
         if missing:
             raise ValueError(
                 "legacy frozen target is ambiguous; missing " + ", ".join(sorted(missing))
             )
+        if str(item["config_hash"]) != frozen.config_hash:
+            raise ValueError("frozen target config_hash must equal the active frozen config_hash")
         try:
             sub_layer = SubLayer(str(item["sub_layer"]))
             instrument_type = InstrumentType(str(item["instrument_type"]))

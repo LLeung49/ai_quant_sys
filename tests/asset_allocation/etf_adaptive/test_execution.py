@@ -121,6 +121,24 @@ def test_grid_initialization_lots_are_sized_from_raw_open_and_target_budget() ->
     assert result.fills[0].shares == 14_900
 
 
+def test_a_share_sell_deducts_commission_stamp_duty_and_transfer_fee() -> None:
+    intent = OrderIntent(
+        date(2026, 9, 2), Side.SELL, OrderReason.GRID_SELL, 0.05,
+        (("grid_anchor", 1.0),), 1.0, 0.0, "close A-share GRID unit",
+    )
+    cost = CostConfig(
+        commission_rate=0.0003, minimum_commission=5.0, slippage_bps=0.0,
+        sell_tax_rate=0.0005, transfer_fee_rate=0.00001,
+    )
+
+    result = ExecutionSimulator(cost, TrendConfig()).execute(
+        (intent,), _bar(), StrategyState(cash=Decimal("0"), position_shares=100),
+    )
+
+    assert result.fills[0].commission == Decimal("5.20")
+    assert result.state.cash == Decimal("394.80")
+
+
 @pytest.mark.parametrize("side", (Side.BUY, Side.SELL))
 def test_grid_step_uses_raw_portfolio_equity_for_one_unit_lot(side: Side) -> None:
     intent = OrderIntent(

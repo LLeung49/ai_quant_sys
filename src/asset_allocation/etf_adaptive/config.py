@@ -55,11 +55,15 @@ class CostConfig:
     commission_rate: float = 0.0001
     minimum_commission: float = 5.0
     slippage_bps: float = 3.0
+    sell_tax_rate: float = 0.0
+    transfer_fee_rate: float = 0.0
 
     def __post_init__(self) -> None:
         _finite_unit(self.commission_rate, "commission_rate")
         _finite_unit(self.minimum_commission, "minimum_commission")
         _finite_unit(self.slippage_bps, "slippage_bps", allow_zero=True)
+        _finite_unit(self.sell_tax_rate, "sell_tax_rate", allow_zero=True)
+        _finite_unit(self.transfer_fee_rate, "transfer_fee_rate", allow_zero=True)
 
 
 @dataclass(frozen=True)
