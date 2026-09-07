@@ -6,8 +6,9 @@ from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 import math
 import re
-from typing import Callable, Mapping, Sequence
+from typing import Callable, Mapping, Protocol, Sequence
 
+from .constituents import HistoricalConstituentProvider
 from .contracts import (
     CorporateAction,
     CorporateActionType,
@@ -16,13 +17,34 @@ from .contracts import (
     DualPriceBar,
     ETFMetadata,
     ExecutionAvailability,
+    InstrumentType,
+    LayeredInstrument,
+    SubLayer,
 )
+from .layers import validate_sub_layer
 
 
 Query = Callable[[str, tuple[object, ...]], Sequence[Mapping[str, object]]]
 CalendarLoader = Callable[[date, date], Sequence[date]]
 AdjustmentProvenanceLoader = Callable[[str, date], Mapping[str, object]]
 ExecutionAvailabilityLoader = Callable[[Mapping[str, object]], ExecutionAvailability]
+PriceProvenanceLoader = Callable[[str, date], Mapping[str, object]]
+
+
+class InstrumentMetadataRepository(Protocol):
+    """Read-only source of effective-dated layered instrument metadata."""
+
+    def load_metadata(self) -> Sequence[Mapping[str, object]]:
+        """Return all dated source rows; filtering is performed fail-closed."""
+
+
+class PointInTimePriceProvider(Protocol):
+    """Price boundary with aligned raw and qfq coordinate bars."""
+
+    def load_bars(
+        self, stock_code: str, start_date: date, end_date: date
+    ) -> tuple[DualPriceBar, ...]:
+        """Return aligned prices for the exact requested range."""
 
 _ETF_CANDIDATE_CODE = re.compile(
     r"^(?:(?:510|511|512|513|515|516|517|518|560|561|562|563|588|589)"
@@ -787,3 +809,295 @@ class AdaptiveMarketDataProvider:
                     effective_date,
                 )
         return tuple(actions)
+
+
+class LayeredMarketDataProvider:
+    """Build only fully-proven layered instruments at one point in time.
+
+    This boundary composes dated membership, dated instrument metadata, and
+    aligned raw/qfq prices.  It has no database write path and does not assume
+    a particular membership storage schema.
+    """
+
+    def __init__(
+        self,
+        *,
+        constituents: HistoricalConstituentProvider,
+        metadata: InstrumentMetadataRepository,
+        prices: PointInTimePriceProvider,
+        price_provenance: PriceProvenanceLoader,
+    ) -> None:
+        if not isinstance(constituents, HistoricalConstituentProvider):
+            raise ValueError("constituents must be a HistoricalConstituentProvider")
+        if not callable(getattr(metadata, "load_metadata", None)):
+            raise ValueError("metadata must provide load_metadata")
+        if not callable(getattr(prices, "load_bars", None)):
+            raise ValueError("prices must provide load_bars")
+        if not callable(price_provenance):
+            raise ValueError("price_provenance must be callable")
+        self._constituents = constituents
+        self._metadata = metadata
+        self._prices = prices
+        self._price_provenance = price_provenance
+        self.last_quality_issues: tuple[DataQualityIssue, ...] = ()
+
+    def _fail(
+        self,
+        code: str,
+        stock_code: str,
+        message: str,
+        trade_date: date | None = None,
+    ) -> None:
+        issue = DataQualityIssue(code, stock_code, trade_date, message)
+        self.last_quality_issues = (issue,)
+        raise DataQualityError(message, self.last_quality_issues)
+
+    def _load_price(self, stock_code: str, as_of_date: date) -> None:
+        try:
+            provenance = self._price_provenance(stock_code, as_of_date)
+        except Exception as exc:
+            self._fail(
+                "price_provenance_unavailable",
+                stock_code,
+                f"price provenance unavailable: {exc}",
+                as_of_date,
+            )
+        if not isinstance(provenance, Mapping):
+            self._fail(
+                "price_provenance_unavailable",
+                stock_code,
+                "price provenance returned an invalid response",
+                as_of_date,
+            )
+        try:
+            provenance_code = _validate_code(provenance.get("stock_code"))  # type: ignore[arg-type]
+            provenance_date = _as_date(provenance.get("as_of_date"), "as_of_date")
+        except ValueError:
+            self._fail(
+                "price_provenance_unavailable",
+                stock_code,
+                "price provenance has an invalid source identity",
+                as_of_date,
+            )
+        if (
+            provenance_code != stock_code
+            or provenance_date != as_of_date
+            or provenance.get("complete") is not True
+            or _as_optional_text(provenance.get("source")) is None
+        ):
+            self._fail(
+                "price_provenance_unavailable",
+                stock_code,
+                "price provenance is incomplete or does not match the requested point in time",
+                as_of_date,
+            )
+        try:
+            bars = self._prices.load_bars(stock_code, as_of_date, as_of_date)
+        except DataQualityError:
+            raise
+        except Exception as exc:
+            self._fail(
+                "aligned_price_unavailable",
+                stock_code,
+                f"aligned price data unavailable: {exc}",
+                as_of_date,
+            )
+        if not isinstance(bars, tuple) or not any(
+            isinstance(bar, DualPriceBar)
+            and bar.stock_code.strip().upper() == stock_code
+            and bar.trade_date == as_of_date
+            for bar in bars
+        ):
+            self._fail(
+                "aligned_price_unavailable",
+                stock_code,
+                "aligned raw/qfq price is unavailable for the requested date",
+                as_of_date,
+            )
+
+    def load_instruments(self, as_of_date: date) -> tuple[LayeredInstrument, ...]:
+        """Return only approved instruments with dated membership and metadata."""
+
+        _validate_range(as_of_date, as_of_date)
+        self.last_quality_issues = ()
+        stock_members = frozenset(
+            stock_code
+            for index_code in ("H30269", "931468", "000922")
+            for stock_code in self._constituents.members(as_of_date, index_code)
+        )
+        try:
+            rows = self._metadata.load_metadata()
+        except Exception as exc:
+            self._fail(
+                "instrument_metadata_unavailable",
+                "<metadata-source>",
+                f"instrument metadata unavailable: {exc}",
+            )
+        if not isinstance(rows, Sequence):
+            self._fail(
+                "instrument_metadata_unavailable",
+                "<metadata-source>",
+                "instrument metadata returned an invalid response",
+            )
+
+        instruments: list[LayeredInstrument] = []
+        active_codes: set[str] = set()
+        active_stock_codes: set[str] = set()
+        for row in rows:
+            if not isinstance(row, Mapping):
+                self._fail(
+                    "invalid_instrument_metadata",
+                    "<metadata-source>",
+                    "instrument metadata contains an invalid record",
+                )
+            try:
+                stock_code = _validate_code(row.get("stock_code"))  # type: ignore[arg-type]
+            except ValueError:
+                self._fail(
+                    "invalid_instrument_stock_code",
+                    "<metadata-source>",
+                    "instrument metadata has an invalid stock code",
+                )
+            if row.get("effective_start") is None or row.get("effective_end") is None:
+                self._fail(
+                    "missing_metadata_effective_range",
+                    stock_code,
+                    "instrument metadata requires an effective date range",
+                )
+            try:
+                effective_start = _as_date(row.get("effective_start"), "effective_start")
+                effective_end = _as_date(row.get("effective_end"), "effective_end")
+            except ValueError:
+                self._fail(
+                    "invalid_metadata_effective_range",
+                    stock_code,
+                    "instrument metadata has an invalid effective date range",
+                )
+            if effective_end < effective_start:
+                self._fail(
+                    "invalid_metadata_effective_range",
+                    stock_code,
+                    "instrument metadata ends before it starts",
+                )
+            if not effective_start <= as_of_date <= effective_end:
+                continue
+            if stock_code in active_codes:
+                self._fail(
+                    "duplicate_active_instrument_metadata",
+                    stock_code,
+                    "instrument metadata contains duplicate active records",
+                    as_of_date,
+                )
+            active_codes.add(stock_code)
+            if row.get("listing_date") is None:
+                self._fail(
+                    "missing_listing_date",
+                    stock_code,
+                    "instrument metadata is missing a listing date",
+                    as_of_date,
+                )
+            try:
+                listing_date = _as_date(row.get("listing_date"), "listing_date")
+            except ValueError:
+                self._fail(
+                    "invalid_listing_date",
+                    stock_code,
+                    "instrument metadata has an invalid listing date",
+                    as_of_date,
+                )
+            if listing_date > as_of_date:
+                self._fail(
+                    "listing_date_after_as_of_date",
+                    stock_code,
+                    "instrument listing date is after the requested date",
+                    listing_date,
+                )
+            try:
+                instrument_type = InstrumentType(str(row.get("instrument_type")).strip().lower())
+            except ValueError:
+                self._fail(
+                    "invalid_instrument_type",
+                    stock_code,
+                    "instrument metadata has an invalid instrument type",
+                    as_of_date,
+                )
+            exposure = _as_optional_text(row.get("exposure"))
+            declared_sub_layer = _as_optional_text(row.get("sub_layer"))
+            if exposure is None or declared_sub_layer is None:
+                self._fail(
+                    "missing_instrument_classification",
+                    stock_code,
+                    "instrument metadata requires explicit exposure and sub-layer classification",
+                    as_of_date,
+                )
+            try:
+                sub_layer = SubLayer(declared_sub_layer)
+            except ValueError:
+                self._fail(
+                    "invalid_instrument_classification",
+                    stock_code,
+                    "instrument metadata has an unapproved sub-layer classification",
+                    as_of_date,
+                )
+            try:
+                is_qdii = _as_bool(row.get("is_qdii"), "is_qdii")
+            except ValueError:
+                self._fail(
+                    "invalid_qdii_classification",
+                    stock_code,
+                    "instrument metadata has an invalid QDII classification",
+                    as_of_date,
+                )
+            if is_qdii and sub_layer not in {
+                SubLayer.OVERSEAS_MATURE,
+                SubLayer.HONG_KONG_OFFSHORE,
+            }:
+                self._fail(
+                    "invalid_qdii_classification",
+                    stock_code,
+                    "QDII ETFs require an explicit approved international sub-layer",
+                    as_of_date,
+                )
+            if instrument_type is InstrumentType.STOCK:
+                active_stock_codes.add(stock_code)
+                if stock_code not in stock_members:
+                    continue
+            instrument = LayeredInstrument(
+                stock_code=stock_code,
+                as_of_date=as_of_date,
+                instrument_type=instrument_type,
+                style=_as_optional_text(row.get("style")),
+                exposure=exposure,
+                is_qdii=is_qdii,
+                is_official_dividend_low_vol_constituent=(
+                    instrument_type is InstrumentType.STOCK and stock_code in stock_members
+                ),
+            )
+            try:
+                assigned_sub_layer = validate_sub_layer(instrument)
+            except ValueError:
+                self._fail(
+                    "unapproved_instrument_classification",
+                    stock_code,
+                    "instrument metadata is outside the approved layered universe",
+                    as_of_date,
+                )
+            if assigned_sub_layer is not sub_layer:
+                self._fail(
+                    "instrument_classification_mismatch",
+                    stock_code,
+                    "explicit sub-layer does not match instrument metadata",
+                    as_of_date,
+                )
+            self._load_price(stock_code, as_of_date)
+            instruments.append(instrument)
+
+        missing_stock_metadata = stock_members - active_stock_codes
+        if missing_stock_metadata:
+            self._fail(
+                "missing_constituent_metadata",
+                sorted(missing_stock_metadata)[0],
+                "active official constituent is missing dated instrument metadata",
+                as_of_date,
+            )
+        return tuple(sorted(instruments, key=lambda item: item.stock_code))
