@@ -129,6 +129,100 @@ class ETFMetadata:
         _require_bool(self.is_leveraged, "is_leveraged")
 
 
+class InstrumentType(str, Enum):
+    """Tradable identity types supported by the layered universe."""
+
+    ETF = "etf"
+    STOCK = "stock"
+
+
+class AssetLayer(str, Enum):
+    """Top-level sleeves whose budgets remain account-allocation inputs."""
+
+    DEFENSIVE = "defensive"
+    BROAD_BETA = "broad_beta"
+
+
+class SubLayer(str, Enum):
+    """The complete approved adaptive-equity sub-layer allowlist."""
+
+    DEFENSIVE_DIVIDEND_ETF = "defensive_dividend_etf"
+    DEFENSIVE_BLUE_CHIP = "defensive_blue_chip"
+    DOMESTIC_CORE = "broad_domestic_core"
+    DOMESTIC_GROWTH = "broad_domestic_growth"
+    OVERSEAS_MATURE = "broad_overseas_mature"
+    HONG_KONG_OFFSHORE = "broad_hk_offshore"
+
+
+_SUB_LAYER_ASSET_LAYERS = {
+    SubLayer.DEFENSIVE_DIVIDEND_ETF: AssetLayer.DEFENSIVE,
+    SubLayer.DEFENSIVE_BLUE_CHIP: AssetLayer.DEFENSIVE,
+    SubLayer.DOMESTIC_CORE: AssetLayer.BROAD_BETA,
+    SubLayer.DOMESTIC_GROWTH: AssetLayer.BROAD_BETA,
+    SubLayer.OVERSEAS_MATURE: AssetLayer.BROAD_BETA,
+    SubLayer.HONG_KONG_OFFSHORE: AssetLayer.BROAD_BETA,
+}
+
+
+def asset_layer_for(sub_layer: SubLayer) -> AssetLayer:
+    """Return the immutable parent layer for an approved sub-layer."""
+
+    if not isinstance(sub_layer, SubLayer):
+        raise ValueError("sub_layer must be a SubLayer")
+    return _SUB_LAYER_ASSET_LAYERS[sub_layer]
+
+
+@dataclass(frozen=True)
+class LayeredInstrument:
+    """A point-in-time candidate awaiting fail-closed sub-layer assignment."""
+
+    stock_code: str
+    as_of_date: date
+    instrument_type: InstrumentType
+    style: str | None
+    exposure: str | None
+    is_qdii: bool
+    is_official_dividend_low_vol_constituent: bool = False
+
+    def __post_init__(self) -> None:
+        _require_non_empty_text(self.stock_code, "stock_code")
+        _require_date(self.as_of_date, "as_of_date")
+        if not isinstance(self.instrument_type, InstrumentType):
+            raise ValueError("instrument_type must be an InstrumentType")
+        _validate_optional_text(self.style, "style")
+        _validate_optional_text(self.exposure, "exposure")
+        _require_bool(self.is_qdii, "is_qdii")
+        _require_bool(
+            self.is_official_dividend_low_vol_constituent,
+            "is_official_dividend_low_vol_constituent",
+        )
+
+    @property
+    def asset_layer(self) -> AssetLayer:
+        """Resolve the parent layer only after approved assignment."""
+
+        from .layers import assign_sub_layer
+
+        return asset_layer_for(assign_sub_layer(self))
+
+
+@dataclass(frozen=True)
+class SubLayerBudget:
+    """An existing account budget delegated to one approved sub-layer."""
+
+    sub_layer: SubLayer
+    budget: Decimal
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.sub_layer, SubLayer):
+            raise ValueError("sub_layer must be a SubLayer")
+        _validate_positive_decimal(self.budget, "budget")
+
+    @property
+    def asset_layer(self) -> AssetLayer:
+        return asset_layer_for(self.sub_layer)
+
+
 class CorporateActionType(str, Enum):
     CASH_DIVIDEND = "cash_dividend"
     SHARE_SPLIT = "share_split"
