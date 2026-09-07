@@ -36,6 +36,18 @@ def commission(notional: Decimal, config: CostConfig) -> Decimal:
     return charged.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
+def execution_fee(notional: Decimal, side: Side, config: CostConfig) -> Decimal:
+    """Return all exchange costs charged to this fill in account currency."""
+
+    tax = notional * Decimal(str(config.sell_tax_rate)) if side is Side.SELL else Decimal("0")
+    transfer = notional * Decimal(str(config.transfer_fee_rate))
+    return (
+        commission(notional, config)
+        + tax.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        + transfer.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    )
+
+
 def slipped_open(raw_open: float, side: Side, bps: float) -> float:
     return raw_open * (1.0 + bps / 10_000.0 if side is Side.BUY else 1.0 - bps / 10_000.0)
 
@@ -199,12 +211,12 @@ class ExecutionSimulator:
                 continue
             price = slipped_open(next_bar.raw_open, side, self.cost.slippage_bps)
             notional = Decimal(str(price)) * shares
-            fee = commission(notional, self.cost)
+            fee = execution_fee(notional, side, self.cost)
             if side is Side.BUY:
                 while shares >= 100 and notional + fee > current.cash:
                     shares -= 100
                     notional = Decimal(str(price)) * shares
-                    fee = commission(notional, self.cost)
+                    fee = execution_fee(notional, side, self.cost)
                 if shares < 100:
                     reject(intent, side, "insufficient cash")
                     continue

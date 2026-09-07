@@ -10,11 +10,15 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import time
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any, Mapping
+
+from ..contracts import SubLayer
 
 
 REPORT_FILES: tuple[str, ...] = (
@@ -33,6 +37,8 @@ REPORT_FILES: tuple[str, ...] = (
     "portfolio_comparisons.json",
     "executive_report.md",
 )
+PUBLISH_RETRY_ATTEMPTS = 3
+PUBLISH_RETRY_DELAY_SECONDS = 0.05
 
 
 @dataclass(frozen=True)
@@ -44,6 +50,8 @@ class ResearchArtifact:
     data_cutoff: str
     config_hash: str
     artifacts: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
+    frozen_selection: Mapping[str, Any] | None = None
+    sub_layers: Mapping[str, Mapping[str, Any]] = field(default_factory=lambda: MappingProxyType({}))
 
 
 @dataclass(frozen=True)
@@ -63,16 +71,15 @@ def publish_directory(staging: Path, destination: Path) -> None:
 
     destination.parent.mkdir(parents=True, exist_ok=True)
     if destination.exists():
-        for child in destination.iterdir():
-            if child.is_file():
-                child.unlink()
-            else:
-                for sub in child.rglob("*"):
-                    if sub.is_file():
-                        sub.unlink()
-                child.rmdir()
-        destination.rmdir()
-    os.replace(staging, destination)
+        shutil.rmtree(destination)
+    for attempt in range(PUBLISH_RETRY_ATTEMPTS):
+        try:
+            os.replace(staging, destination)
+            return
+        except PermissionError:
+            if attempt == PUBLISH_RETRY_ATTEMPTS - 1:
+                raise
+            time.sleep(PUBLISH_RETRY_DELAY_SECONDS)
 
 
 def _stage_directory(output_dir: Path) -> Path:
@@ -120,15 +127,7 @@ def write_research_report(
     output_dir = Path(output_dir)
     staging = _stage_directory(output_dir)
     if staging.exists():
-        for child in staging.iterdir():
-            if child.is_file():
-                child.unlink()
-            else:
-                for sub in child.rglob("*"):
-                    if sub.is_file():
-                        sub.unlink()
-                child.rmdir()
-        staging.rmdir()
+        shutil.rmtree(staging)
     staging.mkdir(parents=True, exist_ok=True)
 
     artifacts = artifact.artifacts
@@ -143,7 +142,20 @@ def write_research_report(
         "config_hash": artifact.config_hash,
         "notes": [],
     }
+    if artifact.frozen_selection is not None:
+        manifest_payload["frozen_selection"] = dict(artifact.frozen_selection)
+    validated_sub_layers = _validated_sub_layers(artifact.sub_layers)
+    if validated_sub_layers:
+        manifest_payload["sub_layers"] = {
+            name: {"budget": str(payload["budget"]), "products": list(payload.get("products", ())) }
+            for name, payload in validated_sub_layers.items()
+        }
     _dump_json(staging / "manifest.json", manifest_payload)
+    for name, payload in validated_sub_layers.items():
+        sub_layer_dir = staging / "sub_layers" / name
+        sub_layer_dir.mkdir(parents=True, exist_ok=True)
+        for artifact_name in ("audit", "oos", "pareto", "portfolio"):
+            _dump_json(sub_layer_dir / f"{artifact_name}.json", payload.get(artifact_name, {}))
 
     _dump_json(
         staging / "universe_audit.json",
@@ -218,3 +230,18 @@ def write_research_report(
         artifact_paths=MappingProxyType(artifact_paths),
         notes=("atomic publish via staging directory",),
     )
+
+
+def _validated_sub_layers(sub_layers: Mapping[str, Mapping[str, Any]]) -> dict[str, Mapping[str, Any]]:
+    """Reject unapproved names before they can become report paths."""
+
+    validated: dict[str, Mapping[str, Any]] = {}
+    for name, payload in sub_layers.items():
+        try:
+            approved = SubLayer(str(name)).value
+        except ValueError as exc:
+            raise ValueError(f"sub-layer name is not approved: {name!r}") from exc
+        if not isinstance(payload, Mapping):
+            raise ValueError("sub-layer artifact payload must be a mapping")
+        validated[approved] = payload
+    return validated

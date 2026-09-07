@@ -13,6 +13,8 @@ from asset_allocation.etf_adaptive.research.report import (
     ResearchArtifact,
     write_research_report,
 )
+import asset_allocation.etf_adaptive.research.report as report_module
+from asset_allocation.etf_adaptive.frozen_selection import FrozenSelection, _canonical_hash
 
 
 REPORTS_ROOT = Path("D:/aiQuant/ai_quant_sys/reports/pytest-report-tmp")
@@ -98,6 +100,67 @@ def test_report_clears_staging_directory_on_overwrite(output_dir: Path) -> None:
     write_research_report(_research_result(), output_dir)
 
     assert not staging.exists()
+
+
+def test_report_republishes_nested_sub_layer_artifacts(output_dir: Path) -> None:
+    from dataclasses import replace
+    layered = replace(_research_result(), sub_layers={
+        "broad_overseas_mature": {"budget": "48000", "oos": [{"return": 0.1}]},
+    })
+
+    write_research_report(layered, output_dir)
+    write_research_report(layered, output_dir)
+
+    assert (output_dir / "sub_layers" / "broad_overseas_mature" / "oos.json").exists()
+
+
+def test_publish_directory_retries_transient_windows_permission_error(tmp_path, monkeypatch) -> None:
+    staging = tmp_path / "staging"
+    destination = tmp_path / "destination"
+    staging.mkdir()
+    (staging / "artifact.txt").write_text("ready", encoding="utf-8")
+    real_replace = report_module.os.replace
+    attempts = 0
+
+    def flaky_replace(source, target):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise PermissionError(5, "access denied")
+        return real_replace(source, target)
+
+    monkeypatch.setattr(report_module.os, "replace", flaky_replace)
+
+    report_module.publish_directory(staging, destination)
+
+    assert attempts == 2
+    assert (destination / "artifact.txt").read_text(encoding="utf-8") == "ready"
+
+
+def test_report_rejects_unsafe_sub_layer_path(output_dir: Path) -> None:
+    from dataclasses import replace
+    layered = replace(_research_result(), sub_layers={"../escape": {"budget": "1"}})
+
+    with pytest.raises(ValueError, match="sub-layer"):
+        write_research_report(layered, output_dir)
+
+
+def test_report_manifest_round_trips_frozen_selection(output_dir: Path) -> None:
+    payload = {
+        "selection_id": "selection-2026-09", "data_cutoff": "2026-09-01",
+        "activation_date": "2026-09-02", "review_date": "2027-03-04",
+        "targets": [{
+            "stock_code": "510300.SH", "tracking_index_code": "000300.SH",
+            "layer": "broad_beta", "sub_layer": "broad_domestic_core",
+            "sub_layer_budget": "12000", "instrument_type": "etf", "weight": "1",
+        }],
+        "sub_layer_budgets": {"broad_domestic_core": "12000"},
+    }
+    payload["config_hash"] = _canonical_hash(payload)
+    artifact = _research_result()
+    from dataclasses import replace
+    write_research_report(replace(artifact, frozen_selection=payload), output_dir)
+    assert FrozenSelection.from_research_manifest(output_dir / "manifest.json").selection_id == "selection-2026-09"
     assert (output_dir / "manifest.json").exists()
 
 

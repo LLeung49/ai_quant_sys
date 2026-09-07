@@ -29,11 +29,14 @@ from .parameters import (
 )
 from .portfolio import (
     PairwiseRisk,
+    SubLayerPortfolio,
+    SubLayerPortfolioEvaluation,
     build_equal_weight,
     build_inverse_volatility,
     correlation,
     downside_correlation,
     drawdown_overlap,
+    evaluate_sub_layer_portfolios,
     pairwise_risk,
 )
 from .report import (
@@ -49,10 +52,12 @@ from .selection import (
     CandidateMetrics,
     PortfolioMetrics,
     ProductMetrics,
+    SubLayerSelectionEvidence,
     dominates,
     pareto_front,
     select_best_product,
     select_products_by_index,
+    select_sub_layer_products,
 )
 from .walk_forward import (
     FrozenWindowSelection,
@@ -80,6 +85,9 @@ __all__ = [
     "ResearchArtifact",
     "ResearchReportManifest",
     "ResearchRunConfig",
+    "SubLayerPortfolio",
+    "SubLayerPortfolioEvaluation",
+    "SubLayerSelectionEvidence",
     "StagedSelector",
     "StagedWalkForwardRequest",
     "Trade",
@@ -95,6 +103,7 @@ __all__ = [
     "dominates",
     "downside_correlation",
     "drawdown_overlap",
+    "evaluate_sub_layer_portfolios",
     "grid_candidates",
     "max_drawdown",
     "pairwise_risk",
@@ -105,6 +114,7 @@ __all__ = [
     "run_staged_walk_forward",
     "select_best_product",
     "select_products_by_index",
+    "select_sub_layer_products",
     "session_returns",
     "stable_parameter_neighborhood",
     "trend_candidates",

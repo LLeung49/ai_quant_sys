@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 
+from asset_allocation.etf_adaptive.contracts import SubLayer, SubLayerBudget
 from asset_allocation.etf_adaptive.research.portfolio import (
     PairwiseRisk,
     build_equal_weight,
@@ -11,7 +14,12 @@ from asset_allocation.etf_adaptive.research.portfolio import (
     correlation,
     downside_correlation,
     drawdown_overlap,
+    evaluate_sub_layer_portfolios,
     pairwise_risk,
+)
+from asset_allocation.etf_adaptive.research.selection import (
+    ProductMetrics,
+    SubLayerSelectionEvidence,
 )
 
 
@@ -68,6 +76,11 @@ def test_inverse_volatility_rejects_invalid_cap() -> None:
         assert "cap" in str(exc)
     else:
         raise AssertionError("expected ValueError for zero cap")
+
+
+def test_inverse_volatility_rejects_an_infeasible_cap_instead_of_over_allocating() -> None:
+    with pytest.raises(ValueError, match="infeasible"):
+        build_inverse_volatility({"A": 0.10, "B": 0.20}, cap=0.40)
 
 
 def test_correlation_matches_expectation_for_lockstep_series() -> None:
@@ -127,3 +140,72 @@ def test_pairwise_risk_returns_metrics_for_every_ordered_pair() -> None:
     assert risk[("A", "B")].drawdown_overlap == pytest.approx(
         risk[("B", "A")].drawdown_overlap,
     )
+
+
+def _portfolio_product(product_id: str) -> ProductMetrics:
+    return ProductMetrics(
+        product_id=product_id,
+        tracking_index_code=product_id,
+        history_confidence=0.95,
+        average_amount=200_000_000.0,
+        data_quality_score=0.98,
+        cost_sensitivity=0.03,
+        oos_evidence=0.12,
+        sub_layer=SubLayer.DOMESTIC_CORE,
+    )
+
+
+def _portfolio_evidence(
+    *,
+    per_product_cap: float,
+    minimum_tradable_budget: Decimal = Decimal("0"),
+) -> SubLayerSelectionEvidence:
+    return SubLayerSelectionEvidence(
+        budget=SubLayerBudget(SubLayer.DOMESTIC_CORE, Decimal("120000")),
+        pareto_product_ids=frozenset(),
+        maximum_cost_sensitivity=0.05,
+        minimum_tradable_budget=minimum_tradable_budget,
+        per_product_cap=per_product_cap,
+        minimum_diversification_gain=0.0,
+    )
+
+
+def test_evaluate_sub_layer_portfolios_conserves_budget_for_equal_and_capped_inverse_volatility() -> None:
+    evaluation = evaluate_sub_layer_portfolios(
+        (_portfolio_product("A"), _portfolio_product("B"), _portfolio_product("C")),
+        {
+            "A": (0.01, -0.02, 0.03, -0.01),
+            "B": (0.02, -0.01, 0.02, -0.02),
+            "C": (-0.01, 0.01, -0.02, 0.02),
+        },
+        _portfolio_evidence(
+            per_product_cap=0.50,
+            minimum_tradable_budget=Decimal("10000"),
+        ),
+    )
+
+    assert sum(evaluation.equal_weight.weights.values()) == pytest.approx(1.0)
+    assert sum(evaluation.capped_inverse_volatility.weights.values()) == pytest.approx(1.0)
+    assert sum(evaluation.equal_weight.allocations.values()) == Decimal("120000")
+    assert sum(evaluation.capped_inverse_volatility.allocations.values()) == Decimal("120000")
+    assert max(evaluation.capped_inverse_volatility.weights.values()) <= 0.50
+
+
+def test_evaluate_sub_layer_portfolios_fails_when_the_cap_cannot_fund_a_basket() -> None:
+    with pytest.raises(ValueError, match="infeasible"):
+        evaluate_sub_layer_portfolios(
+            (_portfolio_product("A"), _portfolio_product("B")),
+            {"A": (0.01, -0.02), "B": (0.02, -0.01)},
+            _portfolio_evidence(per_product_cap=0.40),
+        )
+
+
+def test_evaluate_sub_layer_portfolios_uses_the_selection_evidence_cap_for_one_product() -> None:
+    evaluation = evaluate_sub_layer_portfolios(
+        (_portfolio_product("A"),),
+        {"A": (0.01, -0.02, 0.03, -0.01)},
+        _portfolio_evidence(per_product_cap=1.0),
+    )
+
+    assert evaluation.equal_weight.weights == {"A": 1.0}
+    assert evaluation.capped_inverse_volatility.weights == {"A": 1.0}

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+import json
 
 import pytest
 
@@ -30,6 +31,7 @@ from asset_allocation.etf_adaptive.verify_shadow import (
     READINESS_GATES,
     verify_shadow_period,
 )
+import asset_allocation.etf_adaptive.verify_shadow as verify_module
 
 
 START = date(2026, 1, 1)
@@ -205,3 +207,66 @@ def test_readiness_checked_gates_match_spec() -> None:
     result = verify_shadow_period(START, END, store)
 
     assert set(result.checked_gates) == set(READINESS_GATES)
+
+
+def test_main_uses_injected_durable_store(monkeypatch, capsys) -> None:
+    store = _store_with_n_runs(60)
+    monkeypatch.setattr(verify_module, "default_shadow_store", lambda: store, raising=False)
+    assert verify_module.main(["--start-date", START.isoformat(), "--end-date", END.isoformat()]) == 0
+    assert '"ready": true' in capsys.readouterr().out
+
+
+def test_main_loads_observations_from_json_file(tmp_path, monkeypatch) -> None:
+    store = _store_with_n_runs(60)
+    observation_file = tmp_path / "observations.json"
+    observation_file.write_text(json.dumps([{
+        "execution_eligible_date": START.isoformat(), "stock_code": "510300.SH",
+        "config_hash": "cfg-shadow-1", "raw_open": 1.0, "raw_close": 1.0,
+        "slippage_bps": 10.0, "fill_complete": True, "notes": "test",
+    }]), encoding="utf-8")
+    monkeypatch.setattr(verify_module, "default_shadow_store", lambda: store, raising=False)
+
+    assert verify_module.main([
+        "--start-date", START.isoformat(), "--end-date", END.isoformat(),
+        "--observation-file", str(observation_file),
+    ]) == 2
+
+
+@pytest.mark.parametrize("field,value", (("fill_complete", "false"), ("slippage_bps", float("nan"))))
+def test_main_rejects_malformed_observation_values(tmp_path, monkeypatch, field, value) -> None:
+    store = _store_with_n_runs(60)
+    observation_file = tmp_path / "observations.json"
+    row = {
+        "execution_eligible_date": START.isoformat(), "stock_code": "510300.SH",
+        "config_hash": "cfg-shadow-1", "raw_open": 1.0, "raw_close": 1.0,
+        "slippage_bps": 1.0, "fill_complete": True, "notes": "test",
+    }
+    row[field] = value
+    observation_file.write_text(json.dumps([row]), encoding="utf-8")
+    monkeypatch.setattr(verify_module, "default_shadow_store", lambda: store, raising=False)
+
+    with pytest.raises(ValueError):
+        verify_module.main([
+            "--start-date", START.isoformat(), "--end-date", END.isoformat(),
+            "--observation-file", str(observation_file),
+        ])
+
+
+@pytest.mark.parametrize("field,value", (("execution_eligible_date", 1), ("notes", {"bad": "type"})))
+def test_main_rejects_invalid_observation_date_and_notes(tmp_path, monkeypatch, field, value) -> None:
+    store = _store_with_n_runs(60)
+    observation_file = tmp_path / "observations.json"
+    row = {
+        "execution_eligible_date": START.isoformat(), "stock_code": "510300.SH",
+        "config_hash": "cfg-shadow-1", "raw_open": 1.0, "raw_close": 1.0,
+        "slippage_bps": 1.0, "fill_complete": True, "notes": "test",
+    }
+    row[field] = value
+    observation_file.write_text(json.dumps([row]), encoding="utf-8")
+    monkeypatch.setattr(verify_module, "default_shadow_store", lambda: store, raising=False)
+
+    with pytest.raises(ValueError):
+        verify_module.main([
+            "--start-date", START.isoformat(), "--end-date", END.isoformat(),
+            "--observation-file", str(observation_file),
+        ])

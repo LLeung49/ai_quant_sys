@@ -6,6 +6,7 @@ import json
 import shutil
 import uuid
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,6 @@ import pytest
 from asset_allocation.etf_adaptive.frozen_selection import (
     FrozenSelection,
     FrozenSelectionError,
-    MAX_SINGLE_TARGET_WEIGHT,
     SIX_MONTH_REVIEW_DAYS,
     _canonical_hash,
     activate_selection,
@@ -39,10 +39,12 @@ def _payload(
     *,
     config_hash: str,
     targets: tuple[dict, ...] = (
-        {"stock_code": "510300.SH", "layer": "core_broad", "weight": 0.5,
-         "tracking_index_code": "000300.SH"},
-        {"stock_code": "510500.SH", "layer": "core_broad", "weight": 0.5,
-         "tracking_index_code": "000905.SH"},
+        {"stock_code": "510300.SH", "layer": "broad_beta", "weight": "0.5",
+         "tracking_index_code": "000300.SH", "sub_layer": "broad_domestic_core",
+         "sub_layer_budget": "42000", "instrument_type": "etf"},
+        {"stock_code": "510500.SH", "layer": "broad_beta", "weight": "0.5",
+         "tracking_index_code": "000905.SH", "sub_layer": "broad_domestic_core",
+         "sub_layer_budget": "42000", "instrument_type": "etf"},
     ),
     layer_weights: dict | None = None,
     activation_date: str = "2026-09-01",
@@ -58,7 +60,7 @@ def _payload(
         "activation_date": activation_date,
         "review_date": review_date,
         "targets": list(targets),
-        "layer_weights": layer_weights or {"core_broad": 1.0},
+        "layer_weights": layer_weights or {"broad_beta": 1.0},
     }
     canonical = _canonical_hash(payload)
     payload["config_hash"] = canonical if config_hash == "irrelevant" else config_hash
@@ -89,14 +91,69 @@ def test_frozen_selection_round_trips_valid_payload() -> None:
     assert {target.stock_code for target in selection.targets} == {"510300.SH", "510500.SH"}
 
 
+@pytest.mark.parametrize("target_count", (1, 3))
+def test_layered_selection_accepts_any_nonempty_evidence_supported_target_count(
+    target_count: int,
+) -> None:
+    targets = tuple(
+        {
+            "stock_code": f"510{300 + index}.SH",
+            "tracking_index_code": "000300.SH",
+            "layer": "broad_beta",
+            "sub_layer": "broad_domestic_core",
+            "sub_layer_budget": "42000",
+            "instrument_type": "etf",
+            "weight": (
+                "1" if target_count == 1 else ("0.2", "0.3", "0.5")[index]
+            ),
+        }
+        for index in range(target_count)
+    )
+    payload = _payload(
+        config_hash="irrelevant",
+        targets=targets,
+        layer_weights={"broad_beta": 1.0},
+    )
+    payload["config_hash"] = _canonical_hash(payload)
+
+    selection = FrozenSelection.from_payload(payload)
+
+    assert len(selection.targets) == target_count
+    assert selection.targets[0].sub_layer.value == "broad_domestic_core"
+    assert selection.targets[0].sub_layer_budget == Decimal("42000")
+    assert selection.targets[0].instrument_type.value == "etf"
+
+
+def test_layered_selection_rejects_empty_configured_sub_layer() -> None:
+    payload = _payload(
+        config_hash="irrelevant",
+        targets=(
+            {"stock_code": "510300.SH", "layer": "defensive", "weight": "1",
+             "tracking_index_code": "000922.SH", "sub_layer": "defensive_dividend_etf",
+             "sub_layer_budget": "42000", "instrument_type": "etf"},
+        ),
+        layer_weights={"defensive": 1.0},
+    )
+    payload["sub_layer_budgets"] = {
+        "defensive_dividend_etf": "42000",
+        "defensive_blue_chip": "18000",
+    }
+    payload["config_hash"] = _canonical_hash(payload)
+
+    with pytest.raises(FrozenSelectionError, match="no selected targets"):
+        FrozenSelection.from_payload(payload)
+
+
 def test_frozen_selection_rejects_duplicate_stock_codes() -> None:
     payload = _payload(
         config_hash="irrelevant",
         targets=(
-            {"stock_code": "510300.SH", "layer": "core_broad", "weight": 0.5,
-             "tracking_index_code": "000300.SH"},
-            {"stock_code": "510300.SH", "layer": "core_broad", "weight": 0.5,
-             "tracking_index_code": "000300.SH"},
+            {"stock_code": "510300.SH", "layer": "broad_beta", "weight": "0.5",
+             "tracking_index_code": "000300.SH", "sub_layer": "broad_domestic_core",
+             "sub_layer_budget": "42000", "instrument_type": "etf"},
+            {"stock_code": "510300.SH", "layer": "broad_beta", "weight": "0.5",
+             "tracking_index_code": "000300.SH", "sub_layer": "broad_domestic_core",
+             "sub_layer_budget": "42000", "instrument_type": "etf"},
         ),
     )
 
@@ -108,14 +165,16 @@ def test_frozen_selection_rejects_duplicate_stock_codes() -> None:
         raise AssertionError("expected FrozenSelectionError for duplicate stock codes")
 
 
-def test_frozen_selection_rejects_layer_weight_not_summing_to_one() -> None:
+def test_frozen_selection_rejects_sub_layer_weight_not_summing_to_one() -> None:
     payload = _payload(
         config_hash="irrelevant",
         targets=(
-            {"stock_code": "510300.SH", "layer": "core_broad", "weight": 0.4,
-             "tracking_index_code": "000300.SH"},
-            {"stock_code": "510500.SH", "layer": "core_broad", "weight": 0.4,
-             "tracking_index_code": "000905.SH"},
+            {"stock_code": "510300.SH", "layer": "broad_beta", "weight": "0.4",
+             "tracking_index_code": "000300.SH", "sub_layer": "broad_domestic_core",
+             "sub_layer_budget": "42000", "instrument_type": "etf"},
+            {"stock_code": "510500.SH", "layer": "broad_beta", "weight": "0.4",
+             "tracking_index_code": "000905.SH", "sub_layer": "broad_domestic_core",
+             "sub_layer_budget": "42000", "instrument_type": "etf"},
         ),
         layer_weights={"core_broad": 0.8},
     )
@@ -123,28 +182,25 @@ def test_frozen_selection_rejects_layer_weight_not_summing_to_one() -> None:
     try:
         FrozenSelection.from_payload(payload)
     except FrozenSelectionError as exc:
-        assert "weights sum to" in str(exc)
+        assert "sub-layer" in str(exc)
     else:
         raise AssertionError("expected FrozenSelectionError for layer weight sum")
 
 
-def test_frozen_selection_rejects_single_target_above_cap() -> None:
+def test_frozen_selection_allows_single_target_with_full_evidence_configured_weight() -> None:
     payload = _payload(
         config_hash="irrelevant",
         targets=(
-            {"stock_code": "510300.SH", "layer": "core_broad",
-             "weight": MAX_SINGLE_TARGET_WEIGHT + 0.05, "tracking_index_code": "000300.SH"},
-            {"stock_code": "510500.SH", "layer": "core_broad", "weight": 0.3,
-             "tracking_index_code": "000905.SH"},
+            {"stock_code": "510300.SH", "layer": "broad_beta",
+             "weight": "1", "tracking_index_code": "000300.SH",
+             "sub_layer": "broad_domestic_core", "sub_layer_budget": "42000",
+             "instrument_type": "etf"},
         ),
     )
 
-    try:
-        FrozenSelection.from_payload(payload)
-    except FrozenSelectionError as exc:
-        assert "exceeds the" in str(exc)
-    else:
-        raise AssertionError("expected FrozenSelectionError for over-weight target")
+    payload["config_hash"] = _canonical_hash(payload)
+
+    assert FrozenSelection.from_payload(payload).targets[0].weight == Decimal("1")
 
 
 def test_frozen_selection_rejects_six_month_window_violation() -> None:
@@ -184,6 +240,16 @@ def test_activate_selection_persists_to_store_and_enforces_window() -> None:
 
     assert store.frozen_config_count == 1
     assert record.config_hash == selection.config_hash
+    assert record.selection_payload["targets"][0] == {
+        "stock_code": "510300.SH",
+        "tracking_index_code": "000300.SH",
+        "layer": "broad_beta",
+        "sub_layer": "broad_domestic_core",
+        "sub_layer_budget": "42000",
+        "instrument_type": "etf",
+        "weight": "0.5",
+        "config_hash": selection.config_hash,
+    }
     assert store.load_active_frozen_config(date(2026, 12, 1)) is record
 
 

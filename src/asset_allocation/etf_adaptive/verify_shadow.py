@@ -12,8 +12,12 @@ auto-trade.
 from __future__ import annotations
 
 import argparse
+import json
+import math
+from dataclasses import asdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
 from .run_shadow_daily import ShadowRunSummary
@@ -36,6 +40,12 @@ READINESS_GATES: tuple[str, ...] = (
 
 
 SLIPPAGE_FIVE_BP: float = 5.0
+
+
+def default_shadow_store() -> ShadowStore:
+    """Create the durable store used by readiness verification."""
+    from .mysql_shadow_store import MySQLShadowStore
+    return MySQLShadowStore()
 
 
 @dataclass(frozen=True)
@@ -176,6 +186,45 @@ def _check_slippage_within_5bp(observations: Sequence[FillObservation]) -> tuple
     return passed, detail
 
 
+def load_fill_observations(path: Path) -> tuple[FillObservation, ...]:
+    """Load explicit, JSON-safe fill observations for readiness verification."""
+
+    payload = json.loads(
+        Path(path).read_text(encoding="utf-8"),
+        parse_constant=lambda value: (_ for _ in ()).throw(ValueError(f"invalid JSON constant: {value}")),
+    )
+    if not isinstance(payload, list):
+        raise ValueError("observation file must contain a JSON list")
+    observations: list[FillObservation] = []
+    required = {
+        "execution_eligible_date", "stock_code", "config_hash", "raw_open", "raw_close",
+        "slippage_bps", "fill_complete", "notes",
+    }
+    for item in payload:
+        if not isinstance(item, dict) or required.difference(item):
+            raise ValueError("each observation must include every FillObservation field")
+        if not all(isinstance(item[field], str) and item[field] for field in ("stock_code", "config_hash")):
+            raise ValueError("observation stock_code and config_hash must be non-empty strings")
+        if not isinstance(item["execution_eligible_date"], str):
+            raise ValueError("observation execution_eligible_date must be an ISO date string")
+        if item["notes"] is not None and not isinstance(item["notes"], str):
+            raise ValueError("observation notes must be a string or null")
+        if type(item["fill_complete"]) is not bool:
+            raise ValueError("observation fill_complete must be a boolean")
+        for field_name in ("raw_open", "raw_close", "slippage_bps"):
+            value = item[field_name]
+            if value is not None and (type(value) not in (int, float) or not math.isfinite(float(value))):
+                raise ValueError(f"observation {field_name} must be a finite number or null")
+        observations.append(FillObservation(
+            execution_eligible_date=date.fromisoformat(item["execution_eligible_date"]),
+            stock_code=str(item["stock_code"]), config_hash=str(item["config_hash"]),
+            raw_open=item["raw_open"], raw_close=item["raw_close"],
+            slippage_bps=item["slippage_bps"], fill_complete=bool(item["fill_complete"]),
+            notes=item["notes"],
+        ))
+    return tuple(observations)
+
+
 def verify_shadow_period(
     start_date: date,
     end_date: date,
@@ -228,19 +277,22 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, store_factory=None) -> int:
     args = build_parser().parse_args(argv)
-    from .shadow_store import InMemoryShadowStore
-    store: ShadowStore = InMemoryShadowStore()
-    observations: Sequence[FillObservation] = ()
+    start_date = date.fromisoformat(args.start_date)
+    end_date = date.fromisoformat(args.end_date)
+    store_factory = store_factory or default_shadow_store
+    store: ShadowStore = store_factory()
+    observations: Sequence[FillObservation] = (
+        load_fill_observations(Path(args.observation_file))
+        if args.observation_file else ()
+    )
     readiness = verify_shadow_period(
-        date.fromisoformat(args.start_date),
-        date.fromisoformat(args.end_date),
+        start_date, end_date,
         store,
         observations=observations,
     )
-    print("ready =", readiness.ready)
-    print("failures =", list(readiness.failures))
+    print(json.dumps(asdict(readiness), ensure_ascii=False, sort_keys=True, default=str))
     return 0 if readiness.ready else 2
 
 

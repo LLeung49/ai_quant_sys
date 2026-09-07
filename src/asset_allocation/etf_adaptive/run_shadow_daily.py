@@ -25,8 +25,15 @@ from hashlib import sha256
 from typing import Iterable, Mapping, Protocol, Sequence
 
 from .backtest_provider import AdaptiveBacktestDataProvider
-from .config import AdaptiveConfig
-from .contracts import DualPriceBar, ETFEligibility, ExecutionAvailability
+from .config import AdaptiveConfig, CostConfig
+from .contracts import (
+    DualPriceBar,
+    ETFEligibility,
+    ExecutionAvailability,
+    InstrumentType,
+    SubLayer,
+    asset_layer_for,
+)
 from .engine import process_close
 from .frozen_selection import FrozenTarget
 from .indicators import IndicatorSnapshot, compute_indicators
@@ -46,6 +53,27 @@ from .state import (
     Regime,
     StrategyState,
 )
+
+
+def default_shadow_store() -> ShadowStore:
+    """Create the durable store used by the command-line entry point."""
+    from .mysql_shadow_store import MySQLShadowStore
+    return MySQLShadowStore()
+
+
+def default_shadow_provider() -> _ProviderLike:
+    """Create the repository's read-only dual-price market-data provider."""
+    from data_ingestion.db_config import execute_query
+    from morning_conference.sector_rotation2.research.evaluation.prices import (
+        load_authoritative_market_calendar,
+    )
+    from .market_data import AdaptiveMarketDataProvider
+    return AdaptiveMarketDataProvider(
+        query=execute_query,
+        calendar_loader=lambda start, end: load_authoritative_market_calendar(
+            start, end, execute_query,
+        ),
+    )
 
 
 MARKET_CLOSE_LOCAL: time = time(15, 0)
@@ -97,12 +125,88 @@ def _assert_no_forbidden_imports(imported: Iterable[str]) -> None:
 
 @dataclass(frozen=True)
 class TargetSpec:
-    """A single ETF target consumed by the shadow runner."""
+    """A single funded layered target consumed by the advice-only runner.
+
+    The defaults preserve report-only construction by older callers.  A target
+    loaded for execution is parsed fail-closed by :func:`_build_active_selection`
+    and therefore always supplies the explicit layered fields.
+    """
 
     stock_code: str
     tracking_index_code: str
     layer: str
-    weight: float
+    weight: Decimal | float
+    sub_layer: SubLayer | None = None
+    sub_layer_budget: Decimal | None = None
+    instrument_type: InstrumentType = InstrumentType.ETF
+
+
+@dataclass(frozen=True)
+class ETFCostBoundary:
+    """Existing ETF commission/slippage configuration, kept unchanged."""
+
+    cost: CostConfig
+
+
+@dataclass(frozen=True)
+class ChinaAStockCostBoundary:
+    """Date-versioned mainland A-share execution cost schedule.
+
+    Advice does not execute orders.  This boundary makes the stock schedule
+    explicit for downstream fill modelling instead of allowing an ETF cost
+    configuration to be silently reused.
+    """
+
+    effective_date: date
+    commission_rate: Decimal
+    minimum_commission: Decimal
+    stamp_duty_sell_rate: Decimal
+    transfer_fee_rate: Decimal
+
+
+def cost_boundary_for(
+    target: TargetSpec, trade_date: date, config: AdaptiveConfig,
+) -> ETFCostBoundary | ChinaAStockCostBoundary:
+    """Select the instrument-specific, date-valid cost boundary for advice."""
+
+    if target.instrument_type is InstrumentType.ETF:
+        return ETFCostBoundary(config.cost)
+    if target.instrument_type is InstrumentType.STOCK:
+        # China A-share stamp duty has been 0.05% on sells since 2023-08-28;
+        # the exchange transfer fee is 0.001% on both sides from 2022-04-29.
+        # Earlier dates use the prior statutory schedules rather than today's.
+        if trade_date >= date(2023, 8, 28):
+            stamp_duty = Decimal("0.0005")
+        elif trade_date >= date(2008, 9, 19):
+            stamp_duty = Decimal("0.001")
+        else:
+            stamp_duty = Decimal("0.003")
+        transfer_fee = Decimal("0.00001") if trade_date >= date(2022, 4, 29) else Decimal("0.00002")
+        return ChinaAStockCostBoundary(
+            effective_date=trade_date,
+            commission_rate=Decimal("0.0003"),
+            minimum_commission=Decimal("5"),
+            stamp_duty_sell_rate=stamp_duty,
+            transfer_fee_rate=transfer_fee,
+        )
+    raise ValueError(f"unsupported instrument type for {target.stock_code!r}")
+
+
+def execution_cost_config_for(
+    target: TargetSpec, trade_date: date, config: AdaptiveConfig,
+) -> CostConfig:
+    """Translate the target-specific boundary into the simulator's cost contract."""
+
+    boundary = cost_boundary_for(target, trade_date, config)
+    if isinstance(boundary, ETFCostBoundary):
+        return boundary.cost
+    return CostConfig(
+        commission_rate=float(boundary.commission_rate),
+        minimum_commission=float(boundary.minimum_commission),
+        slippage_bps=config.cost.slippage_bps,
+        sell_tax_rate=float(boundary.stamp_duty_sell_rate),
+        transfer_fee_rate=float(boundary.transfer_fee_rate),
+    )
 
 
 @dataclass(frozen=True)
@@ -142,7 +246,12 @@ class ShadowRunSummary:
                     "stock_code": target.stock_code,
                     "tracking_index_code": target.tracking_index_code,
                     "layer": target.layer,
-                    "weight": target.weight,
+                    "sub_layer": target.sub_layer.value if target.sub_layer else None,
+                    "sub_layer_budget": (
+                        str(target.sub_layer_budget) if target.sub_layer_budget is not None else None
+                    ),
+                    "instrument_type": target.instrument_type.value,
+                    "weight": str(target.weight),
                     "state": {
                         "as_of_date": state.as_of_date.isoformat(),
                         "config_hash": state.config_hash,
@@ -282,16 +391,19 @@ def process_target_close(
     selection: ActiveSelection,
     prior: tuple[ShadowRunRecord, StateRecord] | None,
     execution_eligible_date: date,
-    initial_cash: Decimal,
+    strategy_budget: Decimal,
     model_version: str,
 ) -> ShadowRunRecord:
     """Process one target's close bar and persist the resulting run record."""
 
     _check_config_match(prior, selection.config_hash)
-    state = _build_prior_state(prior, initial_cash)
+    state = _build_prior_state(prior, strategy_budget)
     snapshot = _latest_snapshot(bars)
     bar = bars[-1]
-    decision = process_close(state, snapshot, _eligibility_for(bar), selection.config)
+    target_config = replace(selection.config, cost=execution_cost_config_for(
+        target, bar.trade_date, selection.config,
+    ))
+    decision = process_close(state, snapshot, _eligibility_for(bar), target_config)
     state = decision.state
     identity = ShadowRunIdentity(
         as_of_date=bar.trade_date,
@@ -342,7 +454,6 @@ def run_shadow_date(
     provider: _ProviderLike,
     *,
     model_version: str = "shadow-v1",
-    initial_cash: Decimal = Decimal("100000"),
 ) -> ShadowRunSummary:
     """Run the daily shadow orchestrator for ``as_of_date`` and persist results."""
 
@@ -364,14 +475,21 @@ def run_shadow_date(
         bars = list(provider.load_bars(target.stock_code, lookback_start, as_of_date))
         bar = require_fresh_bar(target.stock_code, bars, as_of_date)
         prior = store.load_latest_state(target.stock_code, selection.config_hash)
+        strategy_budget = target.sub_layer_budget * _as_decimal_weight(target.weight)
         record = process_target_close(
             target, bars, selection, prior, execution_eligible_date,
-            initial_cash, model_version,
+            strategy_budget, model_version,
+        )
+        cost_boundary = cost_boundary_for(target, as_of_date, selection.config)
+        record = replace(
+            record,
+            health_checks=(_cost_boundary_check(record, target, cost_boundary),),
         )
         persisted = store.persist_run(record)
         target_states.append((target, persisted.state))
         advices.extend(persisted.advices)
         health_checks.append(_freshness_check(persisted, bar))
+        health_checks.extend(persisted.health_checks)
 
     run_id = derive_run_id(
         as_of_date, model_version, selection.config_hash,
@@ -392,20 +510,95 @@ def run_shadow_date(
 def _build_active_selection(frozen) -> ActiveSelection:
     payload = frozen.selection_payload or {}
     raw_targets = payload.get("targets", ())
-    targets = tuple(
-        TargetSpec(
+    if not isinstance(raw_targets, Sequence) or isinstance(raw_targets, (str, bytes)):
+        raise ValueError("frozen selection targets must be a sequence")
+    targets: list[TargetSpec] = []
+    for item in raw_targets:
+        if not isinstance(item, Mapping):
+            raise ValueError("frozen selection target must be a mapping")
+        required = {
+            "stock_code", "sub_layer", "sub_layer_budget", "instrument_type", "weight", "config_hash",
+        }
+        missing = required.difference(item)
+        if missing:
+            raise ValueError(
+                "legacy frozen target is ambiguous; missing " + ", ".join(sorted(missing))
+            )
+        if str(item["config_hash"]) != frozen.config_hash:
+            raise ValueError("frozen target config_hash must equal the active frozen config_hash")
+        try:
+            sub_layer = SubLayer(str(item["sub_layer"]))
+            instrument_type = InstrumentType(str(item["instrument_type"]))
+            budget = Decimal(str(item["sub_layer_budget"]))
+            weight = Decimal(str(item["weight"]))
+        except (ValueError, ArithmeticError) as exc:
+            raise ValueError(f"invalid frozen target payload: {exc}") from exc
+        if not budget.is_finite() or budget <= 0 or not weight.is_finite() or weight <= 0:
+            raise ValueError("frozen target budget and weight must be positive finite decimals")
+        expected_layer = asset_layer_for(sub_layer).value
+        if str(item.get("layer", expected_layer)) != expected_layer:
+            raise ValueError("frozen target layer must match its approved sub_layer")
+        targets.append(TargetSpec(
             stock_code=str(item["stock_code"]),
             tracking_index_code=str(item.get("tracking_index_code", "")),
-            layer=str(item.get("layer", "default")),
-            weight=float(item.get("weight", 0.0)),
-        )
-        for item in raw_targets
-    )
+            layer=expected_layer,
+            weight=weight,
+            sub_layer=sub_layer,
+            sub_layer_budget=budget,
+            instrument_type=instrument_type,
+        ))
+    _validate_active_targets(targets)
     return ActiveSelection(
         config_hash=frozen.config_hash,
         config=frozen.config,
         data_cutoff=frozen.data_cutoff,
-        targets=targets,
+        targets=tuple(targets),
+    )
+
+
+def _as_decimal_weight(weight: Decimal | float) -> Decimal:
+    value = Decimal(str(weight))
+    if not value.is_finite() or value <= 0:
+        raise ValueError("target weight must be a positive finite decimal")
+    return value
+
+
+def _validate_active_targets(targets: Sequence[TargetSpec]) -> None:
+    grouped: dict[SubLayer, list[TargetSpec]] = {}
+    for target in targets:
+        if target.sub_layer is None or target.sub_layer_budget is None:
+            raise ValueError("frozen target is missing required sub-layer funding")
+        grouped.setdefault(target.sub_layer, []).append(target)
+    if not grouped:
+        raise ValueError("active frozen selection has no funded targets")
+    for sub_layer, members in grouped.items():
+        if len({member.sub_layer_budget for member in members}) != 1:
+            raise ValueError(f"sub-layer {sub_layer.value!r} has inconsistent target budgets")
+        if sum((_as_decimal_weight(member.weight) for member in members), Decimal("0")) != Decimal("1"):
+            raise ValueError(f"sub-layer {sub_layer.value!r} target weights must sum exactly to 1")
+
+
+def _cost_boundary_check(
+    record: ShadowRunRecord,
+    target: TargetSpec,
+    boundary: ETFCostBoundary | ChinaAStockCostBoundary,
+) -> HealthCheck:
+    detail: dict[str, object] = {"instrument_type": target.instrument_type.value}
+    if isinstance(boundary, ETFCostBoundary):
+        detail["cost_model"] = "etf_config"
+        detail["commission_rate"] = boundary.cost.commission_rate
+    else:
+        detail.update({
+            "cost_model": "china_a_stock",
+            "commission_rate": str(boundary.commission_rate),
+            "stamp_duty_sell_rate": str(boundary.stamp_duty_sell_rate),
+            "transfer_fee_rate": str(boundary.transfer_fee_rate),
+        })
+    return HealthCheck(
+        run_id=record.run_id,
+        check_name="instrument_cost_boundary",
+        passed=True,
+        detail=detail,
     )
 
 
@@ -430,30 +623,30 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--as-of-date", required=True)
     parser.add_argument("--today", required=True, help="ISO datetime treated as wall-clock now")
     parser.add_argument("--model-version", default="shadow-v1")
-    parser.add_argument("--config-hash", default=None)
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    *,
+    store_factory=None,
+    provider_factory=None,
+) -> int:
     args = build_parser().parse_args(argv)
-    store: ShadowStore = InMemoryShadowStore()
-    from .shadow_store import FrozenConfigRecord  # local import to avoid cycles
-    if args.config_hash:
-        store.activate_frozen_config(FrozenConfigRecord(
-            config_hash=args.config_hash,
-            config=AdaptiveConfig.default(),
-            selection_payload={
-                "targets": [
-                    {"stock_code": "510300.SH", "weight": 1.0,
-                     "layer": "core_broad", "tracking_index_code": "000300.SH"},
-                ],
-            },
-            data_cutoff=date.fromisoformat(args.as_of_date),
-            activation_date=date.fromisoformat(args.as_of_date),
-            review_date=date.fromisoformat(args.as_of_date) + timedelta(days=183),
-            activated_at=datetime.now(),
-        ))
-    raise SystemExit(0) if store else 0
+    try:
+        store_factory = store_factory or default_shadow_store
+        provider_factory = provider_factory or default_shadow_provider
+        summary = run_shadow_date(
+            date.fromisoformat(args.as_of_date),
+            datetime.fromisoformat(args.today),
+            store_factory(), provider_factory(), model_version=args.model_version,
+        )
+    except (ValueError, RuntimeError) as exc:
+        import sys
+        print(str(exc), file=sys.stderr)
+        return 2
+    print(summary.canonical_json())
+    return 0
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry point

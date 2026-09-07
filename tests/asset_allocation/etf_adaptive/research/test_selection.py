@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 
+from asset_allocation.etf_adaptive.contracts import SubLayer, SubLayerBudget
+from asset_allocation.etf_adaptive.research.portfolio import PairwiseRisk
 from asset_allocation.etf_adaptive.research.selection import (
     CandidateMetrics,
     ProductMetrics,
+    SubLayerSelectionEvidence,
     dominates,
     pareto_front,
     select_best_product,
     select_products_by_index,
+    select_sub_layer_products,
 )
 
 
@@ -108,3 +114,146 @@ def test_select_products_by_index_groups_by_tracking_index_code() -> None:
 
     ids = tuple(item.product_id for item in chosen)
     assert ids == ("510310.SH", "510500.SH")
+
+
+def _sub_layer_product(
+    product_id: str,
+    index_code: str,
+    *,
+    oos_evidence: float = 0.12,
+    cost_sensitivity: float = 0.03,
+    sub_layer: SubLayer = SubLayer.DEFENSIVE_DIVIDEND_ETF,
+) -> ProductMetrics:
+    return ProductMetrics(
+        product_id=product_id,
+        tracking_index_code=index_code,
+        history_confidence=0.95,
+        average_amount=200_000_000.0,
+        data_quality_score=0.98,
+        cost_sensitivity=cost_sensitivity,
+        oos_evidence=oos_evidence,
+        sub_layer=sub_layer,
+    )
+
+
+def _evidence(
+    *product_ids: str,
+    risk: dict[tuple[str, str], PairwiseRisk] | None = None,
+    budget: Decimal = Decimal("100000"),
+    minimum_tradable_budget: Decimal = Decimal("10000"),
+    per_product_cap: float = 1.0,
+) -> SubLayerSelectionEvidence:
+    return SubLayerSelectionEvidence(
+        budget=SubLayerBudget(SubLayer.DEFENSIVE_DIVIDEND_ETF, budget),
+        pareto_product_ids=frozenset(product_ids),
+        maximum_cost_sensitivity=0.05,
+        minimum_tradable_budget=minimum_tradable_budget,
+        per_product_cap=per_product_cap,
+        minimum_diversification_gain=0.30,
+        pairwise_risk=risk or {},
+    )
+
+
+def test_select_sub_layer_products_returns_no_products_without_positive_oos_evidence() -> None:
+    products = (_sub_layer_product("negative", "dividend", oos_evidence=0.0),)
+
+    chosen = select_sub_layer_products(products, _evidence("negative"))
+
+    assert chosen == ()
+
+
+def test_select_sub_layer_products_returns_one_qualifying_product() -> None:
+    product = _sub_layer_product("dividend_etf", "dividend")
+
+    chosen = select_sub_layer_products((product,), _evidence("dividend_etf"))
+
+    assert tuple(item.product_id for item in chosen) == ("dividend_etf",)
+
+
+def test_select_sub_layer_products_keeps_diversifying_products_and_rejects_duplicate_index() -> None:
+    products = (
+        _sub_layer_product("dividend_etf", "dividend", cost_sensitivity=0.02),
+        _sub_layer_product("duplicate_dividend_etf", "dividend", cost_sensitivity=0.04),
+        _sub_layer_product("bank_stock", "bank"),
+        _sub_layer_product("correlated_value", "value"),
+    )
+    risk = {
+        ("bank_stock", "dividend_etf"): PairwiseRisk(0.30, 0.30, 0.30),
+        ("correlated_value", "dividend_etf"): PairwiseRisk(0.95, 0.95, 0.95),
+        ("correlated_value", "bank_stock"): PairwiseRisk(0.95, 0.95, 0.95),
+    }
+
+    chosen = select_sub_layer_products(
+        products,
+        _evidence(
+            "dividend_etf", "duplicate_dividend_etf", "bank_stock", "correlated_value",
+            risk=risk,
+        ),
+    )
+
+    assert tuple(item.product_id for item in chosen) == ("dividend_etf", "bank_stock")
+
+
+def test_select_sub_layer_products_normalises_duplicate_product_ids_with_conflicting_index_metadata() -> None:
+    products = (
+        _sub_layer_product("same", "index_a", cost_sensitivity=0.02),
+        _sub_layer_product("same", "index_b", cost_sensitivity=0.03),
+    )
+
+    chosen = select_sub_layer_products(
+        products,
+        _evidence("same", risk={("same", "same"): PairwiseRisk(0.0, 0.0, 0.0)}),
+    )
+
+    assert tuple(item.product_id for item in chosen) == ("same",)
+
+
+def test_select_sub_layer_products_stops_before_minimum_trade_amounts_exceed_budget() -> None:
+    products = (
+        _sub_layer_product("first", "first"),
+        _sub_layer_product("second", "second"),
+        _sub_layer_product("third", "third"),
+    )
+    risk = {
+        ("second", "first"): PairwiseRisk(0.0, 0.0, 0.0),
+        ("third", "first"): PairwiseRisk(0.0, 0.0, 0.0),
+        ("third", "second"): PairwiseRisk(0.0, 0.0, 0.0),
+    }
+
+    chosen = select_sub_layer_products(
+        products,
+        _evidence(
+            "first", "second", "third",
+            risk=risk,
+            budget=Decimal("100"),
+            minimum_tradable_budget=Decimal("40"),
+        ),
+    )
+
+    assert tuple(item.product_id for item in chosen) == ("first", "second")
+
+
+def test_select_sub_layer_products_rejects_a_product_that_cannot_receive_minimum_trade_budget() -> None:
+    product = _sub_layer_product("dividend_etf", "dividend")
+
+    chosen = select_sub_layer_products(
+        (product,),
+        _evidence(
+            "dividend_etf",
+            budget=Decimal("10000"),
+            minimum_tradable_budget=Decimal("11000"),
+        ),
+    )
+
+    assert chosen == ()
+
+
+def test_select_sub_layer_products_rejects_a_basket_that_cannot_allocate_the_budget_with_its_cap() -> None:
+    product = _sub_layer_product("dividend_etf", "dividend")
+
+    chosen = select_sub_layer_products(
+        (product,),
+        _evidence("dividend_etf", per_product_cap=0.60),
+    )
+
+    assert chosen == ()

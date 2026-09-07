@@ -12,16 +12,24 @@ from asset_allocation.etf_adaptive.config import AdaptiveConfig
 from asset_allocation.etf_adaptive.contracts import (
     DualPriceBar,
     ExecutionAvailability,
+    InstrumentType,
+    SubLayer,
 )
 from asset_allocation.etf_adaptive.run_shadow_daily import (
+    ChinaAStockCostBoundary,
     CutoffNotReachedError,
     DataFreshnessError,
+    ETFCostBoundary,
     NonTradingDateError,
+    TargetSpec,
+    cost_boundary_for,
+    execution_cost_config_for,
     next_trading_session,
     require_after_market_data_cutoff,
     require_fresh_bar,
     run_shadow_date,
 )
+import asset_allocation.etf_adaptive.run_shadow_daily as shadow_module
 from asset_allocation.etf_adaptive.shadow_store import (
     FrozenConfigRecord,
     InMemoryShadowStore,
@@ -98,9 +106,13 @@ def _store_with_selection() -> InMemoryShadowStore:
             "targets": [
                 {
                     "stock_code": "510300.SH",
-                    "weight": 1.0,
-                    "layer": "core_broad",
+                    "weight": "1",
+                    "layer": "broad_beta",
                     "tracking_index_code": "000300.SH",
+                    "sub_layer": "broad_domestic_core",
+                    "sub_layer_budget": "100000",
+                    "instrument_type": "etf",
+                    "config_hash": "cfg-shadow-1",
                 },
             ],
         },
@@ -110,6 +122,35 @@ def _store_with_selection() -> InMemoryShadowStore:
         activated_at=datetime(2026, 8, 1, 17, 0),
     )
     store.activate_frozen_config(record)
+    return store
+
+
+def _store_with_layered_target_budgets() -> InMemoryShadowStore:
+    store = InMemoryShadowStore()
+    store.activate_frozen_config(FrozenConfigRecord(
+        config_hash="cfg-layered-budget",
+        config=AdaptiveConfig.default(),
+        selection_payload={
+            "targets": [
+                {
+                    "stock_code": "510300.SH", "tracking_index_code": "000300.SH",
+                    "layer": "broad_beta", "sub_layer": "broad_domestic_core",
+                    "sub_layer_budget": "42000", "instrument_type": "etf", "weight": "0.6",
+                    "config_hash": "cfg-layered-budget",
+                },
+                {
+                    "stock_code": "510500.SH", "tracking_index_code": "000905.SH",
+                    "layer": "broad_beta", "sub_layer": "broad_domestic_core",
+                    "sub_layer_budget": "42000", "instrument_type": "etf", "weight": "0.4",
+                    "config_hash": "cfg-layered-budget",
+                },
+            ],
+        },
+        data_cutoff=DATA_CUTOFF,
+        activation_date=date(2026, 8, 1),
+        review_date=date(2027, 2, 1),
+        activated_at=datetime(2026, 8, 1, 17, 0),
+    ))
     return store
 
 
@@ -191,6 +232,78 @@ def test_shadow_runner_publishes_execution_eligible_date_and_run_id() -> None:
     assert state.config_hash == "cfg-shadow-1"
 
 
+def test_shadow_runner_initializes_each_target_from_its_weighted_sub_layer_budget() -> None:
+    store = _store_with_layered_target_budgets()
+    provider = _StubProvider()
+
+    summary = run_shadow_date(TARGET, _after_close(), store, provider)
+
+    assert {
+        target.stock_code: state.cash for target, state in summary.target_states
+    } == {
+        "510300.SH": Decimal("25200.0"),
+        "510500.SH": Decimal("16800.0"),
+    }
+
+
+def test_cost_boundary_dispatches_etf_and_china_a_stock_schedules() -> None:
+    etf = TargetSpec(
+        stock_code="510300.SH", tracking_index_code="000300.SH", layer="broad_beta",
+        weight=Decimal("1"), sub_layer=SubLayer.DOMESTIC_CORE,
+        sub_layer_budget=Decimal("42000"), instrument_type=InstrumentType.ETF,
+    )
+    stock = TargetSpec(
+        stock_code="600000.SH", tracking_index_code="000922.SH", layer="defensive",
+        weight=Decimal("1"), sub_layer=SubLayer.DEFENSIVE_BLUE_CHIP,
+        sub_layer_budget=Decimal("18000"), instrument_type=InstrumentType.STOCK,
+    )
+
+    etf_cost = cost_boundary_for(etf, TARGET, AdaptiveConfig.default())
+    stock_cost = cost_boundary_for(stock, TARGET, AdaptiveConfig.default())
+
+    assert isinstance(etf_cost, ETFCostBoundary)
+    assert isinstance(stock_cost, ChinaAStockCostBoundary)
+    assert stock_cost.stamp_duty_sell_rate == Decimal("0.0005")
+    assert stock_cost.transfer_fee_rate == Decimal("0.00001")
+    stock_execution_cost = execution_cost_config_for(stock, TARGET, AdaptiveConfig.default())
+    assert stock_execution_cost.sell_tax_rate == pytest.approx(0.0005)
+    assert stock_execution_cost.transfer_fee_rate == pytest.approx(0.00001)
+
+
+def test_active_selection_rejects_missing_or_mismatched_target_config_hash() -> None:
+    frozen = FrozenConfigRecord(
+        config_hash="parent-hash",
+        config=AdaptiveConfig.default(),
+        selection_payload={
+            "targets": [{
+                "stock_code": "510300.SH", "tracking_index_code": "000300.SH",
+                "layer": "broad_beta", "sub_layer": "broad_domestic_core",
+                "sub_layer_budget": "42000", "instrument_type": "etf", "weight": "1",
+            }],
+        },
+        data_cutoff=DATA_CUTOFF,
+        activation_date=date(2026, 8, 1),
+        review_date=date(2027, 2, 1),
+        activated_at=datetime(2026, 8, 1, 17, 0),
+    )
+
+    with pytest.raises(ValueError, match="config_hash"):
+        shadow_module._build_active_selection(frozen)
+
+    mismatched = FrozenConfigRecord(
+        **{
+            **frozen.__dict__,
+            "selection_payload": {
+                "targets": [{
+                    **frozen.selection_payload["targets"][0], "config_hash": "another-hash",
+                }],
+            },
+        },
+    )
+    with pytest.raises(ValueError, match="config_hash"):
+        shadow_module._build_active_selection(mismatched)
+
+
 def test_shadow_runner_requires_active_frozen_selection() -> None:
     store = InMemoryShadowStore()
     provider = _StubProvider()
@@ -201,6 +314,19 @@ def test_shadow_runner_requires_active_frozen_selection() -> None:
         assert "no active frozen selection" in str(exc)
     else:
         raise AssertionError("expected error when no active selection exists")
+
+
+def test_main_uses_injected_production_boundaries(monkeypatch, capsys) -> None:
+    store = _store_with_selection()
+    provider = _StubProvider()
+
+    monkeypatch.setattr(shadow_module, "default_shadow_store", lambda: store, raising=False)
+    monkeypatch.setattr(shadow_module, "default_shadow_provider", lambda: provider, raising=False)
+
+    assert shadow_module.main([
+        "--as-of-date", "2026-09-01", "--today", "2026-09-01T17:00:00",
+    ]) == 0
+    assert '"run_id"' in capsys.readouterr().out
 
 
 
