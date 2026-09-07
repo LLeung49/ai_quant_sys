@@ -18,6 +18,12 @@ from asset_allocation.etf_adaptive.research.run_research import (
     build_parser,
     run_research,
 )
+from asset_allocation.etf_adaptive.contracts import (
+    DualPriceBar,
+    ExecutionAvailability,
+    InstrumentType,
+    LayeredInstrument,
+)
 
 
 REPORTS_ROOT = Path("D:/aiQuant/ai_quant_sys/reports/pytest-run-research-tmp")
@@ -100,3 +106,68 @@ def test_run_research_raises_when_no_provider_or_factory() -> None:
 
     with pytest.raises(NotImplementedError):
         run_research(config)
+
+
+def test_run_research_freezes_only_evidence_supported_layered_targets(
+    reports_dir: Path,
+) -> None:
+    """A missing OOS pass or a rejected layer must never enter the freeze."""
+
+    as_of = date(2026, 9, 1)
+
+    class LayeredProvider:
+        def load_instruments(self, requested_as_of: date):
+            assert requested_as_of == as_of
+            return (
+                LayeredInstrument(
+                    stock_code="513500.SH", as_of_date=as_of,
+                    instrument_type=InstrumentType.ETF, style="broad",
+                    exposure="nasdaq_or_sp500", is_qdii=True,
+                ),
+                LayeredInstrument(
+                    stock_code="510300.SH", as_of_date=as_of,
+                    instrument_type=InstrumentType.ETF, style="broad",
+                    exposure="domestic_core", is_qdii=False,
+                ),
+            )
+
+        def load_bars(self, stock_code: str, start_date: date, end_date: date):
+            assert end_date == as_of
+            close = 1.1 if stock_code == "513500.SH" else 0.9
+            return (
+                _research_bar(stock_code, date(2026, 8, 31), 1.0),
+                _research_bar(stock_code, as_of, close),
+            )
+
+    config = ResearchRunConfig(
+        as_of_date=as_of,
+        output_dir=reports_dir / "layered-out",
+        extra={"sub_layer_budgets": {"broad_overseas_mature": "48000", "broad_domestic_core": "12000"}},
+    )
+
+    run_research(config, provider=LayeredProvider())
+
+    manifest = json.loads((config.output_dir / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["sub_layers"]["broad_overseas_mature"]["budget"] == "48000"
+    assert set(manifest["sub_layers"]) == {"broad_overseas_mature"}
+    assert manifest["frozen_selection"]["targets"] == [{
+        "stock_code": "513500.SH",
+        "tracking_index_code": "513500.SH",
+        "layer": "broad_beta",
+        "sub_layer": "broad_overseas_mature",
+        "sub_layer_budget": "48000",
+        "instrument_type": "etf",
+        "weight": "1",
+        "config_hash": manifest["config_hash"],
+    }]
+    assert (config.output_dir / "sub_layers" / "broad_overseas_mature" / "oos.json").exists()
+
+
+def _research_bar(stock_code: str, trade_date: date, close: float) -> DualPriceBar:
+    return DualPriceBar(
+        stock_code=stock_code, trade_date=trade_date,
+        signal_open=close, signal_high=close, signal_low=close, signal_close=close,
+        raw_open=close, raw_high=close, raw_low=close, raw_close=close,
+        amount=20_000_000.0, suspended=False, adjustment_ratio=1.0,
+        execution_availability=ExecutionAvailability(False, False, "test"),
+    )

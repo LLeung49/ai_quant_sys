@@ -45,6 +45,7 @@ class ResearchArtifact:
     config_hash: str
     artifacts: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     frozen_selection: Mapping[str, Any] | None = None
+    sub_layers: Mapping[str, Mapping[str, Any]] = field(default_factory=lambda: MappingProxyType({}))
 
 
 @dataclass(frozen=True)
@@ -146,7 +147,17 @@ def write_research_report(
     }
     if artifact.frozen_selection is not None:
         manifest_payload["frozen_selection"] = dict(artifact.frozen_selection)
+    if artifact.sub_layers:
+        manifest_payload["sub_layers"] = {
+            name: {"budget": str(payload["budget"]), "products": list(payload.get("products", ())) }
+            for name, payload in artifact.sub_layers.items()
+        }
     _dump_json(staging / "manifest.json", manifest_payload)
+    for name, payload in artifact.sub_layers.items():
+        sub_layer_dir = staging / "sub_layers" / name
+        sub_layer_dir.mkdir(parents=True, exist_ok=True)
+        for artifact_name in ("audit", "oos", "pareto", "portfolio"):
+            _dump_json(sub_layer_dir / f"{artifact_name}.json", payload.get(artifact_name, {}))
 
     _dump_json(
         staging / "universe_audit.json",

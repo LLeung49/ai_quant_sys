@@ -105,8 +105,12 @@ def test_report_manifest_round_trips_frozen_selection(output_dir: Path) -> None:
     payload = {
         "selection_id": "selection-2026-09", "data_cutoff": "2026-09-01",
         "activation_date": "2026-09-02", "review_date": "2027-03-04",
-        "targets": [{"stock_code": "510300.SH", "tracking_index_code": "000300.SH", "layer": "core", "weight": 0.5}],
-        "layer_weights": {"core": 1.0},
+        "targets": [{
+            "stock_code": "510300.SH", "tracking_index_code": "000300.SH",
+            "layer": "broad_beta", "sub_layer": "broad_domestic_core",
+            "sub_layer_budget": "12000", "instrument_type": "etf", "weight": "1",
+        }],
+        "sub_layer_budgets": {"broad_domestic_core": "12000"},
     }
     payload["config_hash"] = _canonical_hash(payload)
     artifact = _research_result()

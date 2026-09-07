@@ -16,6 +16,7 @@ import json
 from dataclasses import asdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
 from .run_shadow_daily import ShadowRunSummary
@@ -184,6 +185,30 @@ def _check_slippage_within_5bp(observations: Sequence[FillObservation]) -> tuple
     return passed, detail
 
 
+def load_fill_observations(path: Path) -> tuple[FillObservation, ...]:
+    """Load explicit, JSON-safe fill observations for readiness verification."""
+
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(payload, list):
+        raise ValueError("observation file must contain a JSON list")
+    observations: list[FillObservation] = []
+    required = {
+        "execution_eligible_date", "stock_code", "config_hash", "raw_open", "raw_close",
+        "slippage_bps", "fill_complete", "notes",
+    }
+    for item in payload:
+        if not isinstance(item, dict) or required.difference(item):
+            raise ValueError("each observation must include every FillObservation field")
+        observations.append(FillObservation(
+            execution_eligible_date=date.fromisoformat(str(item["execution_eligible_date"])),
+            stock_code=str(item["stock_code"]), config_hash=str(item["config_hash"]),
+            raw_open=item["raw_open"], raw_close=item["raw_close"],
+            slippage_bps=item["slippage_bps"], fill_complete=bool(item["fill_complete"]),
+            notes=item["notes"],
+        ))
+    return tuple(observations)
+
+
 def verify_shadow_period(
     start_date: date,
     end_date: date,
@@ -242,7 +267,10 @@ def main(argv: list[str] | None = None, *, store_factory=None) -> int:
     end_date = date.fromisoformat(args.end_date)
     store_factory = store_factory or default_shadow_store
     store: ShadowStore = store_factory()
-    observations: Sequence[FillObservation] = ()
+    observations: Sequence[FillObservation] = (
+        load_fill_observations(Path(args.observation_file))
+        if args.observation_file else ()
+    )
     readiness = verify_shadow_period(
         start_date, end_date,
         store,

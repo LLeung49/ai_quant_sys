@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timedelta
 from decimal import Decimal
+import json
 
 import pytest
 
@@ -213,3 +214,19 @@ def test_main_uses_injected_durable_store(monkeypatch, capsys) -> None:
     monkeypatch.setattr(verify_module, "default_shadow_store", lambda: store, raising=False)
     assert verify_module.main(["--start-date", START.isoformat(), "--end-date", END.isoformat()]) == 0
     assert '"ready": true' in capsys.readouterr().out
+
+
+def test_main_loads_observations_from_json_file(tmp_path, monkeypatch) -> None:
+    store = _store_with_n_runs(60)
+    observation_file = tmp_path / "observations.json"
+    observation_file.write_text(json.dumps([{
+        "execution_eligible_date": START.isoformat(), "stock_code": "510300.SH",
+        "config_hash": "cfg-shadow-1", "raw_open": 1.0, "raw_close": 1.0,
+        "slippage_bps": 10.0, "fill_complete": True, "notes": "test",
+    }]), encoding="utf-8")
+    monkeypatch.setattr(verify_module, "default_shadow_store", lambda: store, raising=False)
+
+    assert verify_module.main([
+        "--start-date", START.isoformat(), "--end-date", END.isoformat(),
+        "--observation-file", str(observation_file),
+    ]) == 2
