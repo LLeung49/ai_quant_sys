@@ -101,6 +101,26 @@ def test_report_clears_staging_directory_on_overwrite(output_dir: Path) -> None:
     assert not staging.exists()
 
 
+def test_report_republishes_nested_sub_layer_artifacts(output_dir: Path) -> None:
+    from dataclasses import replace
+    layered = replace(_research_result(), sub_layers={
+        "broad_overseas_mature": {"budget": "48000", "oos": [{"return": 0.1}]},
+    })
+
+    write_research_report(layered, output_dir)
+    write_research_report(layered, output_dir)
+
+    assert (output_dir / "sub_layers" / "broad_overseas_mature" / "oos.json").exists()
+
+
+def test_report_rejects_unsafe_sub_layer_path(output_dir: Path) -> None:
+    from dataclasses import replace
+    layered = replace(_research_result(), sub_layers={"../escape": {"budget": "1"}})
+
+    with pytest.raises(ValueError, match="sub-layer"):
+        write_research_report(layered, output_dir)
+
+
 def test_report_manifest_round_trips_frozen_selection(output_dir: Path) -> None:
     payload = {
         "selection_id": "selection-2026-09", "data_cutoff": "2026-09-01",

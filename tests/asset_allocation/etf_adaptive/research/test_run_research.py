@@ -24,6 +24,7 @@ from asset_allocation.etf_adaptive.contracts import (
     InstrumentType,
     LayeredInstrument,
 )
+from asset_allocation.etf_adaptive.frozen_selection import FrozenSelection
 
 
 REPORTS_ROOT = Path("D:/aiQuant/ai_quant_sys/reports/pytest-run-research-tmp")
@@ -133,10 +134,15 @@ def test_run_research_freezes_only_evidence_supported_layered_targets(
 
         def load_bars(self, stock_code: str, start_date: date, end_date: date):
             assert end_date == as_of
-            close = 1.1 if stock_code == "513500.SH" else 0.9
+            if stock_code == "513500.SH":
+                return (
+                    _research_bar(stock_code, date(2026, 8, 30), 1.0),
+                    _research_bar(stock_code, date(2026, 8, 31), 0.9),
+                    _research_bar(stock_code, as_of, 1.1),
+                )
             return (
                 _research_bar(stock_code, date(2026, 8, 31), 1.0),
-                _research_bar(stock_code, as_of, close),
+                _research_bar(stock_code, as_of, 0.9),
             )
 
     config = ResearchRunConfig(
@@ -161,6 +167,57 @@ def test_run_research_freezes_only_evidence_supported_layered_targets(
         "config_hash": manifest["config_hash"],
     }]
     assert (config.output_dir / "sub_layers" / "broad_overseas_mature" / "oos.json").exists()
+    oos = json.loads((config.output_dir / "sub_layers" / "broad_overseas_mature" / "oos.json").read_text(encoding="utf-8"))
+    pareto = json.loads((config.output_dir / "sub_layers" / "broad_overseas_mature" / "pareto.json").read_text(encoding="utf-8"))
+    portfolio = json.loads((config.output_dir / "sub_layers" / "broad_overseas_mature" / "portfolio.json").read_text(encoding="utf-8"))
+    assert oos == [{"annual_return": pytest.approx(0.1), "max_drawdown_abs": pytest.approx(0.1), "positive_window_share": pytest.approx(0.5), "stock_code": "513500.SH"}]
+    assert pareto == ["513500.SH"]
+    assert portfolio["equal_weight"]["weights"] == {"513500.SH": pytest.approx(1.0)}
+    selection = FrozenSelection.from_research_manifest(config.output_dir / "manifest.json")
+    assert selection.targets[0].config_hash == selection.config_hash
+
+
+def test_run_research_rejects_positive_two_price_candidate_without_return_evidence(
+    reports_dir: Path,
+) -> None:
+    """A two-price gain is not a stitched-OOS return series or a portfolio."""
+
+    as_of = date(2026, 9, 1)
+
+    class LayeredProvider:
+        def load_instruments(self, requested_as_of: date):
+            return (
+                LayeredInstrument(
+                    stock_code="513500.SH", as_of_date=requested_as_of,
+                    instrument_type=InstrumentType.ETF, style="broad",
+                    exposure="nasdaq_or_sp500", is_qdii=True,
+                ),
+            )
+
+        def load_bars(self, stock_code: str, start_date: date, end_date: date):
+            return (
+                _research_bar(stock_code, date(2026, 8, 31), 1.0),
+                _research_bar(stock_code, as_of, 1.2),
+            )
+
+    config = ResearchRunConfig(
+        as_of_date=as_of,
+        output_dir=reports_dir / "insufficient-oos",
+        extra={"sub_layer_budgets": {"broad_overseas_mature": "48000"}},
+    )
+
+    run_research(config, provider=LayeredProvider())
+
+    manifest = json.loads((config.output_dir / "manifest.json").read_text(encoding="utf-8"))
+    audit = json.loads((config.output_dir / "universe_audit.json").read_text(encoding="utf-8"))
+    assert "sub_layers" not in manifest
+    assert manifest["frozen_selection"]["targets"] == []
+    assert audit["rows"] == [{
+        "accepted": False,
+        "reason": "insufficient_return_evidence",
+        "stock_code": "513500.SH",
+        "sub_layer": "broad_overseas_mature",
+    }]
 
 
 def _research_bar(stock_code: str, trade_date: date, close: float) -> DualPriceBar:

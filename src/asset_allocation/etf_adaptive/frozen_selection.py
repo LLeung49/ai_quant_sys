@@ -285,8 +285,18 @@ def _validate_configured_sub_layer_budgets(
 
 
 def _canonical_hash(payload: Mapping[str, Any]) -> str:
+    # Target hashes inherit the enclosing immutable manifest hash.  Excluding
+    # them prevents a circular hash dependency while all other target fields
+    # remain tamper-evident.
+    canonical_payload = {k: v for k, v in payload.items() if k != "config_hash"}
+    raw_targets = canonical_payload.get("targets")
+    if isinstance(raw_targets, Sequence) and not isinstance(raw_targets, (str, bytes)):
+        canonical_payload["targets"] = [
+            ({k: v for k, v in target.items() if k != "config_hash"} if isinstance(target, Mapping) else target)
+            for target in raw_targets
+        ]
     encoded = json.dumps(
-        _canonicalise({k: v for k, v in payload.items() if k != "config_hash"}), sort_keys=True, separators=(",", ":"), ensure_ascii=False,
+        _canonicalise(canonical_payload), sort_keys=True, separators=(",", ":"), ensure_ascii=False,
     ).encode("utf-8")
     return sha256(encoded).hexdigest()
 

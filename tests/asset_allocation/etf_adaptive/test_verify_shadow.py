@@ -230,3 +230,23 @@ def test_main_loads_observations_from_json_file(tmp_path, monkeypatch) -> None:
         "--start-date", START.isoformat(), "--end-date", END.isoformat(),
         "--observation-file", str(observation_file),
     ]) == 2
+
+
+@pytest.mark.parametrize("field,value", (("fill_complete", "false"), ("slippage_bps", float("nan"))))
+def test_main_rejects_malformed_observation_values(tmp_path, monkeypatch, field, value) -> None:
+    store = _store_with_n_runs(60)
+    observation_file = tmp_path / "observations.json"
+    row = {
+        "execution_eligible_date": START.isoformat(), "stock_code": "510300.SH",
+        "config_hash": "cfg-shadow-1", "raw_open": 1.0, "raw_close": 1.0,
+        "slippage_bps": 1.0, "fill_complete": True, "notes": "test",
+    }
+    row[field] = value
+    observation_file.write_text(json.dumps([row]), encoding="utf-8")
+    monkeypatch.setattr(verify_module, "default_shadow_store", lambda: store, raising=False)
+
+    with pytest.raises(ValueError):
+        verify_module.main([
+            "--start-date", START.isoformat(), "--end-date", END.isoformat(),
+            "--observation-file", str(observation_file),
+        ])

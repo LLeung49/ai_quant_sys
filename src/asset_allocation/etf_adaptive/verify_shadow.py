@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from dataclasses import asdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
@@ -188,7 +189,10 @@ def _check_slippage_within_5bp(observations: Sequence[FillObservation]) -> tuple
 def load_fill_observations(path: Path) -> tuple[FillObservation, ...]:
     """Load explicit, JSON-safe fill observations for readiness verification."""
 
-    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    payload = json.loads(
+        Path(path).read_text(encoding="utf-8"),
+        parse_constant=lambda value: (_ for _ in ()).throw(ValueError(f"invalid JSON constant: {value}")),
+    )
     if not isinstance(payload, list):
         raise ValueError("observation file must contain a JSON list")
     observations: list[FillObservation] = []
@@ -199,6 +203,14 @@ def load_fill_observations(path: Path) -> tuple[FillObservation, ...]:
     for item in payload:
         if not isinstance(item, dict) or required.difference(item):
             raise ValueError("each observation must include every FillObservation field")
+        if not all(isinstance(item[field], str) and item[field] for field in ("stock_code", "config_hash")):
+            raise ValueError("observation stock_code and config_hash must be non-empty strings")
+        if type(item["fill_complete"]) is not bool:
+            raise ValueError("observation fill_complete must be a boolean")
+        for field_name in ("raw_open", "raw_close", "slippage_bps"):
+            value = item[field_name]
+            if value is not None and (type(value) not in (int, float) or not math.isfinite(float(value))):
+                raise ValueError(f"observation {field_name} must be a finite number or null")
         observations.append(FillObservation(
             execution_eligible_date=date.fromisoformat(str(item["execution_eligible_date"])),
             stock_code=str(item["stock_code"]), config_hash=str(item["config_hash"]),
