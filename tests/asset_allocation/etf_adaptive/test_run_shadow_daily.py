@@ -12,11 +12,17 @@ from asset_allocation.etf_adaptive.config import AdaptiveConfig
 from asset_allocation.etf_adaptive.contracts import (
     DualPriceBar,
     ExecutionAvailability,
+    InstrumentType,
+    SubLayer,
 )
 from asset_allocation.etf_adaptive.run_shadow_daily import (
+    ChinaAStockCostBoundary,
     CutoffNotReachedError,
     DataFreshnessError,
+    ETFCostBoundary,
     NonTradingDateError,
+    TargetSpec,
+    cost_boundary_for,
     next_trading_session,
     require_after_market_data_cutoff,
     require_fresh_bar,
@@ -99,9 +105,12 @@ def _store_with_selection() -> InMemoryShadowStore:
             "targets": [
                 {
                     "stock_code": "510300.SH",
-                    "weight": 1.0,
-                    "layer": "core_broad",
+                    "weight": "1",
+                    "layer": "broad_beta",
                     "tracking_index_code": "000300.SH",
+                    "sub_layer": "broad_domestic_core",
+                    "sub_layer_budget": "100000",
+                    "instrument_type": "etf",
                 },
             ],
         },
@@ -111,6 +120,33 @@ def _store_with_selection() -> InMemoryShadowStore:
         activated_at=datetime(2026, 8, 1, 17, 0),
     )
     store.activate_frozen_config(record)
+    return store
+
+
+def _store_with_layered_target_budgets() -> InMemoryShadowStore:
+    store = InMemoryShadowStore()
+    store.activate_frozen_config(FrozenConfigRecord(
+        config_hash="cfg-layered-budget",
+        config=AdaptiveConfig.default(),
+        selection_payload={
+            "targets": [
+                {
+                    "stock_code": "510300.SH", "tracking_index_code": "000300.SH",
+                    "layer": "broad_beta", "sub_layer": "broad_domestic_core",
+                    "sub_layer_budget": "42000", "instrument_type": "etf", "weight": "0.6",
+                },
+                {
+                    "stock_code": "510500.SH", "tracking_index_code": "000905.SH",
+                    "layer": "broad_beta", "sub_layer": "broad_domestic_core",
+                    "sub_layer_budget": "42000", "instrument_type": "etf", "weight": "0.4",
+                },
+            ],
+        },
+        data_cutoff=DATA_CUTOFF,
+        activation_date=date(2026, 8, 1),
+        review_date=date(2027, 2, 1),
+        activated_at=datetime(2026, 8, 1, 17, 0),
+    ))
     return store
 
 
@@ -190,6 +226,41 @@ def test_shadow_runner_publishes_execution_eligible_date_and_run_id() -> None:
     target, state = summary.target_states[0]
     assert target.stock_code == "510300.SH"
     assert state.config_hash == "cfg-shadow-1"
+
+
+def test_shadow_runner_initializes_each_target_from_its_weighted_sub_layer_budget() -> None:
+    store = _store_with_layered_target_budgets()
+    provider = _StubProvider()
+
+    summary = run_shadow_date(TARGET, _after_close(), store, provider)
+
+    assert {
+        target.stock_code: state.cash for target, state in summary.target_states
+    } == {
+        "510300.SH": Decimal("25200.0"),
+        "510500.SH": Decimal("16800.0"),
+    }
+
+
+def test_cost_boundary_dispatches_etf_and_china_a_stock_schedules() -> None:
+    etf = TargetSpec(
+        stock_code="510300.SH", tracking_index_code="000300.SH", layer="broad_beta",
+        weight=Decimal("1"), sub_layer=SubLayer.DOMESTIC_CORE,
+        sub_layer_budget=Decimal("42000"), instrument_type=InstrumentType.ETF,
+    )
+    stock = TargetSpec(
+        stock_code="600000.SH", tracking_index_code="000922.SH", layer="defensive",
+        weight=Decimal("1"), sub_layer=SubLayer.DEFENSIVE_BLUE_CHIP,
+        sub_layer_budget=Decimal("18000"), instrument_type=InstrumentType.STOCK,
+    )
+
+    etf_cost = cost_boundary_for(etf, TARGET, AdaptiveConfig.default())
+    stock_cost = cost_boundary_for(stock, TARGET, AdaptiveConfig.default())
+
+    assert isinstance(etf_cost, ETFCostBoundary)
+    assert isinstance(stock_cost, ChinaAStockCostBoundary)
+    assert stock_cost.stamp_duty_sell_rate == Decimal("0.0005")
+    assert stock_cost.transfer_fee_rate == Decimal("0.00001")
 
 
 def test_shadow_runner_requires_active_frozen_selection() -> None:

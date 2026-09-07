@@ -22,12 +22,11 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
 from .config import AdaptiveConfig
+from .contracts import InstrumentType, SubLayer, asset_layer_for
 from .shadow_store import FrozenConfigRecord, ShadowStore
 
 
 SIX_MONTH_REVIEW_DAYS: int = 183
-LAYER_WEIGHT_SUM_TOLERANCE: float = 1e-6
-MAX_SINGLE_TARGET_WEIGHT: float = 0.50
 
 
 class FrozenSelectionError(ValueError):
@@ -36,12 +35,34 @@ class FrozenSelectionError(ValueError):
 
 @dataclass(frozen=True)
 class FrozenTarget:
-    """One ETF product inside a frozen layer with its target weight."""
+    """One immutable, fully funded target in an approved sub-layer."""
 
     stock_code: str
     tracking_index_code: str
     layer: str
-    weight: float
+    sub_layer: SubLayer
+    sub_layer_budget: Decimal
+    instrument_type: InstrumentType
+    weight: Decimal
+    config_hash: str
+
+    def __post_init__(self) -> None:
+        if not self.stock_code:
+            raise FrozenSelectionError("target stock_code must be non-empty")
+        if not isinstance(self.sub_layer, SubLayer):
+            raise FrozenSelectionError("target sub_layer must be an approved SubLayer")
+        if self.layer != asset_layer_for(self.sub_layer).value:
+            raise FrozenSelectionError(
+                f"target {self.stock_code} layer does not match sub_layer {self.sub_layer.value}"
+            )
+        if not isinstance(self.sub_layer_budget, Decimal) or not self.sub_layer_budget.is_finite() or self.sub_layer_budget <= 0:
+            raise FrozenSelectionError("target sub_layer_budget must be a positive finite Decimal")
+        if not isinstance(self.instrument_type, InstrumentType):
+            raise FrozenSelectionError("target instrument_type must be an InstrumentType")
+        if not isinstance(self.weight, Decimal) or not self.weight.is_finite() or self.weight <= 0:
+            raise FrozenSelectionError("target weight must be a positive finite Decimal")
+        if not self.config_hash:
+            raise FrozenSelectionError("target config_hash must be non-empty")
 
 
 @dataclass(frozen=True)
@@ -60,9 +81,8 @@ class FrozenSelection:
 
     def __post_init__(self) -> None:
         _validate_targets(self.targets)
-        _validate_layer_weights(self.layer_weights)
         _validate_review_window(self.activation_date, self.review_date)
-        _validate_max_single_weight(self.targets)
+        _validate_sub_layer_portfolio(self.targets)
         if not self.config_hash:
             raise FrozenSelectionError("config_hash must be a non-empty SHA-256 hex string")
         if not self.selection_id:
@@ -101,15 +121,7 @@ class FrozenSelection:
                 "manifest config hash mismatch: declared "
                 f"{manifest_hash!r}, recomputed {expected_hash!r}"
             )
-        targets = tuple(
-            FrozenTarget(
-                stock_code=str(target["stock_code"]),
-                tracking_index_code=str(target.get("tracking_index_code", "")),
-                layer=str(target.get("layer", "default")),
-                weight=float(target["weight"]),
-            )
-            for target in payload.get("targets", ())
-        )
+        targets = _parse_targets(payload, manifest_hash)
         layer_weights = {
             str(layer): float(weight)
             for layer, weight in payload.get("layer_weights", {}).items()
@@ -121,8 +133,7 @@ class FrozenSelection:
             declared_hash = ""
         if declared_hash:
             base_config = _rebuild_config(payload)
-        if "layer_budgets" in payload:
-            _validate_layered_portfolio(targets, payload["layer_budgets"])
+        _validate_configured_sub_layer_budgets(payload, targets)
         return cls(
             selection_id=str(payload["selection_id"]),
             config_hash=manifest_hash,
@@ -156,24 +167,9 @@ def _rebuild_config(payload: Mapping[str, Any]) -> AdaptiveConfig:
 def _validate_targets(targets: Sequence[FrozenTarget]) -> None:
     seen: set[str] = set()
     for target in targets:
-        if not target.stock_code:
-            raise FrozenSelectionError("target stock_code must be non-empty")
         if target.stock_code in seen:
             raise FrozenSelectionError(f"duplicate stock_code in frozen selection: {target.stock_code}")
         seen.add(target.stock_code)
-        if target.weight < 0.0:
-            raise FrozenSelectionError(
-                f"target {target.stock_code} weight {target.weight} must be non-negative"
-            )
-
-
-def _validate_layer_weights(layer_weights: Mapping[str, float]) -> None:
-    for layer, total in layer_weights.items():
-        if abs(total - 1.0) > LAYER_WEIGHT_SUM_TOLERANCE:
-            raise FrozenSelectionError(
-                f"layer {layer!r} weights sum to {total}, expected 1.0 within "
-                f"{LAYER_WEIGHT_SUM_TOLERANCE}"
-            )
 
 
 def _validate_review_window(activation_date: date, review_date: date) -> None:
@@ -190,36 +186,102 @@ def _validate_review_window(activation_date: date, review_date: date) -> None:
         )
 
 
-def _validate_max_single_weight(targets: Sequence[FrozenTarget]) -> None:
-    for target in targets:
-        if target.weight - MAX_SINGLE_TARGET_WEIGHT > 1e-9:
+def _parse_targets(payload: Mapping[str, Any], config_hash: str) -> tuple[FrozenTarget, ...]:
+    """Parse only unambiguous target records with explicit sub-layer funding."""
+
+    raw_targets = payload.get("targets", ())
+    if not isinstance(raw_targets, Sequence) or isinstance(raw_targets, (str, bytes)):
+        raise FrozenSelectionError("targets must be a sequence")
+    parsed: list[FrozenTarget] = []
+    for raw in raw_targets:
+        if not isinstance(raw, Mapping):
+            raise FrozenSelectionError("target entries must be mappings")
+        missing = {
+            "sub_layer", "sub_layer_budget", "instrument_type", "weight", "stock_code"
+        }.difference(raw)
+        if missing:
             raise FrozenSelectionError(
-                f"target {target.stock_code} weight {target.weight} exceeds the "
-                f"{MAX_SINGLE_TARGET_WEIGHT} cap"
+                "legacy target payload is ambiguous; missing " + ", ".join(sorted(missing))
+            )
+        try:
+            sub_layer = SubLayer(str(raw["sub_layer"]))
+            instrument_type = InstrumentType(str(raw["instrument_type"]))
+            budget = _as_decimal(raw["sub_layer_budget"], "sub_layer_budget")
+            weight = _as_decimal(raw["weight"], "weight")
+        except (ValueError, TypeError, ArithmeticError) as exc:
+            raise FrozenSelectionError(f"invalid frozen target: {exc}") from exc
+        target_hash = str(raw.get("config_hash", config_hash))
+        if target_hash != config_hash:
+            raise FrozenSelectionError("target config_hash must equal manifest config_hash")
+        expected_layer = asset_layer_for(sub_layer).value
+        declared_layer = str(raw.get("layer", expected_layer))
+        parsed.append(FrozenTarget(
+            stock_code=str(raw["stock_code"]),
+            tracking_index_code=str(raw.get("tracking_index_code", "")),
+            layer=declared_layer,
+            sub_layer=sub_layer,
+            sub_layer_budget=budget,
+            instrument_type=instrument_type,
+            weight=weight,
+            config_hash=config_hash,
+        ))
+    return tuple(parsed)
+
+
+def _as_decimal(value: Any, field_name: str) -> Decimal:
+    if isinstance(value, bool):
+        raise ValueError(f"{field_name} must be a decimal number")
+    decimal = Decimal(str(value))
+    if not decimal.is_finite():
+        raise ValueError(f"{field_name} must be finite")
+    return decimal
+
+
+def _validate_sub_layer_portfolio(targets: Sequence[FrozenTarget]) -> None:
+    grouped: dict[SubLayer, list[FrozenTarget]] = {}
+    for target in targets:
+        grouped.setdefault(target.sub_layer, []).append(target)
+    if not grouped:
+        raise FrozenSelectionError("frozen selection requires at least one funded sub-layer")
+    for sub_layer, members in grouped.items():
+        budgets = {member.sub_layer_budget for member in members}
+        if len(budgets) != 1:
+            raise FrozenSelectionError(
+                f"sub-layer {sub_layer.value!r} targets must share one account-currency budget"
+            )
+        # Decimal values are parsed directly from the manifest; exact equality avoids
+        # binary-float drift and deliberately leaves no generic target-count or cap rule.
+        if sum((member.weight for member in members), Decimal("0")) != Decimal("1"):
+            raise FrozenSelectionError(
+                f"sub-layer {sub_layer.value!r} target weights must sum exactly to 1"
             )
 
 
-def _validate_layered_portfolio(
-    targets: Sequence[FrozenTarget], layer_budgets: Any,
+def _validate_configured_sub_layer_budgets(
+    payload: Mapping[str, Any], targets: Sequence[FrozenTarget],
 ) -> None:
-    """Validate the production defensive/broad-beta portfolio contract."""
-    if not isinstance(layer_budgets, Mapping):
-        raise FrozenSelectionError("layer_budgets must be a mapping")
-    grouped: dict[str, list[FrozenTarget]] = {}
+    raw_budgets = payload.get("sub_layer_budgets")
+    if raw_budgets is None:
+        return
+    if not isinstance(raw_budgets, Mapping):
+        raise FrozenSelectionError("sub_layer_budgets must be a mapping")
+    configured: dict[SubLayer, Decimal] = {}
+    for raw_layer, raw_budget in raw_budgets.items():
+        try:
+            configured[SubLayer(str(raw_layer))] = _as_decimal(raw_budget, "sub_layer budget")
+        except (ValueError, TypeError, ArithmeticError) as exc:
+            raise FrozenSelectionError(f"invalid configured sub-layer budget: {exc}") from exc
+    selected = {target.sub_layer for target in targets}
+    for sub_layer in configured:
+        if sub_layer not in selected:
+            raise FrozenSelectionError(f"configured sub-layer {sub_layer.value!r} has no selected targets")
+    if selected != set(configured):
+        raise FrozenSelectionError("sub_layer_budgets must match selected sub-layers")
     for target in targets:
-        grouped.setdefault(target.layer, []).append(target)
-    for layer, members in grouped.items():
-        if layer not in {"defensive", "broad_beta"}:
-            raise FrozenSelectionError(f"unsupported production layer: {layer}")
-        if not 2 <= len(members) <= 4:
-            raise FrozenSelectionError(f"layer {layer!r} requires 2 to 4 targets")
-        if abs(sum(member.weight for member in members) - 1.0) > LAYER_WEIGHT_SUM_TOLERANCE:
-            raise FrozenSelectionError(f"layer {layer!r} target weights must sum to 1.0")
-        budget = layer_budgets.get(layer)
-        if not isinstance(budget, (int, float)) or not 0.0 < float(budget) <= 1.0:
-            raise FrozenSelectionError(f"layer {layer!r} requires a budget in (0, 1]")
-    if set(layer_budgets) != set(grouped):
-        raise FrozenSelectionError("layer_budgets must match selected target layers")
+        if target.sub_layer_budget != configured[target.sub_layer]:
+            raise FrozenSelectionError(
+                f"target {target.stock_code} sub_layer_budget differs from configured sub-layer budget"
+            )
 
 
 def _canonical_hash(payload: Mapping[str, Any]) -> str:
@@ -258,10 +320,27 @@ def activate_selection(
     """Validate activation and persist the frozen selection to ``store``."""
 
     selection.validate_activation(date.today() if now is None else now.date())
+    payload = dict(selection.selection_payload)
+    # Persist the normalized frozen records, not the possibly sparse manifest
+    # representation, so every daily consumer receives the immutable funding
+    # and identity fields without inferring them from a parent layer.
+    payload["targets"] = [
+        {
+            "stock_code": target.stock_code,
+            "tracking_index_code": target.tracking_index_code,
+            "layer": target.layer,
+            "sub_layer": target.sub_layer.value,
+            "sub_layer_budget": str(target.sub_layer_budget),
+            "instrument_type": target.instrument_type.value,
+            "weight": str(target.weight),
+            "config_hash": target.config_hash,
+        }
+        for target in selection.targets
+    ]
     record = FrozenConfigRecord(
         config_hash=selection.config_hash,
         config=selection.base_config,
-        selection_payload=dict(selection.selection_payload),
+        selection_payload=payload,
         data_cutoff=selection.data_cutoff,
         activation_date=selection.activation_date,
         review_date=selection.review_date,
@@ -275,7 +354,6 @@ __all__ = [
     "FrozenSelection",
     "FrozenSelectionError",
     "FrozenTarget",
-    "MAX_SINGLE_TARGET_WEIGHT",
     "SIX_MONTH_REVIEW_DAYS",
     "activate_selection",
 ]
