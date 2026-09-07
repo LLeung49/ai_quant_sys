@@ -48,6 +48,27 @@ from .state import (
 )
 
 
+def default_shadow_store() -> ShadowStore:
+    """Create the durable store used by the command-line entry point."""
+    from .mysql_shadow_store import MySQLShadowStore
+    return MySQLShadowStore()
+
+
+def default_shadow_provider() -> _ProviderLike:
+    """Create the repository's read-only dual-price market-data provider."""
+    from data_ingestion.db_config import execute_query
+    from morning_conference.sector_rotation2.research.evaluation.prices import (
+        load_authoritative_market_calendar,
+    )
+    from .market_data import AdaptiveMarketDataProvider
+    return AdaptiveMarketDataProvider(
+        query=execute_query,
+        calendar_loader=lambda start, end: load_authoritative_market_calendar(
+            start, end, execute_query,
+        ),
+    )
+
+
 MARKET_CLOSE_LOCAL: time = time(15, 0)
 SAFE_PROCESSING_CUTOFF: time = time(17, 0)
 DATA_FRESHNESS_LOOKBACK_DAYS: int = 550
@@ -430,30 +451,30 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--as-of-date", required=True)
     parser.add_argument("--today", required=True, help="ISO datetime treated as wall-clock now")
     parser.add_argument("--model-version", default="shadow-v1")
-    parser.add_argument("--config-hash", default=None)
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    *,
+    store_factory=None,
+    provider_factory=None,
+) -> int:
     args = build_parser().parse_args(argv)
-    store: ShadowStore = InMemoryShadowStore()
-    from .shadow_store import FrozenConfigRecord  # local import to avoid cycles
-    if args.config_hash:
-        store.activate_frozen_config(FrozenConfigRecord(
-            config_hash=args.config_hash,
-            config=AdaptiveConfig.default(),
-            selection_payload={
-                "targets": [
-                    {"stock_code": "510300.SH", "weight": 1.0,
-                     "layer": "core_broad", "tracking_index_code": "000300.SH"},
-                ],
-            },
-            data_cutoff=date.fromisoformat(args.as_of_date),
-            activation_date=date.fromisoformat(args.as_of_date),
-            review_date=date.fromisoformat(args.as_of_date) + timedelta(days=183),
-            activated_at=datetime.now(),
-        ))
-    raise SystemExit(0) if store else 0
+    try:
+        store_factory = store_factory or default_shadow_store
+        provider_factory = provider_factory or default_shadow_provider
+        summary = run_shadow_date(
+            date.fromisoformat(args.as_of_date),
+            datetime.fromisoformat(args.today),
+            store_factory(), provider_factory(), model_version=args.model_version,
+        )
+    except (ValueError, RuntimeError) as exc:
+        import sys
+        print(str(exc), file=sys.stderr)
+        return 2
+    print(summary.canonical_json())
+    return 0
 
 
 if __name__ == "__main__":  # pragma: no cover - CLI entry point

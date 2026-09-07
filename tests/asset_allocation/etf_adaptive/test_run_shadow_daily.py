@@ -22,6 +22,7 @@ from asset_allocation.etf_adaptive.run_shadow_daily import (
     require_fresh_bar,
     run_shadow_date,
 )
+import asset_allocation.etf_adaptive.run_shadow_daily as shadow_module
 from asset_allocation.etf_adaptive.shadow_store import (
     FrozenConfigRecord,
     InMemoryShadowStore,
@@ -201,6 +202,19 @@ def test_shadow_runner_requires_active_frozen_selection() -> None:
         assert "no active frozen selection" in str(exc)
     else:
         raise AssertionError("expected error when no active selection exists")
+
+
+def test_main_uses_injected_production_boundaries(monkeypatch, capsys) -> None:
+    store = _store_with_selection()
+    provider = _StubProvider()
+
+    monkeypatch.setattr(shadow_module, "default_shadow_store", lambda: store, raising=False)
+    monkeypatch.setattr(shadow_module, "default_shadow_provider", lambda: provider, raising=False)
+
+    assert shadow_module.main([
+        "--as-of-date", "2026-09-01", "--today", "2026-09-01T17:00:00",
+    ]) == 0
+    assert '"run_id"' in capsys.readouterr().out
 
 
 

@@ -44,6 +44,7 @@ class ResearchArtifact:
     data_cutoff: str
     config_hash: str
     artifacts: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
+    frozen_selection: Mapping[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -143,6 +144,8 @@ def write_research_report(
         "config_hash": artifact.config_hash,
         "notes": [],
     }
+    if artifact.frozen_selection is not None:
+        manifest_payload["frozen_selection"] = dict(artifact.frozen_selection)
     _dump_json(staging / "manifest.json", manifest_payload)
 
     _dump_json(

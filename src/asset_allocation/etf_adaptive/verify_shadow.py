@@ -12,6 +12,8 @@ auto-trade.
 from __future__ import annotations
 
 import argparse
+import json
+from dataclasses import asdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Callable, Iterable, Sequence
@@ -36,6 +38,12 @@ READINESS_GATES: tuple[str, ...] = (
 
 
 SLIPPAGE_FIVE_BP: float = 5.0
+
+
+def default_shadow_store() -> ShadowStore:
+    """Create the durable store used by readiness verification."""
+    from .mysql_shadow_store import MySQLShadowStore
+    return MySQLShadowStore()
 
 
 @dataclass(frozen=True)
@@ -228,19 +236,19 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, *, store_factory=None) -> int:
     args = build_parser().parse_args(argv)
-    from .shadow_store import InMemoryShadowStore
-    store: ShadowStore = InMemoryShadowStore()
+    start_date = date.fromisoformat(args.start_date)
+    end_date = date.fromisoformat(args.end_date)
+    store_factory = store_factory or default_shadow_store
+    store: ShadowStore = store_factory()
     observations: Sequence[FillObservation] = ()
     readiness = verify_shadow_period(
-        date.fromisoformat(args.start_date),
-        date.fromisoformat(args.end_date),
+        start_date, end_date,
         store,
         observations=observations,
     )
-    print("ready =", readiness.ready)
-    print("failures =", list(readiness.failures))
+    print(json.dumps(asdict(readiness), ensure_ascii=False, sort_keys=True, default=str))
     return 0 if readiness.ready else 2
 
 

@@ -13,6 +13,7 @@ from asset_allocation.etf_adaptive.research.report import (
     ResearchArtifact,
     write_research_report,
 )
+from asset_allocation.etf_adaptive.frozen_selection import FrozenSelection, _canonical_hash
 
 
 REPORTS_ROOT = Path("D:/aiQuant/ai_quant_sys/reports/pytest-report-tmp")
@@ -98,6 +99,20 @@ def test_report_clears_staging_directory_on_overwrite(output_dir: Path) -> None:
     write_research_report(_research_result(), output_dir)
 
     assert not staging.exists()
+
+
+def test_report_manifest_round_trips_frozen_selection(output_dir: Path) -> None:
+    payload = {
+        "selection_id": "selection-2026-09", "data_cutoff": "2026-09-01",
+        "activation_date": "2026-09-02", "review_date": "2027-03-04",
+        "targets": [{"stock_code": "510300.SH", "tracking_index_code": "000300.SH", "layer": "core", "weight": 0.5}],
+        "layer_weights": {"core": 1.0},
+    }
+    payload["config_hash"] = _canonical_hash(payload)
+    artifact = _research_result()
+    from dataclasses import replace
+    write_research_report(replace(artifact, frozen_selection=payload), output_dir)
+    assert FrozenSelection.from_research_manifest(output_dir / "manifest.json").selection_id == "selection-2026-09"
     assert (output_dir / "manifest.json").exists()
 
 

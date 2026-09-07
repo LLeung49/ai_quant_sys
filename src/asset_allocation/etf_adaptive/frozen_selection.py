@@ -137,7 +137,10 @@ class FrozenSelection:
     def from_research_manifest(cls, path: Path) -> "FrozenSelection":
         """Load a frozen selection from a research run's ``manifest.json``."""
 
-        payload = json.loads(Path(path).read_text(encoding="utf-8"))
+        manifest = json.loads(Path(path).read_text(encoding="utf-8"))
+        payload = manifest.get("frozen_selection", manifest)
+        if not isinstance(payload, Mapping):
+            raise FrozenSelectionError("research manifest missing frozen_selection payload")
         return cls.from_payload(payload)
 
 

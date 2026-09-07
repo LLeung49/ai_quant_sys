@@ -30,6 +30,7 @@ from asset_allocation.etf_adaptive.verify_shadow import (
     READINESS_GATES,
     verify_shadow_period,
 )
+import asset_allocation.etf_adaptive.verify_shadow as verify_module
 
 
 START = date(2026, 1, 1)
@@ -205,3 +206,10 @@ def test_readiness_checked_gates_match_spec() -> None:
     result = verify_shadow_period(START, END, store)
 
     assert set(result.checked_gates) == set(READINESS_GATES)
+
+
+def test_main_uses_injected_durable_store(monkeypatch, capsys) -> None:
+    store = _store_with_n_runs(60)
+    monkeypatch.setattr(verify_module, "default_shadow_store", lambda: store, raising=False)
+    assert verify_module.main(["--start-date", START.isoformat(), "--end-date", END.isoformat()]) == 0
+    assert '"ready": true' in capsys.readouterr().out
