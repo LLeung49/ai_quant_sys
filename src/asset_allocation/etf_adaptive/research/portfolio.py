@@ -159,32 +159,42 @@ def _fund_portfolio(
 def evaluate_sub_layer_portfolios(
     products: Sequence[ProductMetrics],
     returns: Mapping[str, Sequence[float]],
-    budget: SubLayerBudget,
-    *,
-    per_product_cap: float = DEFAULT_INVERSE_VOLATILITY_CAP,
-    minimum_tradable_budget: Decimal = Decimal("0"),
+    evidence: SubLayerSelectionEvidence,
 ) -> SubLayerPortfolioEvaluation:
     """Build comparable, fully funded baskets for one selected sub-layer.
 
-    No allocation is silently re-normalised above a cap.  Infeasible cap,
-    volatility, return-series, or minimum-trade constraints fail explicitly so
-    freezing can refuse an untradeable basket.
+    Selection evidence is the sole source of the budget, cap and minimum-trade
+    policy, so evaluation cannot drift to a default universal cap. No allocation
+    is silently re-normalised above a cap. Infeasible cap, volatility,
+    return-series, or minimum-trade constraints fail explicitly.
     """
 
+    # Imported lazily to retain the selection module's PairwiseRisk dependency
+    # without a module-import cycle.
+    from .selection import SubLayerSelectionEvidence
+
+    if not isinstance(evidence, SubLayerSelectionEvidence):
+        raise ValueError("evidence must be a SubLayerSelectionEvidence")
     ids = _validate_portfolio_inputs(
-        products, returns, budget, per_product_cap, minimum_tradable_budget
+        products,
+        returns,
+        evidence.budget,
+        evidence.per_product_cap,
+        evidence.minimum_tradable_budget,
     )
     equal = build_equal_weight(ids)
-    if max(equal.values()) > per_product_cap + 1e-12:
+    if max(equal.values()) > evidence.per_product_cap + 1e-12:
         raise ValueError("per-product cap is infeasible for equal-weight basket")
     volatilities = {product_id: _pop_std(returns[product_id]) for product_id in ids}
     if any(volatility <= 0 for volatility in volatilities.values()):
         raise ValueError("returns must produce positive volatility for every product")
-    inverse = build_inverse_volatility(volatilities, cap=per_product_cap)
+    inverse = build_inverse_volatility(volatilities, cap=evidence.per_product_cap)
     return SubLayerPortfolioEvaluation(
-        equal_weight=_fund_portfolio(equal, budget.budget, minimum_tradable_budget),
+        equal_weight=_fund_portfolio(
+            equal, evidence.budget.budget, evidence.minimum_tradable_budget
+        ),
         capped_inverse_volatility=_fund_portfolio(
-            inverse, budget.budget, minimum_tradable_budget
+            inverse, evidence.budget.budget, evidence.minimum_tradable_budget
         ),
     )
 

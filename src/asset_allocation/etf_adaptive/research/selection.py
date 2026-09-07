@@ -128,6 +128,24 @@ def select_products_by_index(
     return tuple(selected)
 
 
+def _normalise_products_by_id(
+    products: Iterable[ProductMetrics],
+) -> tuple[ProductMetrics, ...]:
+    """Choose one deterministic record per tradable product identity.
+
+    Provider metadata can be corrected or duplicated independently of the
+    exchange-traded product id. Product identity therefore takes precedence
+    over index metadata before index-level representative selection.
+    """
+
+    grouped: dict[str, list[ProductMetrics]] = {}
+    for product in products:
+        grouped.setdefault(product.product_id, []).append(product)
+    return tuple(
+        select_best_product(grouped[product_id]) for product_id in sorted(grouped)
+    )
+
+
 @dataclass(frozen=True)
 class SubLayerSelectionEvidence:
     """Selection gates and pairwise evidence for one approved sub-layer.
@@ -245,7 +263,8 @@ def select_sub_layer_products(
 
     # De-duplicate only after evidence filters: an ineligible cheap tracker
     # cannot exclude a qualifying alternative for the same index.
-    representatives = select_products_by_index(eligible)
+    unique_products = _normalise_products_by_id(eligible)
+    representatives = select_products_by_index(unique_products)
     ordered = sorted(
         representatives,
         key=lambda product: (
@@ -256,6 +275,11 @@ def select_sub_layer_products(
     )
     selected: list[ProductMetrics] = []
     for candidate in ordered:
+        minimum_required = evidence.minimum_tradable_budget * Decimal(
+            len(selected) + 1
+        )
+        if minimum_required > evidence.budget.budget:
+            continue
         gain = _pairwise_diversification_gain(
             candidate.product_id,
             [product.product_id for product in selected],
@@ -263,6 +287,8 @@ def select_sub_layer_products(
         )
         if gain is not None and gain >= evidence.minimum_diversification_gain:
             selected.append(candidate)
+    if len(selected) * evidence.per_product_cap < 1.0 - 1e-12:
+        return ()
     return tuple(selected)
 
 

@@ -17,7 +17,10 @@ from asset_allocation.etf_adaptive.research.portfolio import (
     evaluate_sub_layer_portfolios,
     pairwise_risk,
 )
-from asset_allocation.etf_adaptive.research.selection import ProductMetrics
+from asset_allocation.etf_adaptive.research.selection import (
+    ProductMetrics,
+    SubLayerSelectionEvidence,
+)
 
 
 def test_build_equal_weight_normalises_to_one() -> None:
@@ -152,6 +155,21 @@ def _portfolio_product(product_id: str) -> ProductMetrics:
     )
 
 
+def _portfolio_evidence(
+    *,
+    per_product_cap: float,
+    minimum_tradable_budget: Decimal = Decimal("0"),
+) -> SubLayerSelectionEvidence:
+    return SubLayerSelectionEvidence(
+        budget=SubLayerBudget(SubLayer.DOMESTIC_CORE, Decimal("120000")),
+        pareto_product_ids=frozenset(),
+        maximum_cost_sensitivity=0.05,
+        minimum_tradable_budget=minimum_tradable_budget,
+        per_product_cap=per_product_cap,
+        minimum_diversification_gain=0.0,
+    )
+
+
 def test_evaluate_sub_layer_portfolios_conserves_budget_for_equal_and_capped_inverse_volatility() -> None:
     evaluation = evaluate_sub_layer_portfolios(
         (_portfolio_product("A"), _portfolio_product("B"), _portfolio_product("C")),
@@ -160,9 +178,10 @@ def test_evaluate_sub_layer_portfolios_conserves_budget_for_equal_and_capped_inv
             "B": (0.02, -0.01, 0.02, -0.02),
             "C": (-0.01, 0.01, -0.02, 0.02),
         },
-        SubLayerBudget(SubLayer.DOMESTIC_CORE, Decimal("120000")),
-        per_product_cap=0.50,
-        minimum_tradable_budget=Decimal("10000"),
+        _portfolio_evidence(
+            per_product_cap=0.50,
+            minimum_tradable_budget=Decimal("10000"),
+        ),
     )
 
     assert sum(evaluation.equal_weight.weights.values()) == pytest.approx(1.0)
@@ -177,6 +196,16 @@ def test_evaluate_sub_layer_portfolios_fails_when_the_cap_cannot_fund_a_basket()
         evaluate_sub_layer_portfolios(
             (_portfolio_product("A"), _portfolio_product("B")),
             {"A": (0.01, -0.02), "B": (0.02, -0.01)},
-            SubLayerBudget(SubLayer.DOMESTIC_CORE, Decimal("100000")),
-            per_product_cap=0.40,
+            _portfolio_evidence(per_product_cap=0.40),
         )
+
+
+def test_evaluate_sub_layer_portfolios_uses_the_selection_evidence_cap_for_one_product() -> None:
+    evaluation = evaluate_sub_layer_portfolios(
+        (_portfolio_product("A"),),
+        {"A": (0.01, -0.02, 0.03, -0.01)},
+        _portfolio_evidence(per_product_cap=1.0),
+    )
+
+    assert evaluation.equal_weight.weights == {"A": 1.0}
+    assert evaluation.capped_inverse_volatility.weights == {"A": 1.0}
