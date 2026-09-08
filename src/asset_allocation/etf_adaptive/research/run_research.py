@@ -72,6 +72,20 @@ def _validated_layer_benchmarks(raw: object) -> dict[str, dict[str, object]] | N
     return validated
 
 
+def _research_scope(
+    layer_benchmarks: Mapping[str, Mapping[str, object]] | None,
+    *,
+    bluechip_pit_ready: bool,
+) -> str:
+    """Classify research evidence without granting any activation authority."""
+
+    if layer_benchmarks is not None:
+        return "full_layered"
+    if not bluechip_pit_ready:
+        return "etf_only_pending_bluechip_pit"
+    return "research_only_pending_layer_benchmarks"
+
+
 def run_research(
     config: ResearchRunConfig,
     provider: AdaptiveBacktestDataProvider | None = None,
@@ -99,6 +113,13 @@ def _default_artifact_factory(provider: _LayeredResearchProvider, run_config: Re
         configured_budgets = _sub_layer_budgets(config.extra)
         layer_benchmarks = _validated_layer_benchmarks(
             config.extra.get("layer_benchmarks")
+        )
+        bluechip_pit_ready = config.extra.get("bluechip_pit_ready", False)
+        if not isinstance(bluechip_pit_ready, bool):
+            raise ValueError("extra.bluechip_pit_ready must be a boolean")
+        research_scope = _research_scope(
+            layer_benchmarks,
+            bluechip_pit_ready=bluechip_pit_ready,
         )
         sub_layers: dict[str, dict[str, object]] = {}
         targets: list[dict[str, str]] = []
@@ -184,6 +205,7 @@ def _default_artifact_factory(provider: _LayeredResearchProvider, run_config: Re
             "activation_date": activation_date.isoformat(),
             "review_date": (activation_date + timedelta(days=183)).isoformat(),
             "targets": targets if layer_benchmarks is not None else [],
+            "research_scope": research_scope,
             "sub_layer_budgets": {name: entry["budget"] for name, entry in sub_layers.items()},
         }
         if layer_benchmarks is not None:

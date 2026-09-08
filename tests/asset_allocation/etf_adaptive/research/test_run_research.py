@@ -19,6 +19,7 @@ from asset_allocation.etf_adaptive.research.run_research import (
     build_parser,
     run_research,
     _explicit_evidence,
+    _research_scope,
     _validated_layer_benchmarks,
 )
 from asset_allocation.etf_adaptive.contracts import (
@@ -131,6 +132,15 @@ def test_research_freeze_requires_two_complete_passing_layer_benchmarks() -> Non
     assert _validated_layer_benchmarks(None) is None
 
 
+def test_research_scope_marks_etf_only_results_until_bluechip_pit_is_ready() -> None:
+    assert _research_scope(None, bluechip_pit_ready=False) == "etf_only_pending_bluechip_pit"
+    assert _research_scope(None, bluechip_pit_ready=True) == "research_only_pending_layer_benchmarks"
+    assert _research_scope(
+        {"defensive": {"passed": True}, "broad_beta": {"passed": True}},
+        bluechip_pit_ready=True,
+    ) == "full_layered"
+
+
 def test_run_research_freezes_only_evidence_supported_layered_targets(
     reports_dir: Path,
 ) -> None:
@@ -215,6 +225,7 @@ def test_run_research_freezes_only_evidence_supported_layered_targets(
         "weight": "1",
         "config_hash": manifest["config_hash"],
     }]
+    assert manifest["frozen_selection"]["research_scope"] == "full_layered"
     assert (config.output_dir / "sub_layers" / "broad_overseas_mature" / "oos.json").exists()
     oos = json.loads((config.output_dir / "sub_layers" / "broad_overseas_mature" / "oos.json").read_text(encoding="utf-8"))
     pareto = json.loads((config.output_dir / "sub_layers" / "broad_overseas_mature" / "pareto.json").read_text(encoding="utf-8"))
