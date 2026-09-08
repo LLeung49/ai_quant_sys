@@ -19,6 +19,7 @@ from asset_allocation.etf_adaptive.research.execution_evidence import (
 )
 from asset_allocation.etf_adaptive.research.layer_benchmark import (
     aggregate_layer_evidence,
+    layer_benchmark_artifact,
 )
 
 
@@ -78,6 +79,18 @@ def test_defensive_layer_uses_fixed_weights_and_can_pass_with_one_lagging_target
     assert result.benchmark_nav[-1] == pytest.approx(1.12858)
     assert result.gate.passed is True
     assert result.marginal_excess_contribution[SubLayer.DEFENSIVE_BLUE_CHIP] < 0
+    assert layer_benchmark_artifact(result) == {
+        "passed": True,
+        "return_passed": True,
+        "drawdown_passed": True,
+        "majority_windows_passed": True,
+        "strategy_nav": pytest.approx((1.0, 1.09287, 1.175015)),
+        "benchmark_nav": pytest.approx((1.0, 1.06429, 1.12858)),
+        "marginal_excess_contribution": {
+            "defensive_dividend_etf": pytest.approx(0.06429),
+            "defensive_blue_chip": pytest.approx(-0.017855),
+        },
+    }
 
 
 def test_layer_aggregation_rejects_misaligned_dates() -> None:

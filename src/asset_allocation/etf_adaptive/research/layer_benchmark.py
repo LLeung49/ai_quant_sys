@@ -98,4 +98,23 @@ def aggregate_layer_evidence(
     )
 
 
-__all__ = ["LayerBenchmarkResult", "aggregate_layer_evidence"]
+def layer_benchmark_artifact(result: LayerBenchmarkResult) -> dict[str, object]:
+    """Return the deterministic report/freeze payload for one layer result."""
+
+    if not isinstance(result, LayerBenchmarkResult):
+        raise ValueError("result must be a LayerBenchmarkResult")
+    return {
+        "passed": result.gate.passed,
+        "return_passed": result.gate.return_passed,
+        "drawdown_passed": result.gate.drawdown_passed,
+        "majority_windows_passed": result.gate.majority_windows_passed,
+        "strategy_nav": result.strategy_nav,
+        "benchmark_nav": result.benchmark_nav,
+        "marginal_excess_contribution": {
+            sub_layer.value: result.marginal_excess_contribution[sub_layer]
+            for sub_layer in sorted(result.marginal_excess_contribution, key=lambda item: item.value)
+        },
+    }
+
+
+__all__ = ["LayerBenchmarkResult", "aggregate_layer_evidence", "layer_benchmark_artifact"]
