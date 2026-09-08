@@ -19,6 +19,7 @@ from asset_allocation.etf_adaptive.research.run_research import (
     build_parser,
     run_research,
     _explicit_evidence,
+    _validated_layer_benchmarks,
 )
 from asset_allocation.etf_adaptive.contracts import (
     DualPriceBar,
@@ -114,6 +115,22 @@ def test_run_research_raises_when_no_provider_or_factory() -> None:
         run_research(config)
 
 
+def test_research_freeze_requires_two_complete_passing_layer_benchmarks() -> None:
+    assert _validated_layer_benchmarks({
+        "defensive": {"passed": True},
+        "broad_beta": {"passed": True},
+    }) == {
+        "defensive": {"passed": True},
+        "broad_beta": {"passed": True},
+    }
+    assert _validated_layer_benchmarks({
+        "defensive": {"passed": False},
+        "broad_beta": {"passed": True},
+    }) is None
+    assert _validated_layer_benchmarks({"defensive": {"passed": True}}) is None
+    assert _validated_layer_benchmarks(None) is None
+
+
 def test_run_research_freezes_only_evidence_supported_layered_targets(
     reports_dir: Path,
 ) -> None:
@@ -174,7 +191,13 @@ def test_run_research_freezes_only_evidence_supported_layered_targets(
     config = ResearchRunConfig(
         as_of_date=as_of,
         output_dir=reports_dir / "layered-out",
-        extra={"sub_layer_budgets": {"broad_overseas_mature": "48000", "broad_domestic_core": "12000"}},
+        extra={
+            "sub_layer_budgets": {"broad_overseas_mature": "48000", "broad_domestic_core": "12000"},
+            "layer_benchmarks": {
+                "defensive": {"passed": True},
+                "broad_beta": {"passed": True},
+            },
+        },
     )
 
     run_research(config, provider=LayeredProvider())

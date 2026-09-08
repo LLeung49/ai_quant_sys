@@ -58,6 +58,20 @@ class _LayeredResearchProvider(Protocol):
     ) -> SubLayerSelectionEvidence: ...
 
 
+def _validated_layer_benchmarks(raw: object) -> dict[str, dict[str, object]] | None:
+    """Return only the complete, passing pair required for target activation."""
+
+    if not isinstance(raw, Mapping) or set(raw) != {"defensive", "broad_beta"}:
+        return None
+    validated: dict[str, dict[str, object]] = {}
+    for layer in ("defensive", "broad_beta"):
+        result = raw[layer]
+        if not isinstance(result, Mapping) or result.get("passed") is not True:
+            return None
+        validated[layer] = dict(result)
+    return validated
+
+
 def run_research(
     config: ResearchRunConfig,
     provider: AdaptiveBacktestDataProvider | None = None,
@@ -83,6 +97,9 @@ def _default_artifact_factory(provider: _LayeredResearchProvider, run_config: Re
     def _factory(config: ResearchRunConfig) -> ResearchArtifact:
         base_config = AdaptiveConfig.default()
         configured_budgets = _sub_layer_budgets(config.extra)
+        layer_benchmarks = _validated_layer_benchmarks(
+            config.extra.get("layer_benchmarks")
+        )
         sub_layers: dict[str, dict[str, object]] = {}
         targets: list[dict[str, str]] = []
         audit_rows: list[dict[str, object]] = []
@@ -161,14 +178,16 @@ def _default_artifact_factory(provider: _LayeredResearchProvider, run_config: Re
                     "weight": _decimal_text(weights[stock_code]),
                 })
         activation_date = config.as_of_date + timedelta(days=1)
-        frozen_selection = {
+        frozen_selection: dict[str, object] = {
             "selection_id": f"layered-{config.as_of_date.isoformat()}",
             "data_cutoff": config.as_of_date.isoformat(),
             "activation_date": activation_date.isoformat(),
             "review_date": (activation_date + timedelta(days=183)).isoformat(),
-            "targets": targets,
+            "targets": targets if layer_benchmarks is not None else [],
             "sub_layer_budgets": {name: entry["budget"] for name, entry in sub_layers.items()},
         }
+        if layer_benchmarks is not None:
+            frozen_selection["layer_benchmarks"] = layer_benchmarks
         selection_hash = _canonical_hash(frozen_selection)
         frozen_selection["config_hash"] = selection_hash
         for target in targets:
