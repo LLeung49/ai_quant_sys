@@ -62,3 +62,25 @@ def test_run_bluechip_basket_walk_forward_executes_every_pit_member_without_subs
     assert calls == ["600900.SH", "601088.SH"]
     assert set(result.member_evidence) == {"600900.SH", "601088.SH"}
     assert result.paths[BaselineKind.FULL_ADAPTIVE].nav[-1] == pytest.approx(1.08)
+
+
+def test_aggregate_bluechip_paths_rejects_missing_or_misaligned_members() -> None:
+    basket = BlueChipBasket(
+        "H30269.CSI",
+        date(2024, 1, 2),
+        (
+            BlueChipConstituent("600900.SH", 0.6, "a" * 64),
+            BlueChipConstituent("601088.SH", 0.4, "b" * 64),
+        ),
+    )
+    first = (StitchedNavPoint("wf_000", date(2024, 1, 2), 1.0),)
+    with pytest.raises(ValueError, match="exactly cover"):
+        aggregate_bluechip_paths(basket, {"600900.SH": first})
+    with pytest.raises(ValueError, match="aligned"):
+        aggregate_bluechip_paths(
+            basket,
+            {
+                "600900.SH": first,
+                "601088.SH": (StitchedNavPoint("wf_000", date(2024, 1, 3), 1.0),),
+            },
+        )

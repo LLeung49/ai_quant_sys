@@ -17,7 +17,16 @@ from asset_allocation.etf_adaptive.research.execution_evidence import (
     StitchedNavPoint,
     TargetEvidence,
 )
+from asset_allocation.etf_adaptive.research.bluechip_basket import (
+    BlueChipBasket,
+    BlueChipConstituent,
+)
+from asset_allocation.etf_adaptive.research.bluechip_execution import (
+    BlueChipBasketEvidence,
+    BlueChipPath,
+)
 from asset_allocation.etf_adaptive.research.layer_benchmark import (
+    aggregate_defensive_evidence,
     aggregate_layer_evidence,
     layer_benchmark_artifact,
 )
@@ -112,3 +121,44 @@ def test_layer_aggregation_rejects_misaligned_dates() -> None:
 
     with pytest.raises(ValueError, match="aligned"):
         aggregate_layer_evidence(portfolio, {SubLayer.DOMESTIC_CORE: bad})
+
+
+def test_defensive_adapter_uses_basket_weight_and_reports_stock_contribution() -> None:
+    dates = (date(2024, 1, 2), date(2024, 1, 3), date(2024, 1, 4))
+    basket = BlueChipBasket(
+        "H30269.CSI",
+        dates[0],
+        (
+            BlueChipConstituent("600900.SH", 0.6, "a" * 64),
+            BlueChipConstituent("601088.SH", 0.4, "b" * 64),
+        ),
+    )
+    bluechip = BlueChipBasketEvidence(
+        basket=basket,
+        member_evidence={},
+        paths={
+            BaselineKind.FULL_ADAPTIVE: BlueChipPath(
+                tuple(StitchedNavPoint("wf_000", day, nav) for day, nav in zip(dates, (1.0, 0.9, 0.95))),
+                {"600900.SH": 0.03, "601088.SH": -0.08},
+            ),
+            BaselineKind.BUY_AND_HOLD: BlueChipPath(
+                tuple(StitchedNavPoint("wf_000", day, nav) for day, nav in zip(dates, (1.0, 1.0, 1.0))),
+                {"600900.SH": 0.01, "601088.SH": -0.02},
+            ),
+        },
+    )
+
+    result = aggregate_defensive_evidence(
+        _evidence(SubLayer.DEFENSIVE_DIVIDEND_ETF, (1.0, 1.2, 1.3), (1.0, 1.1, 1.2)),
+        bluechip,
+    )
+
+    assert result.strategy_nav[-1] == pytest.approx(1.175015)
+    assert result.bluechip_member_contribution == {
+        "600900.SH": pytest.approx(0.007142),
+        "601088.SH": pytest.approx(-0.021426),
+    }
+    assert layer_benchmark_artifact(result)["bluechip_member_contribution"] == {
+        "600900.SH": pytest.approx(0.007142),
+        "601088.SH": pytest.approx(-0.021426),
+    }

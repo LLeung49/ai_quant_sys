@@ -17,8 +17,12 @@ from .execution_evidence import (
 
 @dataclass(frozen=True)
 class BlueChipPath:
-    nav: tuple[float, ...]
+    points: tuple[StitchedNavPoint, ...]
     member_contribution: Mapping[str, float]
+
+    @property
+    def nav(self) -> tuple[float, ...]:
+        return tuple(point.nav_total for point in self.points)
 
 
 @dataclass(frozen=True)
@@ -28,6 +32,10 @@ class BlueChipBasketEvidence:
     basket: BlueChipBasket
     member_evidence: Mapping[str, TargetEvidence]
     paths: Mapping[BaselineKind, BlueChipPath]
+
+    @property
+    def stitched_paths(self) -> Mapping[BaselineKind, tuple[StitchedNavPoint, ...]]:
+        return {kind: path.points for kind, path in self.paths.items()}
 
 
 def _member_entry(basket: BlueChipBasket, stock_code: str, source_hash: str) -> WhitelistEntry:
@@ -108,7 +116,17 @@ def aggregate_bluechip_paths(basket: BlueChipBasket, paths: Mapping[str, Sequenc
         elif dates!=reference: raise ValueError("member paths must be aligned")
     nav=tuple(sum(member.weight*paths[member.stock_code][index].nav_total for member in basket.members) for index in range(len(reference)))
     contribution={member.stock_code: member.weight*(paths[member.stock_code][-1].nav_total-1.0) for member in basket.members}
-    return BlueChipPath(nav, contribution)
+    return BlueChipPath(
+        tuple(
+            StitchedNavPoint(
+                paths[next(iter(expected))][index].window_id,
+                paths[next(iter(expected))][index].nav_date,
+                nav[index],
+            )
+            for index in range(len(reference))
+        ),
+        contribution,
+    )
 
 __all__ = [
     "BlueChipBasketEvidence",
