@@ -4,10 +4,58 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from datetime import date, datetime
+import json
 import math
 
 from .bluechip_basket import BlueChipBasket, BlueChipConstituent
-from .source_snapshots import _snapshot
+from .source_snapshots import SourceSnapshot, _snapshot
+
+
+class BlueChipSnapshotStore:
+    """Transactional writer for one immutable source snapshot and its PIT basket."""
+
+    def __init__(self, *, connection_factory: Callable[[], object]) -> None:
+        if not callable(connection_factory):
+            raise ValueError("connection_factory must be callable")
+        self._connection_factory = connection_factory
+
+    def persist(self, source: SourceSnapshot, basket: BlueChipBasket) -> None:
+        if not isinstance(source, SourceSnapshot) or not isinstance(basket, BlueChipBasket):
+            raise ValueError("source and basket are required")
+        if source.as_of_date != basket.as_of_date or any(
+            member.source_hash != source.source_hash for member in basket.members
+        ):
+            raise ValueError("source snapshot must exactly back the PIT basket")
+        conn = self._connection_factory()
+        try:
+            cursor = conn.cursor()  # type: ignore[attr-defined]
+            try:
+                cursor.execute(
+                    """INSERT INTO asset_allocation_etf_research_source_snapshot
+                    (source_hash, source_name, source_kind, captured_at, as_of_date, payload_json)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                    ON DUPLICATE KEY UPDATE source_hash = VALUES(source_hash)""",
+                    (source.source_hash, source.source_name, source.source_kind,
+                     source.captured_at, source.as_of_date,
+                     json.dumps(dict(source.payload), ensure_ascii=False, sort_keys=True)),
+                )
+                for member in basket.members:
+                    cursor.execute(
+                        """INSERT INTO asset_allocation_etf_research_constituent_pit
+                        (index_code, as_of_date, stock_code, weight, source_hash)
+                        VALUES (%s, %s, %s, %s, %s)
+                        ON DUPLICATE KEY UPDATE weight = VALUES(weight), source_hash = VALUES(source_hash)""",
+                        (basket.index_code, basket.as_of_date, member.stock_code,
+                         member.weight, member.source_hash),
+                    )
+                conn.commit()  # type: ignore[attr-defined]
+            except Exception:
+                conn.rollback()  # type: ignore[attr-defined]
+                raise
+            finally:
+                cursor.close()
+        finally:
+            conn.close()  # type: ignore[attr-defined]
 
 
 def _source_date(value: object) -> date:
@@ -79,4 +127,4 @@ def capture_constituent_snapshot(
     return BlueChipBasket(index_code.strip(), as_of_date, tuple(members))
 
 
-__all__ = ["capture_constituent_snapshot"]
+__all__ = ["BlueChipSnapshotStore", "capture_constituent_snapshot"]
