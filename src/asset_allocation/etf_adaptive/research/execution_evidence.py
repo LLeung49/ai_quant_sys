@@ -43,7 +43,9 @@ class TargetEvidence:
     """Five cost-net paths per frozen validation window for one exposure."""
 
     entry: WhitelistEntry
+    initial_cash: Decimal
     paths: Mapping[BaselineKind, tuple[WindowExecutionPath, ...]]
+    stitched_paths: Mapping[BaselineKind, tuple[StitchedNavPoint, ...]]
 
 
 @dataclass(frozen=True)
@@ -129,9 +131,15 @@ def run_target_walk_forward(
             if tuple(point.nav_date for point in run.result.nav) != window.validation_dates:
                 raise ValueError("execution NAV must exactly match validation sessions")
             paths[kind].append(WindowExecutionPath(window.window_id, run.result.nav))
+    frozen_paths = {kind: tuple(value) for kind, value in paths.items()}
     return TargetEvidence(
         entry=entry,
-        paths={kind: tuple(value) for kind, value in paths.items()},
+        initial_cash=config.initial_cash,
+        paths=frozen_paths,
+        stitched_paths={
+            kind: stitch_window_nav(path, initial_cash=config.initial_cash)
+            for kind, path in frozen_paths.items()
+        },
     )
 
 
