@@ -18,7 +18,9 @@ from asset_allocation.etf_adaptive.research.baselines import BaselineKind
 from asset_allocation.etf_adaptive.research.benchmark_contracts import WhitelistEntry
 from asset_allocation.etf_adaptive.research.execution_evidence import (
     TargetWalkForwardConfig,
+    WindowExecutionPath,
     run_target_walk_forward,
+    stitch_window_nav,
 )
 from asset_allocation.etf_adaptive.research.walk_forward import WalkForwardWindow
 
@@ -123,3 +125,29 @@ def test_target_walk_forward_rejects_missing_aligned_bars() -> None:
                 base_config=AdaptiveConfig.default(),
             ),
         )
+
+
+def test_stitch_window_nav_compounds_each_window_without_resetting_capital() -> None:
+    from asset_allocation.etf_adaptive.state import DailyNav
+
+    stitched = stitch_window_nav(
+        (
+            WindowExecutionPath(
+                "wf_000",
+                (
+                    DailyNav(date(2024, 1, 3), Decimal("100"), Decimal("0")),
+                    DailyNav(date(2024, 1, 4), Decimal("110"), Decimal("0")),
+                ),
+            ),
+            WindowExecutionPath(
+                "wf_001",
+                (
+                    DailyNav(date(2024, 1, 5), Decimal("100"), Decimal("0")),
+                    DailyNav(date(2024, 1, 6), Decimal("90"), Decimal("0")),
+                ),
+            ),
+        ),
+        initial_cash=Decimal("100"),
+    )
+
+    assert tuple(point.nav_total for point in stitched) == pytest.approx((1.0, 1.1, 1.1, 0.99))

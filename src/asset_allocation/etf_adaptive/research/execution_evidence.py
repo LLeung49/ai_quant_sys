@@ -46,6 +46,38 @@ class TargetEvidence:
     paths: Mapping[BaselineKind, tuple[WindowExecutionPath, ...]]
 
 
+@dataclass(frozen=True)
+class StitchedNavPoint:
+    window_id: str
+    nav_date: date
+    nav_total: float
+
+
+def stitch_window_nav(
+    paths: Sequence[WindowExecutionPath], *, initial_cash: Decimal
+) -> tuple[StitchedNavPoint, ...]:
+    """Compound reset-per-window NAVs into one cost-net OOS NAV path."""
+
+    if not isinstance(initial_cash, Decimal) or not initial_cash.is_finite() or initial_cash <= 0:
+        raise ValueError("initial_cash must be a positive finite Decimal")
+    compounded = 1.0
+    stitched: list[StitchedNavPoint] = []
+    previous_date: date | None = None
+    for path in paths:
+        if not isinstance(path, WindowExecutionPath) or not path.nav:
+            raise ValueError("paths must contain non-empty WindowExecutionPath values")
+        if previous_date is not None and path.nav[0].nav_date <= previous_date:
+            raise ValueError("window NAV dates must be strictly increasing")
+        for point in path.nav:
+            ratio = float(point.total / initial_cash)
+            if ratio <= 0:
+                raise ValueError("window NAV must remain positive")
+            stitched.append(StitchedNavPoint(path.window_id, point.nav_date, compounded * ratio))
+        compounded = stitched[-1].nav_total
+        previous_date = path.nav[-1].nav_date
+    return tuple(stitched)
+
+
 def _validate_window_inputs(
     entry: WhitelistEntry,
     provider: AdaptiveBacktestDataProvider,
@@ -106,6 +138,8 @@ def run_target_walk_forward(
 __all__ = [
     "TargetEvidence",
     "TargetWalkForwardConfig",
+    "StitchedNavPoint",
     "WindowExecutionPath",
     "run_target_walk_forward",
+    "stitch_window_nav",
 ]
