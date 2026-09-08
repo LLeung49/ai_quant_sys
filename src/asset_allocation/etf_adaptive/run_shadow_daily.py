@@ -509,6 +509,7 @@ def run_shadow_date(
 
 def _build_active_selection(frozen) -> ActiveSelection:
     payload = frozen.selection_payload or {}
+    _require_passing_layer_benchmarks(payload)
     raw_targets = payload.get("targets", ())
     if not isinstance(raw_targets, Sequence) or isinstance(raw_targets, (str, bytes)):
         raise ValueError("frozen selection targets must be a sequence")
@@ -554,6 +555,28 @@ def _build_active_selection(frozen) -> ActiveSelection:
         data_cutoff=frozen.data_cutoff,
         targets=tuple(targets),
     )
+
+
+def _require_passing_layer_benchmarks(payload: Mapping[str, object]) -> None:
+    """Reject new research payloads that record a failed layer-level gate.
+
+    Historic frozen records did not carry layer research evidence and remain
+    readable for audit/replay.  Any new record which includes the field must
+    be complete and passing before it can generate advice.
+    """
+
+    raw = payload.get("layer_benchmarks")
+    if raw is None:
+        return
+    if not isinstance(raw, Mapping):
+        raise ValueError("layer benchmark evidence must be a mapping")
+    expected = {"defensive", "broad_beta"}
+    if set(raw) != expected:
+        raise ValueError("layer benchmark evidence must cover defensive and broad_beta")
+    for layer in expected:
+        result = raw[layer]
+        if not isinstance(result, Mapping) or result.get("passed") is not True:
+            raise ValueError(f"layer benchmark did not pass: {layer}")
 
 
 def _as_decimal_weight(weight: Decimal | float) -> Decimal:

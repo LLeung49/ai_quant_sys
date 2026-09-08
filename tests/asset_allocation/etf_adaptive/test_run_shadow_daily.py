@@ -304,6 +304,32 @@ def test_active_selection_rejects_missing_or_mismatched_target_config_hash() -> 
         shadow_module._build_active_selection(mismatched)
 
 
+def test_active_selection_rejects_a_recorded_failed_layer_benchmark() -> None:
+    frozen = FrozenConfigRecord(
+        config_hash="parent-hash",
+        config=AdaptiveConfig.default(),
+        selection_payload={
+            "layer_benchmarks": {
+                "defensive": {"passed": False},
+                "broad_beta": {"passed": True},
+            },
+            "targets": [{
+                "stock_code": "510300.SH", "tracking_index_code": "000300.SH",
+                "layer": "broad_beta", "sub_layer": "broad_domestic_core",
+                "sub_layer_budget": "42000", "instrument_type": "etf", "weight": "1",
+                "config_hash": "parent-hash",
+            }],
+        },
+        data_cutoff=DATA_CUTOFF,
+        activation_date=date(2026, 8, 1),
+        review_date=date(2027, 2, 1),
+        activated_at=datetime(2026, 8, 1, 17, 0),
+    )
+
+    with pytest.raises(ValueError, match="layer benchmark"):
+        shadow_module._build_active_selection(frozen)
+
+
 def test_shadow_runner_requires_active_frozen_selection() -> None:
     store = InMemoryShadowStore()
     provider = _StubProvider()
