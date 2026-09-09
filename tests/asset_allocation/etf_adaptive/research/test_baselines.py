@@ -129,6 +129,20 @@ def test_buy_and_hold_deducts_the_shared_execution_cost_model() -> None:
     assert buy_hold.result.nav[0].cash > Decimal("0")
 
 
+def test_buy_and_hold_only_records_nav_from_trade_start_date() -> None:
+    bars = tuple(_bar(date(2026, 9, offset + 1), 10.0, 10.0) for offset in range(4))
+    request = BacktestRequest(
+        stock_code="510300.SH", initial_cash=Decimal("100000"),
+        start_date=bars[0].trade_date, end_date=bars[-1].trade_date,
+        trade_start_date=bars[2].trade_date,
+    )
+
+    buy_hold = run_baselines(request, _StubProvider(bars), AdaptiveConfig.default())[BaselineKind.BUY_AND_HOLD]
+
+    assert [point.nav_date for point in buy_hold.result.nav] == [bars[2].trade_date, bars[3].trade_date]
+    assert buy_hold.result.events[0].event_date == bars[2].trade_date
+
+
 def test_fixed_half_hold_baseline_rebalances_to_fifty_percent_each_session() -> None:
     bars = tuple(
         _bar(date(2026, 9, offset + 1), 1.0 + 0.01 * offset, 1.02 + 0.01 * offset)

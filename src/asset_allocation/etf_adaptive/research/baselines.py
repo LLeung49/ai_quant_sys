@@ -106,6 +106,8 @@ def _buy_and_hold(
         actions_by_date.setdefault(action.effective_date, []).append(action)
 
     for bar in bars:
+        if request.trade_start_date is not None and bar.trade_date < request.trade_start_date:
+            continue
         state, applied_action_ids = apply_corporate_actions(
             state,
             tuple(actions_by_date.get(bar.trade_date, ())),
@@ -113,7 +115,11 @@ def _buy_and_hold(
         )
         state = replace(state, applied_action_ids=applied_action_ids)
         eligibility = eligibility_map[bar.trade_date]
-        if not decision_made and eligibility.eligible:
+        if (
+            not decision_made
+            and eligibility.eligible
+            and (request.trade_start_date is None or bar.trade_date >= request.trade_start_date)
+        ):
             intent = OrderIntent(
                 signal_date=bar.trade_date,
                 side=Side.BUY,
@@ -158,6 +164,8 @@ def _fixed_half_hold(request: BacktestRequest, provider: AdaptiveBacktestDataPro
     events: list[BacktestEvent] = []
     nav: list[DailyNav] = []
     for bar in bars:
+        if request.trade_start_date is not None and bar.trade_date < request.trade_start_date:
+            continue
         eligibility = eligibility_map[bar.trade_date]
         total_value = cash + Decimal(str(bar.raw_close)) * shares
         if eligibility.eligible and total_value > 0:
