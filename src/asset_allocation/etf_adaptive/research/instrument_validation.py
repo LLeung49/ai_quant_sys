@@ -9,6 +9,7 @@ from typing import Protocol
 from ..config import AdaptiveConfig
 from ..contracts import DataQualityError, SubLayer
 from ..state import BacktestRequest
+from ..state import BacktestEvent, DailyNav
 from .baselines import BaselineKind, run_baseline, run_baselines
 from .parameters import ParameterCandidate, grid_candidates, stable_parameter_neighborhood, trend_candidates
 from .metrics import max_drawdown
@@ -74,6 +75,10 @@ class ValidationWindowResult:
     benchmark_return: float
     strategy_nav: tuple[float, ...]
     benchmark_nav: tuple[float, ...]
+    strategy_events: tuple[BacktestEvent, ...] = ()
+    benchmark_events: tuple[BacktestEvent, ...] = ()
+    strategy_daily_nav: tuple[DailyNav, ...] = ()
+    benchmark_daily_nav: tuple[DailyNav, ...] = ()
 
 
 class _Provider(Protocol):
@@ -144,7 +149,13 @@ def run_instrument_validation(
             benchmark_nav = _validation_nav(runs[BaselineKind.BUY_AND_HOLD].result.nav, window.validation_dates)
             strategy = strategy_nav[-1] / strategy_nav[0] - 1
             benchmark = benchmark_nav[-1] / benchmark_nav[0] - 1
-            results.append(ValidationWindowResult(window.window_id, window.train_end, window.validation_dates[0], config.config_hash(), strategy, benchmark, strategy_nav, benchmark_nav))
+            strategy_result = runs[BaselineKind.FULL_ADAPTIVE].result
+            benchmark_result = runs[BaselineKind.BUY_AND_HOLD].result
+            results.append(ValidationWindowResult(
+                window.window_id, window.train_end, window.validation_dates[0], config.config_hash(),
+                strategy, benchmark, strategy_nav, benchmark_nav,
+                strategy_result.events, benchmark_result.events, strategy_result.nav, benchmark_result.nav,
+            ))
     except (ValueError, DataQualityError) as exc:
         return InstrumentValidationResult(target, ValidationStatus.DATA_REJECTED, as_of_date, str(exc), tuple(results))
     strategy_path = _stitch_paths(tuple(row.strategy_nav for row in results))
