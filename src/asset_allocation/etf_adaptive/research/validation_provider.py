@@ -81,6 +81,9 @@ class ValidationMarketDataProvider:
             for bar in bars
         )
 
+    def first_aligned_session(self, stock_code, start_date, end_date):
+        return self._prices.first_aligned_session(stock_code, start_date, end_date)
+
     def load_actions(self, stock_code, start_date, end_date):
         return self._prices.load_actions(stock_code, start_date, end_date)
 

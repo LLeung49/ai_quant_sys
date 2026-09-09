@@ -68,6 +68,14 @@ WHERE stock_code = %s AND trade_date BETWEEN %s AND %s
 ORDER BY trade_date
 """
 
+FIRST_ALIGNED_SESSION_SQL = """
+SELECT MIN(raw.trade_date) AS first_trade_date
+FROM trade_stock_daily_raw AS raw
+INNER JOIN trade_stock_daily_qfq AS qfq
+  ON qfq.stock_code = raw.stock_code AND qfq.trade_date = raw.trade_date
+WHERE raw.stock_code = %s AND raw.trade_date BETWEEN %s AND %s
+"""
+
 METADATA_SQL = """
 SELECT stock_code, stock_name AS fund_name, listing_date
 FROM trade_stock_status
@@ -307,6 +315,18 @@ class AdaptiveMarketDataProvider:
                 )
             indexed[day] = row
         return indexed
+
+    def first_aligned_session(
+        self, stock_code: str, start_date: date, end_date: date,
+    ) -> date | None:
+        """Return the first raw/qfq-aligned session without weakening later checks."""
+        code = _validate_code(stock_code)
+        _validate_range(start_date, end_date)
+        rows = self._query(FIRST_ALIGNED_SESSION_SQL, (code, start_date, end_date))
+        if len(rows) != 1:
+            raise ValueError("first aligned session query must return exactly one row")
+        value = rows[0].get("first_trade_date")
+        return _as_date(value, "first_trade_date") if value is not None else None
 
     def load_bars(
         self, stock_code: str, start_date: date, end_date: date

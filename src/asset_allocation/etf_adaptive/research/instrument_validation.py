@@ -88,6 +88,19 @@ class _Provider(Protocol):
     def load_bars(self, stock_code: str, start_date: date, end_date: date) -> tuple[object, ...]: ...
 
 
+def resolve_validation_start(provider: object, stock_code: str, start_date: date, end_date: date) -> date:
+    """Advance only across the pre-listing interval when evidence is available."""
+    resolver = getattr(provider, "first_aligned_session", None)
+    if not callable(resolver):
+        return start_date
+    first = resolver(stock_code, start_date, end_date)
+    if first is None:
+        return start_date
+    if not isinstance(first, date) or first < start_date or first > end_date:
+        raise ValueError("invalid first aligned market session")
+    return first
+
+
 class CachedValidationProvider:
     """Per-run read-through cache for immutable market-data requests.
 
@@ -160,6 +173,7 @@ def run_instrument_validation(
     if not isinstance(initial_cash, Decimal) or not initial_cash.is_finite() or initial_cash <= 0:
         raise ValueError("initial_cash must be a positive finite Decimal")
     try:
+        start_date = resolve_validation_start(provider, target.stock_code, start_date, as_of_date)
         provider = CachedValidationProvider(provider)
         bars = tuple(provider.load_bars(target.stock_code, start_date, as_of_date))
     except DataQualityError as exc:

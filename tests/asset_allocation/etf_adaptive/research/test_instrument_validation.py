@@ -11,6 +11,7 @@ from asset_allocation.etf_adaptive.research.instrument_validation import (
     ValidationStatus,
     evaluate_validation_gate,
     run_instrument_validation,
+    resolve_validation_start,
 )
 from asset_allocation.etf_adaptive.research.walk_forward import build_windows
 
@@ -116,3 +117,12 @@ def test_validation_provider_cache_reuses_identical_market_requests() -> None:
     assert cached.load_bars("159915.SZ", date(2025, 1, 1), date(2025, 6, 1)) == ("159915.SZ", date(2025, 1, 1), date(2025, 6, 1))
     assert cached.load_bars("159915.SZ", date(2025, 1, 1), date(2025, 6, 1)) == ("159915.SZ", date(2025, 1, 1), date(2025, 6, 1))
     assert provider.calls == 1
+
+
+def test_validation_start_advances_to_first_aligned_session_from_provider() -> None:
+    class Provider:
+        def first_aligned_session(self, stock_code, start_date, end_date):
+            assert stock_code == "588000.SH"
+            return date(2020, 11, 16)
+
+    assert resolve_validation_start(Provider(), "588000.SH", date(2020, 1, 1), date(2026, 9, 8)) == date(2020, 11, 16)

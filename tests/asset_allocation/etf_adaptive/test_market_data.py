@@ -74,6 +74,8 @@ class QueryFixture:
 
     def __call__(self, sql: str, params: tuple[object, ...]) -> list[dict[str, Any]]:
         self.calls.append((sql, params))
+        if "MIN(raw.trade_date)" in sql:
+            return [{"first_trade_date": self.raw[0]["trade_date"]}] if self.raw else [{"first_trade_date": None}]
         if "trade_stock_daily_raw" in sql:
             return self.raw
         if "trade_stock_daily_qfq" in sql:
@@ -133,6 +135,12 @@ def test_provider_loads_one_row_per_coordinate_and_uses_same_day_ratio() -> None
     assert "FROM trade_stock_daily_qfq" in query.calls[1][0]
     assert query.calls[0][1] == (CODE, START, END)
     assert query.calls[1][1] == (CODE, START, END)
+
+
+def test_provider_returns_first_aligned_session_without_loading_full_bars() -> None:
+    query = QueryFixture(raw=[_raw_row(day=END)])
+
+    assert query.provider().first_aligned_session(CODE, START, END) == END
 
 
 def test_provider_without_availability_loader_fails_closed() -> None:
