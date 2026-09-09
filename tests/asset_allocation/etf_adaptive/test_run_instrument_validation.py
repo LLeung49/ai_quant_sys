@@ -1,0 +1,31 @@
+from datetime import date
+from decimal import Decimal
+import json
+
+from asset_allocation.etf_adaptive.research.instrument_validation import InstrumentValidationResult, ValidationStatus
+from asset_allocation.etf_adaptive.research.instrument_validation import FIXED_VALIDATION_TARGETS
+
+
+def test_cli_writes_one_status_per_fixed_target(tmp_path, monkeypatch) -> None:
+    import asset_allocation.etf_adaptive.run_instrument_validation as module
+
+    monkeypatch.setattr(module, "default_validation_provider", lambda: object())
+    monkeypatch.setattr(module, "run_instrument_validation", lambda target, provider, start, cutoff, cash: InstrumentValidationResult(target, ValidationStatus.PASSED, cutoff))
+
+    assert module.main(["--start-date", "2020-01-01", "--as-of-date", "2026-09-08", "--output-dir", str(tmp_path)]) == 0
+    payload = json.loads((tmp_path / "instrument_validation.json").read_text(encoding="utf-8"))
+    assert len(payload["results"]) == len(FIXED_VALIDATION_TARGETS)
+    assert {row["status"] for row in payload["results"]} == {"passed"}
+
+
+def test_cli_publishes_per_instrument_validation_manifest(tmp_path, monkeypatch) -> None:
+    import asset_allocation.etf_adaptive.run_instrument_validation as module
+
+    target = FIXED_VALIDATION_TARGETS[0]
+    result = InstrumentValidationResult(target, ValidationStatus.FAILED, date(2026, 9, 8))
+    monkeypatch.setattr(module, "default_validation_provider", lambda: object())
+    monkeypatch.setattr(module, "run_instrument_validation", lambda *args: result)
+    monkeypatch.setattr(module, "write_validation_artifacts", lambda value, destination: destination.mkdir(parents=True) or None)
+
+    assert module.main(["--stock-code", target.stock_code, "--start-date", "2020-01-01", "--as-of-date", "2026-09-08", "--output-dir", str(tmp_path)]) == 0
+    assert (tmp_path / target.stock_code).exists()

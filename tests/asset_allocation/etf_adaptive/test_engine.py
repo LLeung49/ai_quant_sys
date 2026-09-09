@@ -417,6 +417,6 @@ def test_consecutive_locked_sessions_keep_one_protective_exit(monkeypatch: pytes
         BacktestEvent(
             dates[3],
             "fill",
-            (("reason", "grid_stop"), ("shares", "1000"), ("raw_price", "3.9988")),
+            (("reason", "grid_stop"), ("side", "sell"), ("shares", "1000"), ("raw_price", "3.9988"), ("commission", "5.00")),
         ),
     ]

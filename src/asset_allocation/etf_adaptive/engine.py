@@ -262,8 +262,10 @@ class AdaptiveBacktestEngine:
                             "fill",
                             (
                                 ("reason", fill.reason.value),
+                                ("side", fill.side.value),
                                 ("shares", str(fill.shares)),
                                 ("raw_price", str(fill.raw_price)),
+                                ("commission", str(fill.commission)),
                             ),
                         )
                     )

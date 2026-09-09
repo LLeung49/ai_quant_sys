@@ -7,7 +7,8 @@ from enum import Enum
 from typing import Protocol
 
 from ..config import AdaptiveConfig
-from ..contracts import DataQualityError, SubLayer
+from ..contracts import DataQualityError, DualPriceBar, SubLayer
+from ..indicators import IndicatorSnapshot, compute_indicators
 from ..state import BacktestRequest
 from ..state import BacktestEvent, DailyNav
 from .baselines import BaselineKind, run_baseline, run_baselines
@@ -79,10 +80,48 @@ class ValidationWindowResult:
     benchmark_events: tuple[BacktestEvent, ...] = ()
     strategy_daily_nav: tuple[DailyNav, ...] = ()
     benchmark_daily_nav: tuple[DailyNav, ...] = ()
+    market_bars: tuple[DualPriceBar, ...] = ()
+    indicator_snapshots: tuple[IndicatorSnapshot | None, ...] = ()
 
 
 class _Provider(Protocol):
     def load_bars(self, stock_code: str, start_date: date, end_date: date) -> tuple[object, ...]: ...
+
+
+class CachedValidationProvider:
+    """Per-run read-through cache for immutable market-data requests.
+
+    Training evaluates many candidates against identical segments.  Caching
+    those provider reads preserves every strategy replay while removing
+    repeated database materialisation.
+    """
+
+    def __init__(self, provider: object) -> None:
+        self._provider = provider
+        self._bars: dict[tuple[str, date | None, date | None], object] = {}
+        self._actions: dict[tuple[str, date | None, date | None], object] = {}
+        self._eligibility: dict[tuple[str, tuple[date, ...]], object] = {}
+
+    def load_bars(self, stock_code: str, start_date: date | None, end_date: date | None):
+        key = (stock_code, start_date, end_date)
+        if key not in self._bars:
+            self._bars[key] = self._provider.load_bars(stock_code, start_date, end_date)
+        return self._bars[key]
+
+    def load_actions(self, stock_code: str, start_date: date | None, end_date: date | None):
+        key = (stock_code, start_date, end_date)
+        if key not in self._actions:
+            self._actions[key] = self._provider.load_actions(stock_code, start_date, end_date)
+        return self._actions[key]
+
+    def load_eligibility(self, stock_code: str, bars):
+        key = (stock_code, tuple(bar.trade_date for bar in bars))
+        if key not in self._eligibility:
+            self._eligibility[key] = self._provider.load_eligibility(stock_code, bars)
+        return self._eligibility[key]
+
+    def __getattr__(self, name: str):
+        return getattr(self._provider, name)
 
 
 FIXED_VALIDATION_TARGETS = (
@@ -121,6 +160,7 @@ def run_instrument_validation(
     if not isinstance(initial_cash, Decimal) or not initial_cash.is_finite() or initial_cash <= 0:
         raise ValueError("initial_cash must be a positive finite Decimal")
     try:
+        provider = CachedValidationProvider(provider)
         bars = tuple(provider.load_bars(target.stock_code, start_date, as_of_date))
     except DataQualityError as exc:
         return InstrumentValidationResult(target, ValidationStatus.DATA_REJECTED, as_of_date, str(exc))
@@ -131,6 +171,11 @@ def run_instrument_validation(
     except ValueError:
         return InstrumentValidationResult(target, ValidationStatus.DATA_REJECTED, as_of_date, "insufficient history for walk-forward validation")
     results: list[ValidationWindowResult] = []
+    bars_by_date = {bar.trade_date: bar for bar in bars}
+    snapshots_by_date = {
+        bar.trade_date: snapshot
+        for bar, snapshot in zip(bars, compute_indicators(bars))
+    }
     try:
         for window in windows:
             if target.scope is ValidationScope.REFERENCE_ONLY:
@@ -155,6 +200,8 @@ def run_instrument_validation(
                 window.window_id, window.train_end, window.validation_dates[0], config.config_hash(),
                 strategy, benchmark, strategy_nav, benchmark_nav,
                 strategy_result.events, benchmark_result.events, strategy_result.nav, benchmark_result.nav,
+                tuple(bars_by_date[day] for day in window.validation_dates),
+                tuple(snapshots_by_date[day] for day in window.validation_dates),
             ))
     except (ValueError, DataQualityError) as exc:
         return InstrumentValidationResult(target, ValidationStatus.DATA_REJECTED, as_of_date, str(exc), tuple(results))

@@ -137,8 +137,10 @@ def _buy_and_hold(
                     fill.fill_date, "fill",
                     (
                         ("reason", fill.reason.value),
+                        ("side", fill.side.value),
                         ("shares", str(fill.shares)),
                         ("raw_price", str(fill.raw_price)),
+                        ("commission", str(fill.commission)),
                     ),
                 ))
             decision_made = True

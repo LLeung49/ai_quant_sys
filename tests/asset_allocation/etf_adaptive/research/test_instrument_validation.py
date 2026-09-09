@@ -6,6 +6,7 @@ from decimal import Decimal
 from asset_allocation.etf_adaptive.contracts import DualPriceBar, ExecutionAvailability
 from asset_allocation.etf_adaptive.contracts import DataQualityError
 from asset_allocation.etf_adaptive.research.instrument_validation import (
+    CachedValidationProvider,
     FIXED_VALIDATION_TARGETS,
     ValidationStatus,
     evaluate_validation_gate,
@@ -98,3 +99,20 @@ def test_short_sample_reference_uses_252_train_and_126_validation_sessions() -> 
     windows = build_windows(dates, train_sessions=252, validation_sessions=126, step_sessions=126)
     assert len(windows[0].train_dates) == 252
     assert len(windows[0].validation_dates) == 126
+
+
+def test_validation_provider_cache_reuses_identical_market_requests() -> None:
+    class Provider:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def load_bars(self, stock_code, start_date, end_date):
+            self.calls += 1
+            return (stock_code, start_date, end_date)
+
+    provider = Provider()
+    cached = CachedValidationProvider(provider)
+
+    assert cached.load_bars("159915.SZ", date(2025, 1, 1), date(2025, 6, 1)) == ("159915.SZ", date(2025, 1, 1), date(2025, 6, 1))
+    assert cached.load_bars("159915.SZ", date(2025, 1, 1), date(2025, 6, 1)) == ("159915.SZ", date(2025, 1, 1), date(2025, 6, 1))
+    assert provider.calls == 1
