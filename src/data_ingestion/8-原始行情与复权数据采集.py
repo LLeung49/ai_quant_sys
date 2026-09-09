@@ -29,6 +29,7 @@ from price_projection_store import (
     write_daily_rows,
     write_daily_rows_batch,
 )
+from price_projection_integrity import audit_raw_qfq_projection, find_raw_qfq_issues
 
 
 DATA_START = "20150101"
@@ -232,12 +233,11 @@ def _rows_with_fallback(stock_code: str, dataframe, dividend_type: str) -> tuple
     return rows, failures
 
 
-def download_and_save_mode(
+def _fetch_mode_rows(
     stock_code: str,
     dividend_type: str,
     start_date: str,
-    adjustment_asof: date | None,
-) -> int:
+)-> list[dict]:
     """下载并幂等写入一个价格模式，返回实际写入的行数。
 
     ``start_date`` 由三张表中最早的游标决定，保证它们日期对齐。供应商返回空表、
@@ -264,13 +264,24 @@ def download_and_save_mode(
         raise RuntimeError(
             f"QMT returned no valid {MODE_LABELS[dividend_type]} rows for {stock_code}"
         )
-    write_daily_rows(dividend_type, rows, adjustment_asof)
     _, hard_failures = _classify_fallback_failures(fallback_failures)
     if hard_failures:
         raise RuntimeError(
             f"AkShare could not repair {MODE_LABELS[dividend_type]} rows for {stock_code}: "
             f"{sorted(hard_failures)}"
         )
+    return rows
+
+
+def download_and_save_mode(
+    stock_code: str,
+    dividend_type: str,
+    start_date: str,
+    adjustment_asof: date | None,
+) -> int:
+    """Fetch and persist one mode for the existing single-mode refresh path."""
+    rows = _fetch_mode_rows(stock_code, dividend_type, start_date)
+    write_daily_rows(dividend_type, rows, adjustment_asof)
     return len(rows)
 
 
@@ -278,15 +289,62 @@ def download_and_save_all_modes(
     stock_code: str, start_date: str, adjustment_asof: date | None = None,
 ) -> dict[str, int]:
     """按固定顺序拉取原始、前复权、后复权；三者从同一起点重新对齐。"""
-    counts = {}
-    for dividend_type in DIVIDEND_TYPES:
-        counts[dividend_type] = download_and_save_mode(
-            stock_code,
-            dividend_type,
-            start_date,
-            adjustment_asof,
+    rows_by_mode = {
+        dividend_type: _fetch_mode_rows(stock_code, dividend_type, start_date)
+        for dividend_type in DIVIDEND_TYPES
+    }
+    issues = find_raw_qfq_issues(rows_by_mode["none"], rows_by_mode["front"])
+    if issues:
+        sample = ", ".join(
+            f"{issue.trade_date}:{issue.reason}" for issue in issues[:3]
         )
+        raise RuntimeError(
+            f"raw/qfq candidate integrity failed for {stock_code}: {sample}"
+        )
+    counts = {}
+    for dividend_type, rows in rows_by_mode.items():
+        write_daily_rows(dividend_type, rows, adjustment_asof)
+        counts[dividend_type] = len(rows)
     return counts
+
+
+def audit_and_repair_projection(
+    stock_code: str, adjustment_asof: date | None,
+) -> dict[str, int]:
+    """Rebuild one independently projected instrument only after an audit fails.
+
+    The repair always starts at the managed history boundary.  A candidate is
+    validated in memory by :func:`download_and_save_all_modes` before it can
+    overwrite any of the independent raw/QFQ/BFQ projections, and the stored
+    result is immediately re-audited.
+    """
+    try:
+        issues = audit_raw_qfq_projection(stock_code)
+        if not issues:
+            return {"detected": 0, "repaired": 0, "failed": 0}
+        sample = ", ".join(
+            f"{issue.trade_date}:{issue.reason}" for issue in issues[:3]
+        )
+        _progress(
+            f"[raw/qfq integrity] stock={stock_code} issues={len(issues)} "
+            f"sample={sample}; action=full_rebuild"
+        )
+        download_and_save_all_modes(stock_code, DATA_START, adjustment_asof)
+        remaining = audit_raw_qfq_projection(stock_code)
+        if remaining:
+            raise RuntimeError(
+                f"post-repair audit still has {len(remaining)} issue(s)"
+            )
+    except Exception as exc:
+        _progress(
+            f"[raw/qfq integrity] stock={stock_code} action=repair_failed "
+            f"error={type(exc).__name__}: {exc}"
+        )
+        return {"detected": int("issues" in locals()), "repaired": 0, "failed": 1}
+    _progress(
+        f"[raw/qfq integrity] stock={stock_code} action=repaired_verified"
+    )
+    return {"detected": 1, "repaired": 1, "failed": 0}
 
 
 def _download_one_with_timeout(stock_code: str, start_date: str) -> bool:
@@ -362,7 +420,7 @@ def _akshare_fallback_for_timeout(
         all_dates.add(cur.isoformat())
         cur += timedelta(days=1)
 
-    any_written = False
+    candidates: dict[str, list[dict]] = {}
     for dividend_type in DIVIDEND_TYPES:
         try:
             fallback_rows, failures = fetch_valid_rows(stock_code, dividend_type, all_dates)
@@ -374,9 +432,7 @@ def _akshare_fallback_for_timeout(
                     f"AkShare 无数据：{reason_sample}"
                 )
                 continue
-            write_daily_rows(dividend_type, rows, adjustment_asof)
-            counts[dividend_type] = counts.get(dividend_type, 0) + len(rows)
-            any_written = True
+            candidates[dividend_type] = rows
             # 统计有多少日期真正被 AkShare 填入
             filled = len(fallback_rows)
             pending_today = today_str in failures
@@ -393,6 +449,19 @@ def _akshare_fallback_for_timeout(
                 f"[QMT超时→AkShare降级] {stock_code} mode={dividend_type} "
                 f"异常 {type(exc).__name__}: {exc}"
             )
+    any_written = False
+    if len(candidates) == len(DIVIDEND_TYPES):
+        issues = find_raw_qfq_issues(candidates["none"], candidates["front"])
+        if issues:
+            _progress(
+                f"[raw/qfq integrity] stock={stock_code} action=reject_akshare_candidate "
+                f"issues={len(issues)}"
+            )
+        else:
+            for dividend_type, rows in candidates.items():
+                write_daily_rows(dividend_type, rows, adjustment_asof)
+                counts[dividend_type] = counts.get(dividend_type, 0) + len(rows)
+            any_written = True
     if any_written:
         failed_codes.discard(stock_code)
     else:
@@ -429,6 +498,9 @@ def download_and_save_batch(
     )
     counts = {mode: 0 for mode in DIVIDEND_TYPES}
     failed_codes = set()
+    candidates: dict[str, dict[str, list[dict]]] = {
+        stock_code: {} for stock_code in stock_codes
+    }
     for dividend_type in DIVIDEND_TYPES:
         mode_started_at = time.monotonic()
         mode_label = MODE_LABELS[dividend_type]
@@ -461,6 +533,7 @@ def download_and_save_batch(
             _, hard_failures = _classify_fallback_failures(fallback_failures)
             if hard_failures:
                 failed_codes.add(stock_code)
+            candidates[stock_code][dividend_type] = code_rows
             rows.extend(code_rows)
         missing = sum(
             1
@@ -474,6 +547,25 @@ def download_and_save_batch(
             f"missing={missing} "
             f"elapsed={time.monotonic() - mode_started_at:.1f}s"
         )
+    safe_rows = {mode: [] for mode in DIVIDEND_TYPES}
+    for stock_code in stock_codes:
+        if stock_code in xtdata_timed_out or stock_code in failed_codes:
+            continue
+        candidate = candidates[stock_code]
+        if any(mode not in candidate for mode in DIVIDEND_TYPES):
+            failed_codes.add(stock_code)
+            continue
+        issues = find_raw_qfq_issues(candidate["none"], candidate["front"])
+        if issues:
+            failed_codes.add(stock_code)
+            _progress(
+                f"[raw/qfq integrity] stock={stock_code} action=reject_candidate "
+                f"issues={len(issues)}"
+            )
+            continue
+        for dividend_type in DIVIDEND_TYPES:
+            safe_rows[dividend_type].extend(candidate[dividend_type])
+    for dividend_type, rows in safe_rows.items():
         if rows:
             write_daily_rows_batch(dividend_type, rows, adjustment_asofs)
             counts[dividend_type] = len(rows)
@@ -610,6 +702,11 @@ def _earliest_start(
     """
     starts = [latest_dates[mode].get(stock_code) for mode in DIVIDEND_TYPES]
     if any(value is None for value in starts):
+        # A partially populated projection is an integrity incident, not a
+        # newly listed instrument.  Rebuild it from the managed history floor
+        # so raw/QFQ/BFQ regain the same coverage before incrementing again.
+        if any(value is not None for value in starts):
+            return DATA_START
         return _new_code_start(stock_code, today or date.today())
     return min(starts)
 
@@ -695,6 +792,16 @@ def main(skip_equity_snapshot: bool = False) -> int:
                 f"bfq={counts['back']} failed={len(batch_failures)}"
             )
     # 任务执行器只认识“股票、模式、起点”；闭包负责把它适配为本文件的 QMT 下载函数。
+    integrity_counts = {"detected": 0, "repaired": 0, "failed": 0}
+    for stock_code in codes:
+        result = audit_and_repair_projection(
+            stock_code, adjustment_asofs.get(stock_code)
+        )
+        for key, value in result.items():
+            integrity_counts[key] += value
+        if result["failed"]:
+            failures.append(stock_code)
+
     def refresh_projection(stock_code: str, price_mode: str, refresh_from: date) -> int:
         return download_and_save_mode(
             stock_code,
@@ -705,6 +812,10 @@ def main(skip_equity_snapshot: bool = False) -> int:
 
     refresh = run_due_refresh_tasks(refresh_projection)
     print("[行情] raw=%(none)s qfq=%(front)s bfq=%(back)s" % total_rows)
+    print(
+        "[raw/qfq integrity] detected=%(detected)s repaired=%(repaired)s failed=%(failed)s"
+        % integrity_counts
+    )
     print(
         "[权益] 新增=%(new)s 修订=%(corrected)s 撤回=%(cancelled)s 刷新任务=%(tasks)s"
         % action_counts

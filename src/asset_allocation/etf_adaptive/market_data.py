@@ -181,23 +181,33 @@ def _validate_code(stock_code: str) -> str:
     return stock_code.strip().upper()
 
 
-def to_signal_price(raw_price: float, adjustment_ratio: float) -> float:
+def _finite_offset(adjustment_offset: float) -> float:
+    if not isinstance(adjustment_offset, (int, float)) or not math.isfinite(adjustment_offset):
+        raise ValueError("adjustment_offset must be a finite number")
+    return float(adjustment_offset)
+
+
+def to_signal_price(
+    raw_price: float, adjustment_ratio: float, adjustment_offset: float = 0.0,
+) -> float:
     """Convert an execution-coordinate price into the signal coordinate."""
 
     raw = _positive_finite(raw_price, "raw_price")
     ratio = _positive_finite(adjustment_ratio, "adjustment_ratio")
-    result = raw * ratio
+    result = raw * ratio + _finite_offset(adjustment_offset)
     if not math.isfinite(result):
         raise ValueError("result must be finite")
     return result
 
 
-def to_raw_price(signal_price: float, adjustment_ratio: float) -> float:
+def to_raw_price(
+    signal_price: float, adjustment_ratio: float, adjustment_offset: float = 0.0,
+) -> float:
     """Convert a signal-coordinate price into the execution coordinate."""
 
     signal = _positive_finite(signal_price, "signal_price")
     ratio = _positive_finite(adjustment_ratio, "adjustment_ratio")
-    result = signal / ratio
+    result = (signal - _finite_offset(adjustment_offset)) / ratio
     if not math.isfinite(result):
         raise ValueError("result must be finite")
     if result <= 0:
@@ -503,21 +513,36 @@ class AdaptiveMarketDataProvider:
                         day,
                     )
 
-            ratio = signal_prices["close"] / raw_prices["close"]
-            if not math.isfinite(ratio) or ratio <= 0:
+            pairs = tuple(
+                (raw_prices[name], signal_prices[name])
+                for name in ("open", "high", "low", "close")
+            )
+            first_raw, first_signal = pairs[0]
+            second = next(
+                ((raw_price, signal_price) for raw_price, signal_price in pairs[1:]
+                 if not math.isclose(raw_price, first_raw, abs_tol=0.0, rel_tol=0.0)),
+                None,
+            )
+            if second is None:
+                ratio = signal_prices["close"] / raw_prices["close"]
+                adjustment_offset = 0.0
+            else:
+                second_raw, second_signal = second
+                ratio = (second_signal - first_signal) / (second_raw - first_raw)
+                adjustment_offset = first_signal - ratio * first_raw
+            if not math.isfinite(ratio) or ratio <= 0 or not math.isfinite(adjustment_offset):
                 self._fail("invalid_adjustment_ratio", code, "invalid adjustment ratio", day)
-            for name in ("open", "high", "low"):
-                candidate = signal_prices[name] / raw_prices[name]
+            for name in ("open", "high", "low", "close"):
+                candidate = ratio * raw_prices[name] + adjustment_offset
                 if not math.isclose(
-                    candidate,
-                    ratio,
+                    candidate, signal_prices[name],
                     rel_tol=self._ratio_tolerance,
-                    abs_tol=0.0,
+                    abs_tol=self._ratio_tolerance,
                 ):
                     self._fail(
-                        "inconsistent_raw_qfq_ohlc_ratio",
+                        "inconsistent_raw_qfq_ohlc_affine",
                         code,
-                        "inconsistent raw/qfq OHLC ratio",
+                        "inconsistent raw/qfq OHLC affine mapping",
                         day,
                     )
 
@@ -621,6 +646,7 @@ class AdaptiveMarketDataProvider:
                     amount=amount,
                     suspended=suspended,
                     adjustment_ratio=ratio,
+                    adjustment_offset=adjustment_offset,
                     execution_availability=availability,
                 )
             )

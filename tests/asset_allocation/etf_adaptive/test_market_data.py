@@ -179,6 +179,11 @@ def test_signal_and_raw_price_conversion_is_a_round_trip() -> None:
     assert to_raw_price(1.02, 0.25) == pytest.approx(4.08)
 
 
+def test_signal_and_raw_coordinates_support_cash_adjusted_affine_projection() -> None:
+    assert to_signal_price(0.994, 1.0, -0.455) == pytest.approx(0.539)
+    assert to_raw_price(0.539, 1.0, -0.455) == pytest.approx(0.994)
+
+
 def test_raw_price_conversion_rejects_underflow_to_zero() -> None:
     with pytest.raises(ValueError, match="result must be positive"):
         to_raw_price(5e-324, 1e308)
@@ -250,7 +255,7 @@ def test_provider_wraps_malformed_source_identity_as_data_quality_error() -> Non
         ({}, {"close_price": Decimal("0")}, "invalid qfq close_price"),
         ({"high_price": Decimal("3.90")}, {}, "invalid raw OHLC"),
         ({}, {"low_price": Decimal("1.03")}, "invalid qfq OHLC"),
-        ({}, {"high_price": Decimal("1.11")}, "inconsistent raw/qfq OHLC ratio"),
+        ({}, {"high_price": Decimal("1.11")}, "inconsistent raw/qfq OHLC affine mapping"),
     ],
 )
 def test_provider_rejects_invalid_prices_ohlc_and_adjustment_ratios(
@@ -265,6 +270,24 @@ def test_provider_rejects_invalid_prices_ohlc_and_adjustment_ratios(
 
     with pytest.raises(DataQualityError, match=message):
         query.provider().load_bars(CODE, START, END)
+
+
+def test_provider_accepts_cash_adjusted_qfq_with_one_affine_ohlc_mapping() -> None:
+    query = QueryFixture(
+        raw=[_raw_row(
+            open_price=Decimal("0.970"), high_price=Decimal("0.999"),
+            low_price=Decimal("0.970"), close_price=Decimal("0.994"),
+        )],
+        qfq=[_qfq_row(
+            open_price=Decimal("0.530"), high_price=Decimal("0.559"),
+            low_price=Decimal("0.530"), close_price=Decimal("0.554"),
+        )],
+    )
+
+    bar = query.provider().load_bars(CODE, START, END)[0]
+
+    assert bar.adjustment_ratio == pytest.approx(1.0)
+    assert bar.adjustment_offset == pytest.approx(-0.44)
 
 
 def test_ratio_tolerance_is_relative_for_small_adjustment_factors() -> None:
@@ -287,7 +310,7 @@ def test_ratio_tolerance_is_relative_for_small_adjustment_factors() -> None:
         ],
     )
 
-    with pytest.raises(DataQualityError, match="inconsistent raw/qfq OHLC ratio"):
+    with pytest.raises(DataQualityError, match="inconsistent raw/qfq OHLC affine mapping"):
         query.provider().load_bars(CODE, START, END)
 
 

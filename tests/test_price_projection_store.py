@@ -12,6 +12,7 @@ INGESTION_DIR = SRC_DIR / "data_ingestion"
 sys.path.insert(0, str(SRC_DIR))
 
 from data_ingestion import price_projection_store as store  # noqa: E402
+from data_ingestion import price_projection_integrity as integrity  # noqa: E402
 
 
 SCRIPT_PATH = INGESTION_DIR / "8-原始行情与复权数据采集.py"
@@ -34,6 +35,49 @@ def load_collector(fake_xtdata):
             sys.modules.pop("xtquant", None)
         else:
             sys.modules["xtquant"] = prior
+
+
+def test_raw_qfq_validator_accepts_cash_adjusted_affine_projection():
+    raw_rows = [{
+        "stock_code": "515450.SH", "trade_date": "2020-02-26",
+        "open_price": 0.970, "high_price": 0.999,
+        "low_price": 0.970, "close_price": 0.994,
+    }]
+    qfq_rows = [{
+        "stock_code": "515450.SH", "trade_date": "2020-02-26",
+        "open_price": 0.530, "high_price": 0.559,
+        "low_price": 0.530, "close_price": 0.554,
+        "adjustment_asof": None,
+    }]
+
+    issues = integrity.find_raw_qfq_issues(raw_rows, qfq_rows)
+
+    assert issues == []
+
+
+def test_projection_audit_loads_raw_and_qfq_for_the_same_stock(monkeypatch):
+    raw_rows = [{
+        "stock_code": "515450.SH", "trade_date": "2020-02-26",
+        "open_price": 0.970, "high_price": 0.999,
+        "low_price": 0.970, "close_price": 0.994,
+    }]
+    qfq_rows = [{
+        "stock_code": "515450.SH", "trade_date": "2020-02-26",
+        "open_price": 0.530, "high_price": 0.559,
+        "low_price": 0.530, "close_price": 0.554,
+    }]
+    calls = []
+
+    def fake_query(sql, params):
+        calls.append(params)
+        return raw_rows if "trade_stock_daily_raw" in sql else qfq_rows
+
+    monkeypatch.setattr(integrity, "execute_query", fake_query)
+
+    issues = integrity.audit_raw_qfq_projection("515450.SH")
+
+    assert issues == []
+    assert calls == [("515450.SH",), ("515450.SH",)]
 
 
 def test_mode_to_table_mapping_is_explicit_and_fixed():
@@ -215,6 +259,120 @@ def test_collector_fetches_none_front_and_back_without_importing_legacy_collecto
     source = SCRIPT_PATH.read_text(encoding="utf-8")
     assert "1-行情数据采集" not in source
     assert "download_and_save(" not in source
+
+
+def test_all_mode_rebuild_rejects_invalid_raw_qfq_candidate_before_writing(monkeypatch):
+    class OneRowDataFrame:
+        def __init__(self, open_price, close_price):
+            self.open_price = open_price
+            self.close_price = close_price
+
+        def __len__(self):
+            return 1
+
+        def iterrows(self):
+            yield "20250102", {
+                "open": self.open_price, "high": self.open_price,
+                "low": self.open_price, "close": self.close_price,
+                "volume": 100, "amount": 1000.0,
+                "preClose": self.close_price, "suspendFlag": 0,
+            }
+
+    fake_xtdata = types.SimpleNamespace(
+        download_history_data=lambda *args, **kwargs: None,
+        get_market_data_ex=lambda **kwargs: {
+            "515450.SH": OneRowDataFrame(
+                1.0 if kwargs["dividend_type"] == "none" else 0.5,
+                1.0 if kwargs["dividend_type"] == "none" else 0.55,
+            )
+        },
+    )
+    collector = load_collector(fake_xtdata)
+    writes = []
+    monkeypatch.setattr(
+        collector, "write_daily_rows",
+        lambda *args: writes.append(args),
+    )
+
+    with pytest.raises(RuntimeError, match="raw/qfq candidate integrity failed"):
+        collector.download_and_save_all_modes("515450.SH", "20250101")
+
+    assert writes == []
+
+
+def test_batch_rejects_invalid_raw_qfq_candidate_before_any_mode_is_written(monkeypatch):
+    class OneRowDataFrame:
+        def __init__(self, mode):
+            self.mode = mode
+
+        def __len__(self):
+            return 1
+
+        def iterrows(self):
+            qfq = self.mode == "front"
+            yield "20250102", {
+                "open": 0.5 if qfq else 1.0,
+                "high": 0.5 if qfq else 1.0,
+                "low": 0.5 if qfq else 1.0,
+                "close": 0.55 if qfq else 1.0,
+                "volume": 100, "amount": 1000.0,
+                "preClose": 1.0, "suspendFlag": 0,
+            }
+
+    fake_xtdata = types.SimpleNamespace(
+        download_history_data=lambda *args, **kwargs: None,
+        get_market_data_ex=lambda **kwargs: {
+            "515450.SH": OneRowDataFrame(kwargs["dividend_type"])
+        },
+    )
+    collector = load_collector(fake_xtdata)
+    writes = []
+    monkeypatch.setattr(
+        collector, "write_daily_rows_batch",
+        lambda *args: writes.append(args),
+    )
+
+    counts, failed_codes = collector.download_and_save_batch(
+        ["515450.SH"], "20250101", {"515450.SH": None}
+    )
+
+    assert counts == {"none": 0, "front": 0, "back": 0}
+    assert failed_codes == ["515450.SH"]
+    assert writes == []
+
+
+def test_daily_integrity_repair_rebuilds_from_full_history_and_reverifies(monkeypatch):
+    collector = load_collector(types.SimpleNamespace())
+    issue = integrity.RawQfqIssue(
+        "515450.SH", "2020-02-26", "qfq_ohlc_factor_mismatch"
+    )
+    audits = iter([[issue], []])
+    calls = []
+    monkeypatch.setattr(collector, "audit_raw_qfq_projection", lambda code: next(audits))
+    monkeypatch.setattr(
+        collector, "download_and_save_all_modes",
+        lambda code, start, asof: calls.append((code, start, asof))
+        or {"none": 100, "front": 100, "back": 100},
+    )
+
+    result = collector.audit_and_repair_projection(
+        "515450.SH", date(2026, 9, 9)
+    )
+
+    assert result == {"detected": 1, "repaired": 1, "failed": 0}
+    assert calls == [("515450.SH", collector.DATA_START, date(2026, 9, 9))]
+
+
+def test_daily_integrity_repair_fails_closed_when_audit_is_unavailable(monkeypatch):
+    collector = load_collector(types.SimpleNamespace())
+    monkeypatch.setattr(
+        collector, "audit_raw_qfq_projection",
+        lambda code: (_ for _ in ()).throw(RuntimeError("database unavailable")),
+    )
+
+    result = collector.audit_and_repair_projection("515450.SH", None)
+
+    assert result == {"detected": 0, "repaired": 0, "failed": 1}
 
 
 def test_single_code_history_download_uses_single_code_qmt_api():
@@ -503,8 +661,8 @@ def test_batch_marks_stock_failed_when_akshare_cannot_fill_qmt_dirty_date(monkey
     )
 
     assert failures == ["600519.SH"]
-    assert counts == {"none": 1, "front": 1, "back": 1}
-    assert all(row["trade_date"] == "2026-07-28" for rows in writes for row in rows)
+    assert counts == {"none": 0, "front": 0, "back": 0}
+    assert writes == []
 
 
 def test_batch_marks_stock_failed_when_all_rows_have_nan(monkeypatch):
@@ -572,14 +730,14 @@ def test_collector_fetches_three_modes_for_a_code_batch_and_isolates_missing_cod
     def get_market_data_ex(**kwargs):
         market_calls.append(kwargs)
         codes = kwargs["stock_list"]
-        # One code is absent only from qfq: raw/bfq data must still be persisted,
-        # while the caller receives a precise failed-code result.
+        # One code is absent only from qfq: no partial raw/bfq projection may
+        # be persisted for it, while the healthy code remains writable.
         if kwargs["dividend_type"] == "front":
             codes = [code for code in codes if code != "000002.SZ"]
         return {code: OneRowDataFrame() for code in codes}
 
     fake_xtdata = types.SimpleNamespace(
-        download_history_data2=lambda *args, **kwargs: download_calls.append((args, kwargs)),
+        download_history_data=lambda *args, **kwargs: download_calls.append((args, kwargs)),
         get_market_data_ex=get_market_data_ex,
     )
     collector = load_collector(fake_xtdata)
@@ -601,14 +759,15 @@ def test_collector_fetches_three_modes_for_a_code_batch_and_isolates_missing_cod
     )
 
     assert download_calls == [
-        ((["000001.SZ", "000002.SZ"], "1d", "20250101", ""), {})
+        (("000001.SZ", "1d", "20250101", ""), {}),
+        (("000002.SZ", "1d", "20250101", ""), {}),
     ]
     assert [call["dividend_type"] for call in market_calls] == ["none", "front", "back"]
     assert all(call["stock_list"] == ["000001.SZ", "000002.SZ"] for call in market_calls)
-    assert counts == {"none": 2, "front": 1, "back": 2}
+    assert counts == {"none": 1, "front": 1, "back": 1}
     assert failed_codes == ["000002.SZ"]
     assert [(mode, len(rows)) for mode, rows, _ in writes] == [
-        ("none", 2), ("front", 1), ("back", 2),
+        ("none", 1), ("front", 1), ("back", 1),
     ]
 
 
@@ -726,6 +885,7 @@ def test_executable_flow_syncs_actions_before_prices_then_runs_durable_refresh(
         "get_code_universe",
         lambda: (["600519.SH"], {"600519.SH"}),
     )
+    monkeypatch.setattr(collector, "_new_code_start", lambda code, today: collector.DATA_START)
     monkeypatch.setattr(
         collector,
         "sync_stock_actions",
@@ -740,6 +900,11 @@ def test_executable_flow_syncs_actions_before_prices_then_runs_durable_refresh(
         collector,
         "get_adjustment_asofs",
         lambda codes: {code: date(2026, 6, 20) for code in codes},
+    )
+    monkeypatch.setattr(
+        collector,
+        "audit_and_repair_projection",
+        lambda code, adjustment_asof: {"detected": 0, "repaired": 0, "failed": 0},
     )
     monkeypatch.setattr(
         collector,
@@ -793,6 +958,7 @@ def test_main_can_skip_equity_snapshot(monkeypatch):
     monkeypatch.setattr(
         collector, "get_code_universe", lambda: (["600519.SH"], {"600519.SH"})
     )
+    monkeypatch.setattr(collector, "_new_code_start", lambda code, today: collector.DATA_START)
     monkeypatch.setattr(
         collector,
         "sync_stock_actions",
@@ -802,6 +968,11 @@ def test_main_can_skip_equity_snapshot(monkeypatch):
         collector,
         "get_adjustment_asofs",
         lambda codes: {code: None for code in codes},
+    )
+    monkeypatch.setattr(
+        collector,
+        "audit_and_repair_projection",
+        lambda code, adjustment_asof: {"detected": 0, "repaired": 0, "failed": 0},
     )
     monkeypatch.setattr(
         collector,

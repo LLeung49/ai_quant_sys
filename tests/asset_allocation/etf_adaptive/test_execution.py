@@ -103,6 +103,22 @@ def test_rebase_signal_state_changes_only_signal_coordinate_levels() -> None:
     assert rebased.position_shares == 100
 
 
+def test_rebase_signal_state_preserves_raw_levels_when_cash_offset_changes() -> None:
+    state = StrategyState(
+        grid_anchor=0.554, cycle_entry_price=0.554, cash=Decimal("1000"),
+        units=(TrendUnit(0.994, 0.554, 0.05, 100, 0.579),),
+    )
+
+    rebased = rebase_signal_state(
+        state, old_ratio=1.0, new_ratio=1.0,
+        old_offset=-0.44, new_offset=-0.455,
+    )
+
+    assert rebased.grid_anchor == pytest.approx(0.539)
+    assert rebased.units[0].signal_fill_price == pytest.approx(0.539)
+    assert rebased.units[0].next_add_signal_price == pytest.approx(0.564)
+
+
 def test_rebase_signal_state_rejects_non_positive_adjustment_ratios() -> None:
     with pytest.raises(ValueError, match="adjustment ratios must be positive"):
         rebase_signal_state(StrategyState(), old_ratio=0.0, new_ratio=0.20)

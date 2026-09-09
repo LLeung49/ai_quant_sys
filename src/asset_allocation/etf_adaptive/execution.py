@@ -21,12 +21,15 @@ def is_protective_exit(reason: OrderReason) -> bool:
 
 def aggregate_trend_risk(
     state: StrategyState, raw_stop: float, adjustment_ratio: float,
+    adjustment_offset: float = 0.0,
 ) -> Decimal:
     """Return open TREND-unit loss to the current stop in raw-price space."""
     raw_stop_decimal = Decimal(str(raw_stop))
     risk = Decimal("0")
     for unit in state.units:
-        raw_entry = Decimal(str(to_raw_price(unit.signal_fill_price, adjustment_ratio)))
+        raw_entry = Decimal(str(to_raw_price(
+            unit.signal_fill_price, adjustment_ratio, adjustment_offset
+        )))
         risk += max(Decimal("0"), raw_entry - raw_stop_decimal) * unit.shares
     return risk
 
@@ -80,13 +83,14 @@ def apply_corporate_actions(
 
 def rebase_signal_state(
     state: StrategyState, old_ratio: float, new_ratio: float,
+    old_offset: float = 0.0, new_offset: float = 0.0,
 ) -> StrategyState:
     """Keep persistent signal levels continuous when the adjustment basis changes."""
     if old_ratio <= 0 or new_ratio <= 0:
         raise ValueError("adjustment ratios must be positive")
     scale = new_ratio / old_ratio
     def level(value: float | None) -> float | None:
-        return None if value is None else value * scale
+        return None if value is None else (value - old_offset) * scale + new_offset
     return replace(
         state,
         grid_anchor=level(state.grid_anchor),
@@ -97,9 +101,9 @@ def rebase_signal_state(
         units=tuple(
             replace(
                 unit,
-                signal_fill_price=unit.signal_fill_price * scale,
+                signal_fill_price=(unit.signal_fill_price - old_offset) * scale + new_offset,
                 signal_atr20=unit.signal_atr20 * scale,
-                next_add_signal_price=unit.next_add_signal_price * scale,
+                next_add_signal_price=(unit.next_add_signal_price - old_offset) * scale + new_offset,
             )
             for unit in state.units
         ),
@@ -147,7 +151,11 @@ class ExecutionSimulator:
                 if signal_stop is None:
                     raw_stop = next_bar.raw_open - stop_distance
                 else:
-                    raw_stop = to_raw_price(signal_stop, next_bar.adjustment_ratio)
+                    raw_stop = to_raw_price(
+                        signal_stop,
+                        next_bar.adjustment_ratio,
+                        next_bar.adjustment_offset,
+                    )
                 raw_equity = current.cash + Decimal(str(next_bar.raw_open)) * current.position_shares
                 risk_cap = (
                     raw_equity
@@ -157,7 +165,12 @@ class ExecutionSimulator:
                 remaining_risk = max(
                     Decimal("0"),
                     risk_cap
-                    - aggregate_trend_risk(current, raw_stop, next_bar.adjustment_ratio)
+                    - aggregate_trend_risk(
+                        current,
+                        raw_stop,
+                        next_bar.adjustment_ratio,
+                        next_bar.adjustment_offset,
+                    )
                     - reserved_trend_risk,
                 )
                 candidate_price = Decimal(str(slipped_open(
@@ -193,7 +206,14 @@ class ExecutionSimulator:
                 reject(intent, side, "sell_locked")
                 continue
             raw_thresholds = tuple(
-                (name, to_raw_price(value, next_bar.adjustment_ratio))
+                (
+                    name,
+                    to_raw_price(
+                        value,
+                        next_bar.adjustment_ratio,
+                        next_bar.adjustment_offset,
+                    ),
+                )
                 for name, value in intent.signal_thresholds
             )
             if shares < 100:
@@ -235,7 +255,13 @@ class ExecutionSimulator:
                 }
             ):
                 reserved_trend_risk += risk_per_share * shares
-            fills.append(Fill(next_bar.trade_date, side, shares, price, fee, intent.reason, to_signal_price(price, next_bar.adjustment_ratio), intent.signal_atr20))
+            fills.append(Fill(
+                next_bar.trade_date, side, shares, price, fee, intent.reason,
+                to_signal_price(
+                    price, next_bar.adjustment_ratio, next_bar.adjustment_offset
+                ),
+                intent.signal_atr20,
+            ))
         return ExecutionResult(
             tuple(fills), current, tuple(rejected), tuple(rejected_orders), raw_atr, stop_distance, raw_thresholds,
         )

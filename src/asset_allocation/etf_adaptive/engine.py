@@ -23,10 +23,13 @@ from .trend import apply_trend_fill
 
 def apply_session_actions(
     state: StrategyState, actions: tuple[CorporateAction, ...], *, old_ratio: float, new_ratio: float,
+    old_offset: float = 0.0, new_offset: float = 0.0,
 ) -> StrategyState:
     """Apply raw ledger actions once, then preserve continuous signal levels."""
     accounted, action_ids = apply_corporate_actions(state, actions, state.applied_action_ids)
-    rebased = rebase_signal_state(accounted, old_ratio, new_ratio)
+    rebased = rebase_signal_state(
+        accounted, old_ratio, new_ratio, old_offset, new_offset
+    )
     return replace(rebased, applied_action_ids=action_ids)
 
 
@@ -196,10 +199,12 @@ class AdaptiveBacktestEngine:
         nav: list[DailyNav] = []
         snapshots = compute_indicators(bars)
         previous_ratio: float | None = None
+        previous_offset: float | None = None
         for bar, snapshot in zip(bars, snapshots):
             trading_enabled = request.trade_start_date is None or bar.trade_date >= request.trade_start_date
             if not trading_enabled:
                 previous_ratio = bar.adjustment_ratio
+                previous_offset = bar.adjustment_offset
                 continue
             session_actions = tuple(actions_by_date.get(bar.trade_date, ()))
             previously_applied = set(state.applied_action_ids)
@@ -208,6 +213,8 @@ class AdaptiveBacktestEngine:
                 session_actions,
                 old_ratio=bar.adjustment_ratio if previous_ratio is None else previous_ratio,
                 new_ratio=bar.adjustment_ratio,
+                old_offset=bar.adjustment_offset if previous_offset is None else previous_offset,
+                new_offset=bar.adjustment_offset,
             )
             recorded_action_ids: set[str] = set()
             for action in session_actions:
@@ -277,6 +284,7 @@ class AdaptiveBacktestEngine:
                     pending = decision.orders
             nav.append(DailyNav(bar.trade_date, state.cash, Decimal(str(bar.raw_close)) * state.position_shares))
             previous_ratio = bar.adjustment_ratio
+            previous_offset = bar.adjustment_offset
         return BacktestResult(request, tuple(events), tuple(nav))
 
 

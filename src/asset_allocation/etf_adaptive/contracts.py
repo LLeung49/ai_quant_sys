@@ -73,6 +73,7 @@ class DualPriceBar:
     execution_availability: ExecutionAvailability = ExecutionAvailability(
         True, True, "unavailable"
     )
+    adjustment_offset: float = 0.0
 
     def __post_init__(self) -> None:
         _require_non_empty_text(self.stock_code, "stock_code")
@@ -100,6 +101,10 @@ class DualPriceBar:
         _validate_finite_float(
             self.adjustment_ratio, "adjustment_ratio", allow_zero=False
         )
+        if not isinstance(self.adjustment_offset, float) or not math.isfinite(
+            self.adjustment_offset
+        ):
+            raise ValueError("adjustment_offset must be a finite float")
         if not isinstance(self.execution_availability, ExecutionAvailability):
             raise ValueError("execution_availability must be an ExecutionAvailability")
 
