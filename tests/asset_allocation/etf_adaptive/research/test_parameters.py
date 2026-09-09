@@ -141,3 +141,26 @@ def test_plateau_picks_more_conservative_risk_when_even_cardinality() -> None:
     assert selected[0].config.trend.risk_per_unit == 0.0050
     assert selected[0].config.trend.add_n == 0.75
     assert selected[0].config.trend.max_units == 3
+
+
+def test_amount_ratio_none_is_a_valid_neighbor_axis_value() -> None:
+    candidates = tuple(
+        candidate for candidate in trend_candidates()
+        if candidate.config.trend.risk_per_unit == 0.005
+        and candidate.config.trend.add_n == 0.75
+        and candidate.config.trend.max_units == 3
+    )
+    points = {
+        candidate.config_hash: SurfacePoint(
+            candidate.config_hash, {"amount_ratio_min": float("-inf") if candidate.config.trend.amount_ratio_min is None else candidate.config.trend.amount_ratio_min},
+            (0.05, 0.04), (True, True),
+        )
+        for candidate in candidates
+    }
+
+    selected = stable_parameter_neighborhood(
+        points, axes=("amount_ratio_min",), min_positive_window_share=0.5,
+    )
+
+    assert len(selected) == 1
+    assert selected[0].config.trend.amount_ratio_min in {1.0, 1.2}

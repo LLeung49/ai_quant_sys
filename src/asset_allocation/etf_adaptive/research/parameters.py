@@ -165,7 +165,7 @@ def trend_candidates() -> tuple[ParameterCandidate, ...]:
 def _index_axis(value: float, axis: str) -> int:
     values = _axis_values(axis)
     for index, candidate in enumerate(values):
-        if abs(candidate - value) < 1e-12:
+        if candidate == value or abs(candidate - value) < 1e-12:
             return index
     raise ValueError(f"value {value} not part of axis {axis}")
 
@@ -193,8 +193,8 @@ def _every_in_surface_neighbor_positive(
         if other_candidate is None:
             continue
         other_axis_value = _axis_key(axis, other_candidate)
-        is_lower = abs(other_axis_value - lower_value) < 1e-9
-        is_upper = abs(other_axis_value - upper_value) < 1e-9
+        is_lower = other_axis_value == lower_value or abs(other_axis_value - lower_value) < 1e-9
+        is_upper = other_axis_value == upper_value or abs(other_axis_value - upper_value) < 1e-9
         if not (is_lower or is_upper):
             continue
         if other_point.positive_window_share + 1e-9 < min_positive_window_share:
