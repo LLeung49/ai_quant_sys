@@ -9,7 +9,7 @@ from typing import Protocol
 from ..config import AdaptiveConfig
 from ..contracts import DataQualityError, SubLayer
 from ..state import BacktestRequest
-from .baselines import BaselineKind, run_baselines
+from .baselines import BaselineKind, run_baseline, run_baselines
 from .parameters import ParameterCandidate, grid_candidates, stable_parameter_neighborhood, trend_candidates
 from .metrics import max_drawdown
 from .walk_forward import build_windows
@@ -185,11 +185,14 @@ class _TrainingPoint:
 def _select_training_candidate(stock_code, provider, dates, initial_cash, candidates, axes, segment_size):
     segments = tuple(dates[index:index + segment_size] for index in range(0, len(dates), segment_size))
     points = {}
+    candidate_kind = BaselineKind.GRID_ONLY if candidates[0].family == "grid_only" else BaselineKind.TREND_ONLY
     for candidate in candidates:
         excess = []
         for segment in segments:
-            runs = run_baselines(BacktestRequest(stock_code, initial_cash, segment[0], segment[-1]), provider, candidate.config)
-            excess.append(_nav_return(runs[BaselineKind.FULL_ADAPTIVE].result.nav) - _nav_return(runs[BaselineKind.BUY_AND_HOLD].result.nav))
+            request = BacktestRequest(stock_code, initial_cash, segment[0], segment[-1])
+            strategy = run_baseline(candidate_kind, request, provider, candidate.config)
+            benchmark = run_baseline(BaselineKind.BUY_AND_HOLD, request, provider, candidate.config)
+            excess.append(_nav_return(strategy.result.nav) - _nav_return(benchmark.result.nav))
         points[candidate.config_hash] = _TrainingPoint(candidate, tuple(value >= 0 for value in excess), tuple(excess), dates[-1])
     selected = stable_parameter_neighborhood(points, axes=axes, min_positive_window_share=.75)
     return selected[0] if selected else None

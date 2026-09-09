@@ -237,3 +237,25 @@ def run_baselines(
         notes=("full_adaptive runs the approved regime machine",),
     )
     return runs
+
+
+def run_baseline(
+    kind: BaselineKind,
+    request: BacktestRequest,
+    provider: AdaptiveBacktestDataProvider,
+    base_config: AdaptiveConfig,
+) -> BaselineRun:
+    """Run one named baseline without paying for unrelated research variants."""
+    if kind is BaselineKind.BUY_AND_HOLD:
+        return BaselineRun(kind, base_config, _buy_and_hold(request, provider, base_config))
+    if kind is BaselineKind.GRID_ONLY:
+        config = _grid_only(base_config)
+        return BaselineRun(kind, config, _engine(config, provider).run(request))
+    if kind is BaselineKind.TREND_ONLY:
+        config = _trend_only(base_config)
+        return BaselineRun(kind, config, _engine(config, provider).run(request))
+    if kind is BaselineKind.FULL_ADAPTIVE:
+        return BaselineRun(kind, base_config, _engine(base_config, provider).run(request))
+    if kind is BaselineKind.FIXED_HALF_HOLD:
+        return BaselineRun(kind, base_config, _fixed_half_hold(request, provider))
+    raise ValueError(f"unsupported baseline kind: {kind!r}")
