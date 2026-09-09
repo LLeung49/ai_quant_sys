@@ -197,6 +197,10 @@ class AdaptiveBacktestEngine:
         snapshots = compute_indicators(bars)
         previous_ratio: float | None = None
         for bar, snapshot in zip(bars, snapshots):
+            trading_enabled = request.trade_start_date is None or bar.trade_date >= request.trade_start_date
+            if not trading_enabled:
+                previous_ratio = bar.adjustment_ratio
+                continue
             session_actions = tuple(actions_by_date.get(bar.trade_date, ()))
             previously_applied = set(state.applied_action_ids)
             state = apply_session_actions(
@@ -302,8 +306,12 @@ def _validate_run_inputs(
         raise ValueError("bars must contain ordered unique sessions")
     if sessions[0] != start_date or sessions[-1] != end_date:
         raise ValueError("bar coverage must include the requested start and end dates")
-
     session_set = set(sessions)
+    if request.trade_start_date is not None:
+        if type(request.trade_start_date) is not date:
+            raise ValueError("trade_start_date must be a date")
+        if request.trade_start_date not in session_set:
+            raise ValueError("trade_start_date must match a bar session")
     for action in actions:
         if action.stock_code != request.stock_code:
             raise ValueError("corporate action stock code must exactly match the request")

@@ -108,6 +108,7 @@ class BacktestRequest:
     initial_cash: Decimal
     start_date: date | None = None
     end_date: date | None = None
+    trade_start_date: date | None = None
 
 
 @dataclass(frozen=True)

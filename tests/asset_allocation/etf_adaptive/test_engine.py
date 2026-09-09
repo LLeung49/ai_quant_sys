@@ -205,6 +205,43 @@ def test_daily_engine_marks_nav_with_raw_close() -> None:
     assert result.nav[-1].market_value == Decimal("0")
 
 
+def test_warmup_sessions_do_not_change_validation_account_or_emit_events(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    dates = tuple(date(2026, 9, 1 + offset) for offset in range(4))
+    bars = tuple(
+            DualPriceBar(
+                "510300.SH", trade_date, 1.0, 1.1, 0.9, 1.0,
+                4.0, 4.4, 3.6, 4.0, 20_000_000.0, False, 0.25,
+                4.0, ExecutionAvailability(False, False, "exchange"),
+            )
+        for trade_date in dates
+    )
+    decisions = iter((
+        Decision(
+            StrategyState(cash=Decimal("100000")),
+                (OrderIntent(dates[2], Side.BUY, OrderReason.GRID_INITIALIZE, 0.05, (), 50_000.0, 0.0, "entry"),),
+        ),
+        Decision(StrategyState(cash=Decimal("100000")), ()),
+    ))
+    monkeypatch.setattr(
+        "asset_allocation.etf_adaptive.indicators.compute_indicators",
+        lambda values: (object(),) * len(values),
+    )
+    monkeypatch.setattr(engine_module, "process_close", lambda *_: next(decisions))
+    config = AdaptiveConfig.default()
+
+    result = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend)).run_with_data(
+        BacktestRequest("510300.SH", Decimal("100000"), dates[0], dates[-1], dates[2]),
+        bars,
+        {bar.trade_date: ETFEligibility(True, (), "broad", 252, 20_000_000.0) for bar in bars},
+    )
+
+    assert [point.nav_date for point in result.nav] == list(dates[2:])
+    assert [event.event_date for event in result.events] == [dates[3]]
+    assert dict(result.events[0].payload)["reason"] == "grid_initialize"
+
+
 def test_daily_engine_records_company_action_before_processing_the_session() -> None:
     bar = DualPriceBar(
         "510300.SH", date(2026, 9, 3),
