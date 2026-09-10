@@ -10,6 +10,12 @@ from .baselines import (
     BaselineRun,
     run_baselines,
 )
+from .decision import (
+    DecisionSummary,
+    ResearchConclusion,
+    ResearchEvidence,
+    evaluate_research_decision,
+)
 from .metrics import (
     AttributionEvent,
     ModeAttribution,
@@ -75,6 +81,7 @@ __all__ = [
     "BaselineKind",
     "BaselineRun",
     "CandidateMetrics",
+    "DecisionSummary",
     "FrozenWindowSelection",
     "ModeAttribution",
     "ParameterCandidate",
@@ -83,6 +90,8 @@ __all__ = [
     "PortfolioMetrics",
     "ProductMetrics",
     "ResearchArtifact",
+    "ResearchConclusion",
+    "ResearchEvidence",
     "ResearchReportManifest",
     "ResearchRunConfig",
     "SubLayerPortfolio",
@@ -104,6 +113,7 @@ __all__ = [
     "downside_correlation",
     "drawdown_overlap",
     "evaluate_sub_layer_portfolios",
+    "evaluate_research_decision",
     "grid_candidates",
     "max_drawdown",
     "pairwise_risk",
