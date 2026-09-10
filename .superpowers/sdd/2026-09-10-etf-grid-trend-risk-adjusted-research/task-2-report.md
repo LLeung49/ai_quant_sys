@@ -48,3 +48,30 @@ worktree; it does not affect test execution.
 ## Commit
 
 Pending: `feat: screen stable exit parameter regions`.
+
+## Fix round 1/5
+
+- Restored baseline `grid_candidates()` and `trend_candidates()` to 220 and
+  144 candidates respectively, with the default approved exit/filter values.
+  The approved value tuples remain available only through
+  `expand_candidate_axis` for staged expansion.
+- Extended `stable_parameter_neighborhood` with an optional `candidates`
+  sequence or config-hash index. Callers can therefore evaluate the exact
+  expanded surface rather than depending on the baseline catalog.
+- Made neighbor comparison remove only the asserted axis from the complete
+  `AdaptiveConfig` payload. Any unrelated GRID, TREND, or cost-field change
+  now prevents the candidate from being a neighbor.
+- Added regressions for baseline sizes, all four single-axis expansions, a
+  stable three-point expanded surface, and unrelated GRID/TREND mismatch
+  rejection.
+
+Verification:
+
+```powershell
+$env:PYTHONPATH='src'; python -m pytest tests/asset_allocation/etf_adaptive/research/test_parameters.py tests/asset_allocation/etf_adaptive/test_contracts.py -q
+```
+
+Output: `37 passed, 1 warning in 0.64s`. The warning is the existing
+worktree pytest-cache permission denial.
+
+Fix-round commit pending.

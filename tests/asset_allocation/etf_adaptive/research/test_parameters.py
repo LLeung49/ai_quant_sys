@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Mapping
+
+import pytest
 
 from asset_allocation.etf_adaptive.config import AdaptiveConfig, GridConfig, TrendConfig
 from asset_allocation.etf_adaptive.research.parameters import (
@@ -73,8 +75,9 @@ def test_grid_candidates_include_only_approved_exit_axes() -> None:
 
     assert GRID_ATR_STOP_MULTIPLES == (2.0, 3.0, 4.0)
     assert GRID_COOLDOWN_SESSIONS == (0, 3, 5, 10)
-    assert {item.atr_stop_multiple for item in grids} == {2.0, 3.0, 4.0}
-    assert {item.cooldown_sessions for item in grids} == {0, 3, 5, 10}
+    assert len(grids) == 220
+    assert {item.atr_stop_multiple for item in grids} == {3.0}
+    assert {item.cooldown_sessions for item in grids} == {5}
 
 
 def test_trend_candidates_cover_risk_grid() -> None:
@@ -92,11 +95,26 @@ def test_trend_candidates_include_only_approved_exit_and_filter_axes() -> None:
 
     assert TREND_STOP_N == (1.5, 2.0, 2.5, 3.0)
     assert TREND_REQUIRE_MACD_BULLISH == (False, True)
-    assert {item.stop_n for item in trends} == {1.5, 2.0, 2.5, 3.0}
-    assert {item.require_macd_bullish for item in trends} == {False, True}
+    assert len(trends) == 144
+    assert {item.stop_n for item in trends} == {2.0}
+    assert {item.require_macd_bullish for item in trends} == {True}
 
 
-def test_one_axis_expansion_preserves_all_unrelated_settings() -> None:
+@pytest.mark.parametrize(
+    ("axis", "section", "field", "expected_values"),
+    (
+        ("atr_stop_multiple", "grid", "atr_stop_multiple", {2.0, 3.0, 4.0}),
+        ("cooldown_sessions", "grid", "cooldown_sessions", {0, 3, 5, 10}),
+        ("stop_n", "trend", "stop_n", {1.5, 2.0, 2.5, 3.0}),
+        ("require_macd_bullish", "trend", "require_macd_bullish", {False, True}),
+    ),
+)
+def test_one_axis_expansion_changes_only_its_requested_field(
+    axis: str,
+    section: str,
+    field: str,
+    expected_values: set[object],
+) -> None:
     base = ParameterCandidate(
         config=AdaptiveConfig(
             grid=GridConfig(
@@ -108,22 +126,19 @@ def test_one_axis_expansion_preserves_all_unrelated_settings() -> None:
             ),
             trend=TrendConfig(stop_n=2.5, require_macd_bullish=False),
         ),
-        family="grid_only",
+        family="full",
     )
 
-    expanded = expand_candidate_axis(base, axis="atr_stop_multiple")
+    expanded = expand_candidate_axis(base, axis=axis)
 
-    assert {candidate.config.grid.atr_stop_multiple for candidate in expanded} == {2.0, 3.0, 4.0}
-    assert all(candidate.family == "grid_only" for candidate in expanded)
-    assert all(
-        candidate.config.grid.step_pct == 0.035
-        and candidate.config.grid.unit_pct == 0.15
-        and candidate.config.grid.fixed_initial_pct == 0.60
-        and candidate.config.grid.cooldown_sessions == 5
-        and candidate.config.trend == base.config.trend
-        and candidate.config.cost == base.config.cost
-        for candidate in expanded
-    )
+    assert {getattr(getattr(candidate.config, section), field) for candidate in expanded} == expected_values
+    assert all(candidate.family == "full" for candidate in expanded)
+    for candidate in expanded:
+        base_payload = asdict(base.config)
+        expanded_payload = asdict(candidate.config)
+        del base_payload[section][field]
+        del expanded_payload[section][field]
+        assert expanded_payload == base_payload
 
 
 def test_candidate_ids_are_deterministic_and_stable_under_reorder() -> None:
@@ -200,6 +215,64 @@ def test_neighbor_must_match_every_other_axis() -> None:
     ) == ()
 
 
+def _positive_surface(candidates: tuple[ParameterCandidate, ...]) -> dict[str, SurfacePoint]:
+    return {
+        candidate.config_hash: SurfacePoint(
+            config_hash=candidate.config_hash,
+            axis_values={},
+            oos_returns=(0.05, 0.04, 0.03),
+            positive_windows=(True, True, True),
+        )
+        for candidate in candidates
+    }
+
+
+def test_expanded_three_point_surface_reaches_stability() -> None:
+    base = ParameterCandidate(
+        config=AdaptiveConfig(grid=GridConfig(atr_stop_multiple=3.0)),
+        family="grid_only",
+    )
+    expanded = expand_candidate_axis(base, axis="atr_stop_multiple")
+
+    selected = stable_parameter_neighborhood(
+        _positive_surface(expanded),
+        candidates=expanded,
+        axes=("atr_stop_multiple",),
+        min_positive_window_share=0.75,
+    )
+
+    assert selected == (expanded[1],)
+
+
+@pytest.mark.parametrize(
+    "unrelated_config",
+    (
+        AdaptiveConfig(grid=GridConfig(atr_stop_multiple=4.0, cooldown_sessions=10)),
+        AdaptiveConfig(grid=GridConfig(atr_stop_multiple=4.0), trend=TrendConfig(stop_n=2.5)),
+    ),
+)
+def test_neighbor_with_any_unrelated_grid_or_trend_change_is_not_stable(
+    unrelated_config: AdaptiveConfig,
+) -> None:
+    center = ParameterCandidate(
+        config=AdaptiveConfig(grid=GridConfig(atr_stop_multiple=3.0)),
+        family="grid_only",
+    )
+    lower = ParameterCandidate(
+        config=AdaptiveConfig(grid=GridConfig(atr_stop_multiple=2.0)),
+        family="grid_only",
+    )
+    upper = ParameterCandidate(config=unrelated_config, family="grid_only")
+    candidates = (center, lower, upper)
+
+    assert stable_parameter_neighborhood(
+        _positive_surface(candidates),
+        candidates=candidates,
+        axes=("atr_stop_multiple",),
+        min_positive_window_share=0.75,
+    ) == ()
+
+
 def test_categorical_macd_axis_requires_both_observed_passing_values() -> None:
     candidates = tuple(
         ParameterCandidate(
@@ -229,6 +302,7 @@ def test_categorical_macd_axis_requires_both_observed_passing_values() -> None:
 
     selected = stable_parameter_neighborhood(
         points,
+        candidates=candidates,
         axes=("require_macd_bullish",),
         min_positive_window_share=0.75,
     )
@@ -246,6 +320,7 @@ def test_categorical_macd_axis_requires_both_observed_passing_values() -> None:
     )
     assert stable_parameter_neighborhood(
         failed_points,
+        candidates=candidates,
         axes=("require_macd_bullish",),
         min_positive_window_share=0.75,
     ) == ()

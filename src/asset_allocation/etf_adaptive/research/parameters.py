@@ -13,7 +13,7 @@ candidate wins.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from typing import Mapping, Protocol, Sequence
 
 from ..config import AdaptiveConfig, GridConfig, TrendConfig
@@ -51,6 +51,19 @@ _EXPANDABLE_AXES = {
     "cooldown_sessions",
     "stop_n",
     "require_macd_bullish",
+}
+_AXIS_CONFIG_FIELDS = {
+    "step_pct": ("grid", "step_pct"),
+    "unit_pct": ("grid", "unit_pct"),
+    "fixed_initial_pct": ("grid", "fixed_initial_pct"),
+    "atr_stop_multiple": ("grid", "atr_stop_multiple"),
+    "cooldown_sessions": ("grid", "cooldown_sessions"),
+    "stop_n": ("trend", "stop_n"),
+    "risk_per_unit": ("trend", "risk_per_unit"),
+    "add_n": ("trend", "add_n"),
+    "max_units": ("trend", "max_units"),
+    "amount_ratio_min": ("trend", "amount_ratio_min"),
+    "require_macd_bullish": ("trend", "require_macd_bullish"),
 }
 _AxisValue = float | bool
 
@@ -143,18 +156,14 @@ def _grid_only_configs() -> tuple[GridConfig, ...]:
     for step in GRID_STEPS:
         for unit in GRID_UNITS:
             for fixed in FIXED_INITIAL:
-                for stop_multiple in GRID_ATR_STOP_MULTIPLES:
-                    for cooldown_sessions in GRID_COOLDOWN_SESSIONS:
-                        configs.append(
-                            GridConfig(
-                                step_pct=step,
-                                unit_pct=unit,
-                                initial_model="fixed",
-                                fixed_initial_pct=fixed,
-                                atr_stop_multiple=stop_multiple,
-                                cooldown_sessions=cooldown_sessions,
-                            )
-                        )
+                configs.append(
+                    GridConfig(
+                        step_pct=step,
+                        unit_pct=unit,
+                        initial_model="fixed",
+                        fixed_initial_pct=fixed,
+                    )
+                )
     return tuple(configs)
 
 
@@ -164,18 +173,14 @@ def _trend_only_configs() -> tuple[TrendConfig, ...]:
         for add in ADD_N:
             for units in MAX_UNITS:
                 for amount in AMOUNT_RATIO:
-                    for stop_n in TREND_STOP_N:
-                        for require_macd_bullish in TREND_REQUIRE_MACD_BULLISH:
-                            configs.append(
-                                TrendConfig(
-                                    stop_n=stop_n,
-                                    risk_per_unit=risk,
-                                    add_n=add,
-                                    max_units=units,
-                                    require_macd_bullish=require_macd_bullish,
-                                    amount_ratio_min=amount,
-                                )
-                            )
+                    configs.append(
+                        TrendConfig(
+                            risk_per_unit=risk,
+                            add_n=add,
+                            max_units=units,
+                            amount_ratio_min=amount,
+                        )
+                    )
     return tuple(configs)
 
 
@@ -271,28 +276,18 @@ def _same_axis_value(left: _AxisValue, right: _AxisValue) -> bool:
     return left == right or abs(left - right) < 1e-9
 
 
-def _axis_group(axis: str) -> Sequence[str]:
-    if axis in _GRID_AXES:
-        return _GRID_AXES
-    if axis in _TREND_AXES:
-        return _TREND_AXES
-    raise ValueError(f"unknown tuned axis: {axis}")
-
-
 def _matches_every_nonchanged_axis(
     candidate: ParameterCandidate,
     other_candidate: ParameterCandidate,
     *,
     axis: str,
 ) -> bool:
-    return all(
-        _same_axis_value(
-            _axis_key(other_axis, candidate),
-            _axis_key(other_axis, other_candidate),
-        )
-        for other_axis in _axis_group(axis)
-        if other_axis != axis
-    )
+    section, field = _AXIS_CONFIG_FIELDS[axis]
+    candidate_payload = asdict(candidate.config)
+    other_payload = asdict(other_candidate.config)
+    del candidate_payload[section][field]
+    del other_payload[section][field]
+    return candidate_payload == other_payload
 
 
 def _every_in_surface_neighbor_positive(
@@ -358,6 +353,7 @@ def _candidate_key(
 def stable_parameter_neighborhood(
     results: Mapping[str, SurfacePointLike],
     *,
+    candidates: Sequence[ParameterCandidate] | Mapping[str, ParameterCandidate] | None = None,
     axes: Sequence[str],
     min_positive_window_share: float,
 ) -> tuple[ParameterCandidate, ...]:
@@ -381,10 +377,19 @@ def stable_parameter_neighborhood(
     if not 0.0 <= min_positive_window_share <= 1.0:
         raise ValueError("min_positive_window_share must be between 0 and 1")
 
-    candidate_index: dict[str, ParameterCandidate] = {}
-    for candidates in (grid_candidates(), trend_candidates()):
-        for candidate in candidates:
-            candidate_index[candidate.config_hash] = candidate
+    if candidates is None:
+        candidate_index = {
+            candidate.config_hash: candidate
+            for family_candidates in (grid_candidates(), trend_candidates())
+            for candidate in family_candidates
+        }
+    elif isinstance(candidates, Mapping):
+        candidate_index = dict(candidates)
+    else:
+        candidate_index = {
+            candidate.config_hash: candidate
+            for candidate in candidates
+        }
 
     plateau: list[ParameterCandidate] = []
     for point in results.values():
