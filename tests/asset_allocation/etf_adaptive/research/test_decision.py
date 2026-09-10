@@ -28,6 +28,7 @@ def _evidence(**overrides: object) -> ResearchEvidence:
         "exposure_ratio": 0.80,
         "turnover": 1.0,
         "total_cost": 100.0,
+        "initial_oos_nav": 10_000.0,
         "cost_drag": 0.01,
     }
     values.update(overrides)
@@ -82,6 +83,27 @@ def test_excessive_cost_drag_fails_closed() -> None:
 
     assert summary.conclusion is ResearchConclusion.DO_NOT_TRADE
     assert "cost_drag" in summary.blockers
+
+
+def test_fabricated_cost_drag_fails_closed() -> None:
+    """Trusting a supplied drag value must not conceal recorded execution cost."""
+
+    summary = evaluate_research_decision(_evidence(cost_drag=0.005))
+
+    assert summary.conclusion is ResearchConclusion.DO_NOT_TRADE
+    assert "cost_drag" in summary.blockers
+
+
+@pytest.mark.parametrize("initial_oos_nav", (0.0, inf))
+def test_zero_or_nonfinite_initial_oos_nav_fails_closed(
+    initial_oos_nav: float,
+) -> None:
+    """Cost validation must not divide by an absent or unusable OOS NAV."""
+
+    summary = evaluate_research_decision(_evidence(initial_oos_nav=initial_oos_nav))
+
+    assert summary.conclusion is ResearchConclusion.DO_NOT_TRADE
+    assert "initial_oos_nav" in summary.blockers
 
 
 def test_nonfinite_numeric_evidence_fails_closed() -> None:

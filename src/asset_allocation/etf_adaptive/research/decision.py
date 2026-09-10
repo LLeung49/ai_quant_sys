@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
-from math import isfinite
+from math import isclose, isfinite
 
 
 class ResearchConclusion(str, Enum):
@@ -21,7 +21,7 @@ class ResearchEvidence:
     """Comparable out-of-sample evidence for one strategy configuration.
 
     ``cost_drag`` is supplied upstream as total cost divided by the recorded
-    initial OOS NAV.
+    initial OOS NAV and is verified against those source values.
     """
 
     data_valid: bool
@@ -37,6 +37,7 @@ class ResearchEvidence:
     exposure_ratio: float
     turnover: float
     total_cost: float
+    initial_oos_nav: float
     cost_drag: float
 
 
@@ -60,6 +61,7 @@ _NUMERIC_FIELDS = (
     "exposure_ratio",
     "turnover",
     "total_cost",
+    "initial_oos_nav",
     "cost_drag",
 )
 _RISK_ADJUSTED_FIELDS = (
@@ -105,7 +107,24 @@ def _invalid_evidence_blockers(evidence: ResearchEvidence) -> tuple[str, ...]:
         blockers.append("turnover")
     if _is_finite_number(evidence.total_cost) and evidence.total_cost < 0.0:
         blockers.append("total_cost")
-    if _is_finite_number(evidence.cost_drag) and not 0.0 <= evidence.cost_drag <= _MAX_COST_DRAG:
+    if _is_finite_number(evidence.initial_oos_nav) and evidence.initial_oos_nav <= 0.0:
+        blockers.append("initial_oos_nav")
+    if _is_finite_number(evidence.cost_drag) and not 0.0 <= evidence.cost_drag <= 1.0:
+        blockers.append("cost_drag")
+    if _is_finite_number(evidence.cost_drag) and evidence.cost_drag > _MAX_COST_DRAG:
+        blockers.append("cost_drag")
+    if (
+        _is_finite_number(evidence.total_cost)
+        and _is_finite_number(evidence.initial_oos_nav)
+        and evidence.initial_oos_nav > 0.0
+        and _is_finite_number(evidence.cost_drag)
+        and not isclose(
+            evidence.cost_drag,
+            evidence.total_cost / evidence.initial_oos_nav,
+            rel_tol=1e-9,
+            abs_tol=1e-12,
+        )
+    ):
         blockers.append("cost_drag")
     return tuple(dict.fromkeys(blockers))
 
