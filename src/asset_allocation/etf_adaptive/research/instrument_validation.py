@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 from enum import Enum
-from typing import Protocol
+from typing import Protocol, Sequence
 
 from ..config import AdaptiveConfig
 from ..contracts import DataQualityError, DualPriceBar, SubLayer
@@ -12,7 +12,15 @@ from ..indicators import IndicatorSnapshot, compute_indicators
 from ..state import BacktestRequest
 from ..state import BacktestEvent, DailyNav
 from .baselines import BaselineKind, run_baseline, run_baselines
-from .parameters import ParameterCandidate, grid_candidates, stable_parameter_neighborhood, trend_candidates
+from .decision import DecisionSummary, ResearchConclusion, ResearchEvidence, evaluate_research_decision
+from .metrics import PerformanceMetrics, Trade, calculate_performance
+from .parameters import (
+    ParameterCandidate,
+    expand_candidate_axis,
+    grid_candidates,
+    stable_parameter_neighborhood,
+    trend_candidates,
+)
 from .metrics import max_drawdown
 from .walk_forward import build_windows
 
@@ -64,6 +72,24 @@ class InstrumentValidationResult:
     benchmark_max_drawdown: float | None = None
     scope: ValidationScope = ValidationScope.FORMAL
     activation_eligible: bool = False
+    evidence: ResearchEvidence | None = None
+    decision: DecisionSummary | None = None
+    strategy_metrics: PerformanceMetrics | None = None
+    benchmark_metrics: PerformanceMetrics | None = None
+    strategy_invested_sessions: int = 0
+    strategy_cash_sessions: int = 0
+    benchmark_invested_sessions: int = 0
+    benchmark_cash_sessions: int = 0
+
+
+@dataclass(frozen=True)
+class TrainingSurfaceSummary:
+    """Primitive-only summary of one train-only parameter replay."""
+
+    config_hash: str
+    positive_windows: tuple[bool, ...]
+    oos_returns: tuple[float, ...]
+    positive_window_share: float
 
 
 @dataclass(frozen=True)
@@ -82,6 +108,14 @@ class ValidationWindowResult:
     benchmark_daily_nav: tuple[DailyNav, ...] = ()
     market_bars: tuple[DualPriceBar, ...] = ()
     indicator_snapshots: tuple[IndicatorSnapshot | None, ...] = ()
+    strategy_metrics: PerformanceMetrics | None = None
+    benchmark_metrics: PerformanceMetrics | None = None
+    strategy_invested_sessions: int = 0
+    strategy_cash_sessions: int = 0
+    benchmark_invested_sessions: int = 0
+    benchmark_cash_sessions: int = 0
+    grid_training_surface: tuple[TrainingSurfaceSummary, ...] = ()
+    trend_training_surface: tuple[TrainingSurfaceSummary, ...] = ()
 
 
 class _Provider(Protocol):
@@ -177,13 +211,13 @@ def run_instrument_validation(
         provider = CachedValidationProvider(provider)
         bars = tuple(provider.load_bars(target.stock_code, start_date, as_of_date))
     except DataQualityError as exc:
-        return InstrumentValidationResult(target, ValidationStatus.DATA_REJECTED, as_of_date, str(exc))
+        return _data_rejected_result(target, as_of_date, str(exc))
     if not bars:
-        return InstrumentValidationResult(target, ValidationStatus.DATA_REJECTED, as_of_date, "no market bars in requested range")
+        return _data_rejected_result(target, as_of_date, "no market bars in requested range")
     try:
         windows = build_windows(tuple(bar.trade_date for bar in bars), train_sessions=target.minimum_train_sessions)
     except ValueError:
-        return InstrumentValidationResult(target, ValidationStatus.DATA_REJECTED, as_of_date, "insufficient history for walk-forward validation")
+        return _data_rejected_result(target, as_of_date, "insufficient history for walk-forward validation")
     results: list[ValidationWindowResult] = []
     bars_by_date = {bar.trade_date: bar for bar in bars}
     snapshots_by_date = {
@@ -194,13 +228,32 @@ def run_instrument_validation(
         for window in windows:
             if target.scope is ValidationScope.REFERENCE_ONLY:
                 config = AdaptiveConfig.default()
+                grid_surface: tuple[TrainingSurfaceSummary, ...] = ()
+                trend_surface: tuple[TrainingSurfaceSummary, ...] = ()
             else:
                 segment_size = len(window.train_dates) // 4
-                grid = _select_training_candidate(target.stock_code, provider, window.train_dates, initial_cash, grid_candidates(), ("step_pct", "unit_pct", "fixed_initial_pct"), segment_size)
-                trend = _select_training_candidate(target.stock_code, provider, window.train_dates, initial_cash, trend_candidates(), ("risk_per_unit", "add_n", "max_units", "amount_ratio_min"), segment_size)
-                if grid is None or trend is None:
-                    return InstrumentValidationResult(target, ValidationStatus.FAILED, as_of_date, "no_stable_training_parameters", tuple(results))
-                config = AdaptiveConfig(grid=grid.config.grid, trend=trend.config.trend, cost=AdaptiveConfig.default().cost)
+                grid_selection = _select_training_candidate(
+                    target.stock_code, provider, window.train_dates, initial_cash,
+                    grid_candidates(), ("step_pct", "unit_pct", "fixed_initial_pct"),
+                    segment_size, ("atr_stop_multiple", "cooldown_sessions"),
+                )
+                trend_selection = _select_training_candidate(
+                    target.stock_code, provider, window.train_dates, initial_cash,
+                    trend_candidates(), ("risk_per_unit", "add_n", "max_units", "amount_ratio_min"),
+                    segment_size, ("stop_n", "require_macd_bullish"),
+                )
+                if grid_selection is None or trend_selection is None:
+                    return _no_trade_result(
+                        target, ValidationStatus.FAILED, as_of_date,
+                        "no_stable_training_parameters", tuple(results),
+                    )
+                config = AdaptiveConfig(
+                    grid=grid_selection.candidate.config.grid,
+                    trend=trend_selection.candidate.config.trend,
+                    cost=AdaptiveConfig.default().cost,
+                )
+                grid_surface = grid_selection.surface
+                trend_surface = trend_selection.surface
             # Indicators see the training history, but the Task 1 engine
             # starts the accounting state at the validation boundary.
             runs = run_baselines(BacktestRequest(target.stock_code, initial_cash, window.train_dates[0], window.validation_end, window.validation_dates[0]), provider, config)
@@ -210,31 +263,46 @@ def run_instrument_validation(
             benchmark = benchmark_nav[-1] / benchmark_nav[0] - 1
             strategy_result = runs[BaselineKind.FULL_ADAPTIVE].result
             benchmark_result = runs[BaselineKind.BUY_AND_HOLD].result
+            strategy_metrics = _recorded_performance(strategy_result.nav, strategy_result.events)
+            benchmark_metrics = _recorded_performance(benchmark_result.nav, benchmark_result.events)
+            strategy_invested, strategy_cash = _recorded_exposure(strategy_result.nav)
+            benchmark_invested, benchmark_cash = _recorded_exposure(benchmark_result.nav)
             results.append(ValidationWindowResult(
                 window.window_id, window.train_end, window.validation_dates[0], config.config_hash(),
                 strategy, benchmark, strategy_nav, benchmark_nav,
                 strategy_result.events, benchmark_result.events, strategy_result.nav, benchmark_result.nav,
                 tuple(bars_by_date[day] for day in window.validation_dates),
                 tuple(snapshots_by_date[day] for day in window.validation_dates),
+                strategy_metrics, benchmark_metrics,
+                strategy_invested, strategy_cash, benchmark_invested, benchmark_cash,
+                grid_surface, trend_surface,
             ))
     except (ValueError, DataQualityError) as exc:
-        return InstrumentValidationResult(target, ValidationStatus.DATA_REJECTED, as_of_date, str(exc), tuple(results))
+        return _data_rejected_result(target, as_of_date, str(exc), tuple(results))
     strategy_path = _stitch_paths(tuple(row.strategy_nav for row in results))
     benchmark_path = _stitch_paths(tuple(row.benchmark_nav for row in results))
     strategy_annual = _annual_return(strategy_path)
     benchmark_annual = _annual_return(benchmark_path)
     strategy_drawdown = abs(max_drawdown(strategy_path))
     benchmark_drawdown = abs(max_drawdown(benchmark_path))
-    status = evaluate_validation_gate(
-        annual_excess=strategy_annual - benchmark_annual,
-        drawdown_excess=strategy_drawdown - benchmark_drawdown,
-        non_lagging_windows=sum(row.strategy_return >= row.benchmark_return for row in results),
-        total_windows=len(results),
+    strategy_metrics = calculate_performance(
+        strategy_path, _recorded_trades(tuple(event for row in results for event in row.strategy_events)),
     )
+    benchmark_metrics = calculate_performance(
+        benchmark_path, _recorded_trades(tuple(event for row in results for event in row.benchmark_events)),
+    )
+    evidence = _research_evidence(results, strategy_metrics, benchmark_metrics)
+    decision = evaluate_research_decision(evidence)
+    status = ValidationStatus.PASSED if decision.conclusion is ResearchConclusion.PASSED else ValidationStatus.FAILED
     return InstrumentValidationResult(
         target, status, as_of_date, None, tuple(results), strategy_annual,
         benchmark_annual, strategy_drawdown, benchmark_drawdown, target.scope,
-        target.scope is ValidationScope.FORMAL and status is ValidationStatus.PASSED,
+        _activation_eligible(target.scope, decision),
+        evidence, decision, strategy_metrics, benchmark_metrics,
+        sum(row.strategy_invested_sessions for row in results),
+        sum(row.strategy_cash_sessions for row in results),
+        sum(row.benchmark_invested_sessions for row in results),
+        sum(row.benchmark_cash_sessions for row in results),
     )
 
 
@@ -254,7 +322,47 @@ class _TrainingPoint:
         return sum(self.positive_windows) / len(self.positive_windows)
 
 
-def _select_training_candidate(stock_code, provider, dates, initial_cash, candidates, axes, segment_size):
+@dataclass(frozen=True)
+class _TrainingSelection:
+    candidate: ParameterCandidate
+    surface: tuple[TrainingSurfaceSummary, ...]
+
+
+def _select_training_candidate(
+    stock_code,
+    provider,
+    dates,
+    initial_cash,
+    candidates: Sequence[ParameterCandidate],
+    axes: Sequence[str],
+    segment_size: int,
+    expansion_axes: Sequence[str] = (),
+) -> _TrainingSelection | None:
+    """Select a baseline, then screen each approved new axis in sequence.
+
+    Every replay below is bounded to a training segment.  In particular, an
+    expansion starts from the previously selected candidate and never creates
+    a cross-product of the newly approved axes.
+    """
+
+    selected, summaries = _screen_training_candidates(
+        stock_code, provider, dates, initial_cash, candidates, axes, segment_size,
+    )
+    if selected is None:
+        return None
+    all_summaries = list(summaries)
+    for axis in expansion_axes:
+        expanded = expand_candidate_axis(selected, axis=axis)
+        selected, summaries = _screen_training_candidates(
+            stock_code, provider, dates, initial_cash, expanded, (axis,), segment_size,
+        )
+        if selected is None:
+            return None
+        all_summaries.extend(summaries)
+    return _TrainingSelection(selected, tuple(all_summaries))
+
+
+def _screen_training_candidates(stock_code, provider, dates, initial_cash, candidates, axes, segment_size):
     segments = tuple(dates[index:index + segment_size] for index in range(0, len(dates), segment_size))
     points = {}
     candidate_kind = BaselineKind.GRID_ONLY if candidates[0].family == "grid_only" else BaselineKind.TREND_ONLY
@@ -266,8 +374,134 @@ def _select_training_candidate(stock_code, provider, dates, initial_cash, candid
             benchmark = run_baseline(BaselineKind.BUY_AND_HOLD, request, provider, candidate.config)
             excess.append(_nav_return(strategy.result.nav) - _nav_return(benchmark.result.nav))
         points[candidate.config_hash] = _TrainingPoint(candidate, tuple(value >= 0 for value in excess), tuple(excess), dates[-1])
-    selected = stable_parameter_neighborhood(points, axes=axes, min_positive_window_share=.75)
-    return selected[0] if selected else None
+    selected = stable_parameter_neighborhood(
+        points, candidates=candidates, axes=axes, min_positive_window_share=.75,
+    )
+    summaries = tuple(
+        TrainingSurfaceSummary(
+            config_hash=point.config_hash,
+            positive_windows=point.positive_windows,
+            oos_returns=point.oos_returns,
+            positive_window_share=point.positive_window_share,
+        )
+        for point in points.values()
+    )
+    return (selected[0] if selected else None), summaries
+
+
+def _recorded_trades(events: Sequence[BacktestEvent]) -> tuple[Trade, ...]:
+    trades: list[Trade] = []
+    for event in events:
+        payload = dict(event.payload)
+        if event.kind == "fill":
+            trades.append(Trade(
+                signal_date=event.event_date,
+                fill_date=event.event_date,
+                side=payload.get("side", ""),
+                shares=int(payload.get("shares", "0")),
+                raw_price=float(payload.get("raw_price", "0")),
+                commission=Decimal(payload.get("commission", "0")),
+                slippage_cost=Decimal(payload.get("slippage_cost", "0")),
+                minimum_commission_applied=payload.get("minimum_commission_applied") == "true",
+                is_unfilled=False,
+            ))
+        elif event.kind == "rejected_order":
+            trades.append(Trade(
+                signal_date=event.event_date,
+                fill_date=event.event_date,
+                side=payload.get("side", ""),
+                shares=0,
+                raw_price=0.0,
+                commission=Decimal("0"),
+                slippage_cost=Decimal("0"),
+                minimum_commission_applied=False,
+                is_unfilled=True,
+            ))
+    return tuple(trades)
+
+
+def _recorded_performance(nav: Sequence[DailyNav], events: Sequence[BacktestEvent]) -> PerformanceMetrics:
+    """Calculate research metrics solely from the persisted backtest result."""
+    return calculate_performance(tuple(float(point.total) for point in nav), _recorded_trades(events))
+
+
+def _recorded_exposure(nav: Sequence[DailyNav]) -> tuple[int, int]:
+    invested = sum(point.market_value > 0 for point in nav)
+    return invested, len(nav) - invested
+
+
+def _research_evidence(
+    results: Sequence[ValidationWindowResult],
+    strategy: PerformanceMetrics,
+    benchmark: PerformanceMetrics,
+) -> ResearchEvidence:
+    initial_oos_nav = float(results[0].strategy_daily_nav[0].total)
+    total_cost = sum(row.strategy_metrics.total_cost for row in results if row.strategy_metrics is not None)
+    invested = sum(row.strategy_invested_sessions for row in results)
+    sessions = sum(row.strategy_invested_sessions + row.strategy_cash_sessions for row in results)
+    return ResearchEvidence(
+        data_valid=True,
+        oos_window_count=len(results),
+        oos_non_lagging_share=sum(row.strategy_return >= row.benchmark_return for row in results) / len(results),
+        stable_parameter_region=all(row.grid_training_surface and row.trend_training_surface for row in results),
+        annual_excess=strategy.annual_return - benchmark.annual_return,
+        drawdown_improvement=abs(benchmark.max_drawdown) - abs(strategy.max_drawdown),
+        sharpe_excess=strategy.sharpe - benchmark.sharpe,
+        sortino_excess=strategy.sortino - benchmark.sortino,
+        calmar_excess=strategy.calmar - benchmark.calmar,
+        cvar5_improvement=strategy.cvar5 - benchmark.cvar5,
+        exposure_ratio=invested / sessions if sessions else 0.0,
+        turnover=strategy.turnover,
+        total_cost=total_cost,
+        initial_oos_nav=initial_oos_nav,
+        cost_drag=total_cost / initial_oos_nav,
+    )
+
+
+def _data_rejected_result(
+    target: ValidationTarget,
+    as_of_date: date,
+    reason: str,
+    windows: tuple[ValidationWindowResult, ...] = (),
+) -> InstrumentValidationResult:
+    return _no_trade_result(target, ValidationStatus.DATA_REJECTED, as_of_date, reason, windows, data_valid=False)
+
+
+def _no_trade_result(
+    target: ValidationTarget,
+    status: ValidationStatus,
+    as_of_date: date,
+    reason: str,
+    windows: tuple[ValidationWindowResult, ...] = (),
+    *,
+    data_valid: bool = True,
+) -> InstrumentValidationResult:
+    evidence = ResearchEvidence(
+        data_valid=data_valid,
+        oos_window_count=1,
+        oos_non_lagging_share=0.0,
+        stable_parameter_region=False,
+        annual_excess=0.0,
+        drawdown_improvement=0.0,
+        sharpe_excess=0.0,
+        sortino_excess=0.0,
+        calmar_excess=0.0,
+        cvar5_improvement=0.0,
+        exposure_ratio=0.0,
+        turnover=0.0,
+        total_cost=0.0,
+        initial_oos_nav=1.0,
+        cost_drag=0.0,
+    )
+    return InstrumentValidationResult(
+        target, status, as_of_date, reason, windows,
+        scope=target.scope, evidence=evidence, decision=evaluate_research_decision(evidence),
+    )
+
+
+def _activation_eligible(scope: ValidationScope, decision: DecisionSummary) -> bool:
+    """Formal research can activate only on an explicit passed conclusion."""
+    return scope is ValidationScope.FORMAL and decision.conclusion is ResearchConclusion.PASSED
 
 
 def _nav_return(nav) -> float:

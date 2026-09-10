@@ -3,16 +3,23 @@
 from datetime import date
 from decimal import Decimal
 
+import pytest
+
 from asset_allocation.etf_adaptive.contracts import DualPriceBar, ExecutionAvailability
 from asset_allocation.etf_adaptive.contracts import DataQualityError
+from asset_allocation.etf_adaptive.config import AdaptiveConfig
 from asset_allocation.etf_adaptive.research.instrument_validation import (
     CachedValidationProvider,
     FIXED_VALIDATION_TARGETS,
+    ValidationScope,
     ValidationStatus,
     evaluate_validation_gate,
     run_instrument_validation,
     resolve_validation_start,
 )
+from asset_allocation.etf_adaptive.research.decision import DecisionSummary, ResearchConclusion
+from asset_allocation.etf_adaptive.research.parameters import ParameterCandidate
+from asset_allocation.etf_adaptive.state import BacktestEvent, DailyNav
 from asset_allocation.etf_adaptive.research.walk_forward import build_windows
 
 
@@ -72,6 +79,18 @@ def test_validation_converts_initial_market_data_error_to_data_rejected() -> Non
 
     assert result.status is ValidationStatus.DATA_REJECTED
     assert result.rejection_reason == "expected market session is missing"
+    assert result.decision is not None
+    assert result.decision.conclusion is ResearchConclusion.DO_NOT_TRADE
+
+
+def test_formal_validation_never_activates_a_non_passing_research_decision() -> None:
+    """The legacy gate must not override the stricter recorded-evidence decision."""
+    from asset_allocation.etf_adaptive.research.instrument_validation import _activation_eligible
+
+    decision = DecisionSummary(ResearchConclusion.CONTINUE_PARAMETER_OPTIMIZATION, ("annual_excess",))
+
+    assert _activation_eligible(ValidationScope.FORMAL, decision) is False
+    assert _activation_eligible(ValidationScope.REFERENCE_ONLY, DecisionSummary(ResearchConclusion.PASSED, ())) is False
 
 
 def test_validation_rejects_history_shorter_than_first_walk_forward_window() -> None:
@@ -126,3 +145,42 @@ def test_validation_start_advances_to_first_aligned_session_from_provider() -> N
             return date(2020, 11, 16)
 
     assert resolve_validation_start(Provider(), "588000.SH", date(2020, 1, 1), date(2026, 9, 8)) == date(2020, 11, 16)
+
+
+def test_recorded_metrics_and_exposure_use_only_persisted_nav_and_events() -> None:
+    from asset_allocation.etf_adaptive.research.instrument_validation import _recorded_exposure, _recorded_performance
+
+    nav = (
+        DailyNav(date(2026, 9, 1), Decimal("100"), Decimal("0")),
+        DailyNav(date(2026, 9, 2), Decimal("20"), Decimal("90")),
+        DailyNav(date(2026, 9, 3), Decimal("120"), Decimal("0")),
+    )
+    events = (BacktestEvent(date(2026, 9, 2), "fill", (
+        ("side", "buy"), ("shares", "9"), ("raw_price", "10"), ("commission", "2.5"),
+    )),)
+
+    metrics = _recorded_performance(nav, events)
+
+    assert metrics.total_cost == 2.5
+    assert _recorded_exposure(nav) == (1, 2)
+
+
+def test_staged_training_expands_each_exit_axis_without_cartesian_candidates(monkeypatch: pytest.MonkeyPatch) -> None:
+    from asset_allocation.etf_adaptive.research import instrument_validation as module
+
+    base = ParameterCandidate(AdaptiveConfig.default(), family="grid_only")
+    observed_sizes: list[int] = []
+
+    def screen(*args):
+        candidates = args[4]
+        observed_sizes.append(len(candidates))
+        return candidates[len(candidates) // 2], ()
+
+    monkeypatch.setattr(module, "_screen_training_candidates", screen)
+    selection = module._select_training_candidate(
+        "510300.SH", object(), (date(2026, 1, 1),), Decimal("100"), (base,),
+        ("step_pct",), 1, ("atr_stop_multiple", "cooldown_sessions"),
+    )
+
+    assert selection is not None
+    assert observed_sizes == [1, 3, 4]
