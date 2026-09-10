@@ -5,9 +5,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Mapping
 
-from asset_allocation.etf_adaptive.config import AdaptiveConfig, GridConfig
+from asset_allocation.etf_adaptive.config import AdaptiveConfig, GridConfig, TrendConfig
 from asset_allocation.etf_adaptive.research.parameters import (
+    GRID_ATR_STOP_MULTIPLES,
+    GRID_COOLDOWN_SESSIONS,
     ParameterCandidate,
+    TREND_REQUIRE_MACD_BULLISH,
+    TREND_STOP_N,
+    expand_candidate_axis,
     grid_candidates,
     stable_parameter_neighborhood,
     trend_candidates,
@@ -63,6 +68,15 @@ def test_grid_candidates_cover_exact_approved_space() -> None:
     assert {candidate.config.grid.unit_pct for candidate in candidates} == {0.05, 0.10, 0.15, 0.20}
 
 
+def test_grid_candidates_include_only_approved_exit_axes() -> None:
+    grids = {candidate.config.grid for candidate in grid_candidates()}
+
+    assert GRID_ATR_STOP_MULTIPLES == (2.0, 3.0, 4.0)
+    assert GRID_COOLDOWN_SESSIONS == (0, 3, 5, 10)
+    assert {item.atr_stop_multiple for item in grids} == {2.0, 3.0, 4.0}
+    assert {item.cooldown_sessions for item in grids} == {0, 3, 5, 10}
+
+
 def test_trend_candidates_cover_risk_grid() -> None:
     candidates = trend_candidates()
 
@@ -71,6 +85,45 @@ def test_trend_candidates_cover_risk_grid() -> None:
     }
     assert {candidate.config.trend.max_units for candidate in candidates} == {2, 3, 4}
     assert {candidate.config.trend.amount_ratio_min for candidate in candidates} == {None, 1.0, 1.2, 1.5}
+
+
+def test_trend_candidates_include_only_approved_exit_and_filter_axes() -> None:
+    trends = {candidate.config.trend for candidate in trend_candidates()}
+
+    assert TREND_STOP_N == (1.5, 2.0, 2.5, 3.0)
+    assert TREND_REQUIRE_MACD_BULLISH == (False, True)
+    assert {item.stop_n for item in trends} == {1.5, 2.0, 2.5, 3.0}
+    assert {item.require_macd_bullish for item in trends} == {False, True}
+
+
+def test_one_axis_expansion_preserves_all_unrelated_settings() -> None:
+    base = ParameterCandidate(
+        config=AdaptiveConfig(
+            grid=GridConfig(
+                step_pct=0.035,
+                unit_pct=0.15,
+                fixed_initial_pct=0.60,
+                atr_stop_multiple=3.0,
+                cooldown_sessions=5,
+            ),
+            trend=TrendConfig(stop_n=2.5, require_macd_bullish=False),
+        ),
+        family="grid_only",
+    )
+
+    expanded = expand_candidate_axis(base, axis="atr_stop_multiple")
+
+    assert {candidate.config.grid.atr_stop_multiple for candidate in expanded} == {2.0, 3.0, 4.0}
+    assert all(candidate.family == "grid_only" for candidate in expanded)
+    assert all(
+        candidate.config.grid.step_pct == 0.035
+        and candidate.config.grid.unit_pct == 0.15
+        and candidate.config.grid.fixed_initial_pct == 0.60
+        and candidate.config.grid.cooldown_sessions == 5
+        and candidate.config.trend == base.config.trend
+        and candidate.config.cost == base.config.cost
+        for candidate in expanded
+    )
 
 
 def test_candidate_ids_are_deterministic_and_stable_under_reorder() -> None:
@@ -113,6 +166,89 @@ def test_full_positive_neighborhood_returns_middle_candidate() -> None:
     assert len(selected) == 1
     assert selected[0].config.grid.step_pct == 0.015
     assert selected[0].config.grid.unit_pct == 0.10
+
+
+def test_neighbor_must_match_every_other_axis() -> None:
+    def point(step: float, stop: float) -> SurfacePoint:
+        candidate = ParameterCandidate(
+            config=AdaptiveConfig(
+                grid=GridConfig(step_pct=step, atr_stop_multiple=stop),
+            ),
+            family="grid_only",
+        )
+        return SurfacePoint(
+            config_hash=candidate.config_hash,
+            axis_values={"step_pct": step, "atr_stop_multiple": stop},
+            oos_returns=(0.05, 0.04, 0.03),
+            positive_windows=(True, True, True),
+        )
+
+    points = {
+        item.config_hash: item
+        for item in (
+            point(0.015, 3.0),
+            point(0.010, 3.0),
+            point(0.010, 2.0),
+            point(0.020, 4.0),
+        )
+    }
+
+    assert stable_parameter_neighborhood(
+        points,
+        axes=("step_pct", "atr_stop_multiple"),
+        min_positive_window_share=0.75,
+    ) == ()
+
+
+def test_categorical_macd_axis_requires_both_observed_passing_values() -> None:
+    candidates = tuple(
+        ParameterCandidate(
+            config=AdaptiveConfig(
+                trend=TrendConfig(
+                    stop_n=2.0,
+                    risk_per_unit=0.005,
+                    add_n=0.5,
+                    max_units=4,
+                    require_macd_bullish=value,
+                    amount_ratio_min=None,
+                ),
+            ),
+            family="trend_only",
+        )
+        for value in (False, True)
+    )
+    points = {
+        candidate.config_hash: SurfacePoint(
+            config_hash=candidate.config_hash,
+            axis_values={"require_macd_bullish": float(candidate.config.trend.require_macd_bullish)},
+            oos_returns=(0.05, 0.04, 0.03),
+            positive_windows=(True, True, True),
+        )
+        for candidate in candidates
+    }
+
+    selected = stable_parameter_neighborhood(
+        points,
+        axes=("require_macd_bullish",),
+        min_positive_window_share=0.75,
+    )
+
+    assert len(selected) == 1
+    assert selected[0].config_hash in points
+
+    failed_points = dict(points)
+    failed_candidate = candidates[0]
+    failed_points[failed_candidate.config_hash] = SurfacePoint(
+        config_hash=failed_candidate.config_hash,
+        axis_values={"require_macd_bullish": 0.0},
+        oos_returns=(-0.03, -0.02, -0.01),
+        positive_windows=(False, False, False),
+    )
+    assert stable_parameter_neighborhood(
+        failed_points,
+        axes=("require_macd_bullish",),
+        min_positive_window_share=0.75,
+    ) == ()
 
 
 def test_plateau_picks_more_conservative_risk_when_even_cardinality() -> None:

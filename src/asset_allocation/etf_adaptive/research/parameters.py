@@ -13,7 +13,7 @@ candidate wins.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Mapping, Protocol, Sequence
 
 from ..config import AdaptiveConfig, GridConfig, TrendConfig
@@ -26,9 +26,36 @@ RISK_PER_UNIT: tuple[float, ...] = (0.0025, 0.0050, 0.0075, 0.0100)
 ADD_N: tuple[float, ...] = (0.5, 0.75, 1.0)
 MAX_UNITS: tuple[int, ...] = (2, 3, 4)
 AMOUNT_RATIO: tuple[float | None, ...] = (None, 1.0, 1.2, 1.5)
+GRID_ATR_STOP_MULTIPLES: tuple[float, ...] = (2.0, 3.0, 4.0)
+GRID_COOLDOWN_SESSIONS: tuple[int, ...] = (0, 3, 5, 10)
+TREND_STOP_N: tuple[float, ...] = (1.5, 2.0, 2.5, 3.0)
+TREND_REQUIRE_MACD_BULLISH: tuple[bool, ...] = (False, True)
+
+_GRID_AXES = (
+    "step_pct",
+    "unit_pct",
+    "fixed_initial_pct",
+    "atr_stop_multiple",
+    "cooldown_sessions",
+)
+_TREND_AXES = (
+    "stop_n",
+    "risk_per_unit",
+    "add_n",
+    "max_units",
+    "amount_ratio_min",
+    "require_macd_bullish",
+)
+_EXPANDABLE_AXES = {
+    "atr_stop_multiple",
+    "cooldown_sessions",
+    "stop_n",
+    "require_macd_bullish",
+}
+_AxisValue = float | bool
 
 
-def _axis_values(axis: str) -> Sequence[float]:
+def _axis_values(axis: str) -> Sequence[_AxisValue]:
     if axis == "step_pct":
         return GRID_STEPS
     if axis == "unit_pct":
@@ -43,10 +70,18 @@ def _axis_values(axis: str) -> Sequence[float]:
         return tuple(float(value) for value in MAX_UNITS)
     if axis == "amount_ratio_min":
         return tuple(value if value is not None else float("-inf") for value in AMOUNT_RATIO)
+    if axis == "atr_stop_multiple":
+        return GRID_ATR_STOP_MULTIPLES
+    if axis == "cooldown_sessions":
+        return tuple(float(value) for value in GRID_COOLDOWN_SESSIONS)
+    if axis == "stop_n":
+        return TREND_STOP_N
+    if axis == "require_macd_bullish":
+        return TREND_REQUIRE_MACD_BULLISH
     raise ValueError(f"unknown tuned axis: {axis}")
 
 
-def _axis_key(axis: str, candidate: "ParameterCandidate") -> float:
+def _axis_key(axis: str, candidate: "ParameterCandidate") -> _AxisValue:
     if axis == "step_pct":
         return candidate.config.grid.step_pct
     if axis == "unit_pct":
@@ -65,6 +100,14 @@ def _axis_key(axis: str, candidate: "ParameterCandidate") -> float:
     if axis == "amount_ratio_min":
         value = candidate.config.trend.amount_ratio_min
         return float("-inf") if value is None else value
+    if axis == "atr_stop_multiple":
+        return candidate.config.grid.atr_stop_multiple
+    if axis == "cooldown_sessions":
+        return float(candidate.config.grid.cooldown_sessions)
+    if axis == "stop_n":
+        return candidate.config.trend.stop_n
+    if axis == "require_macd_bullish":
+        return candidate.config.trend.require_macd_bullish
     raise ValueError(f"unknown tuned axis: {axis}")
 
 
@@ -88,7 +131,7 @@ class SurfacePointLike(Protocol):
     """The minimum shape ``stable_parameter_neighborhood`` accepts."""
 
     config_hash: str
-    axis_values: Mapping[str, float]
+    axis_values: Mapping[str, _AxisValue]
     positive_windows: Sequence[bool]
 
     @property
@@ -100,14 +143,18 @@ def _grid_only_configs() -> tuple[GridConfig, ...]:
     for step in GRID_STEPS:
         for unit in GRID_UNITS:
             for fixed in FIXED_INITIAL:
-                configs.append(
-                    GridConfig(
-                        step_pct=step,
-                        unit_pct=unit,
-                        initial_model="fixed",
-                        fixed_initial_pct=fixed,
-                    )
-                )
+                for stop_multiple in GRID_ATR_STOP_MULTIPLES:
+                    for cooldown_sessions in GRID_COOLDOWN_SESSIONS:
+                        configs.append(
+                            GridConfig(
+                                step_pct=step,
+                                unit_pct=unit,
+                                initial_model="fixed",
+                                fixed_initial_pct=fixed,
+                                atr_stop_multiple=stop_multiple,
+                                cooldown_sessions=cooldown_sessions,
+                            )
+                        )
     return tuple(configs)
 
 
@@ -117,16 +164,18 @@ def _trend_only_configs() -> tuple[TrendConfig, ...]:
         for add in ADD_N:
             for units in MAX_UNITS:
                 for amount in AMOUNT_RATIO:
-                    configs.append(
-                        TrendConfig(
-                            stop_n=2.0,
-                            risk_per_unit=risk,
-                            add_n=add,
-                            max_units=units,
-                            require_macd_bullish=True,
-                            amount_ratio_min=amount,
-                        )
-                    )
+                    for stop_n in TREND_STOP_N:
+                        for require_macd_bullish in TREND_REQUIRE_MACD_BULLISH:
+                            configs.append(
+                                TrendConfig(
+                                    stop_n=stop_n,
+                                    risk_per_unit=risk,
+                                    add_n=add,
+                                    max_units=units,
+                                    require_macd_bullish=require_macd_bullish,
+                                    amount_ratio_min=amount,
+                                )
+                            )
     return tuple(configs)
 
 
@@ -162,12 +211,88 @@ def trend_candidates() -> tuple[ParameterCandidate, ...]:
     return _candidates_for(configs, family="trend_only")
 
 
+def expand_candidate_axis(
+    base_candidate: ParameterCandidate,
+    *,
+    axis: str,
+) -> tuple[ParameterCandidate, ...]:
+    """Vary one approved exit/filter axis while preserving a selected base.
+
+    Walk-forward selection uses this bounded expansion after choosing the
+    existing training candidate, rather than replaying a cross-product of
+    legacy and new axes. The returned sequence includes the base value when
+    it is approved so adjacent values can form a complete screened surface.
+    """
+
+    if axis not in _EXPANDABLE_AXES:
+        raise ValueError(f"axis is not approved for one-axis expansion: {axis}")
+    if axis in _GRID_AXES and base_candidate.family == "trend_only":
+        raise ValueError("grid axes require a grid_only or full base candidate")
+    if axis in _TREND_AXES and base_candidate.family == "grid_only":
+        raise ValueError("trend axes require a trend_only or full base candidate")
+
+    configs: list[AdaptiveConfig] = []
+    for value in _axis_values(axis):
+        if axis == "atr_stop_multiple":
+            config = replace(
+                base_candidate.config,
+                grid=replace(base_candidate.config.grid, atr_stop_multiple=float(value)),
+            )
+        elif axis == "cooldown_sessions":
+            config = replace(
+                base_candidate.config,
+                grid=replace(base_candidate.config.grid, cooldown_sessions=int(value)),
+            )
+        elif axis == "stop_n":
+            config = replace(
+                base_candidate.config,
+                trend=replace(base_candidate.config.trend, stop_n=float(value)),
+            )
+        else:
+            config = replace(
+                base_candidate.config,
+                trend=replace(base_candidate.config.trend, require_macd_bullish=bool(value)),
+            )
+        configs.append(config)
+    return _candidates_for(configs, family=base_candidate.family)
+
+
 def _index_axis(value: float, axis: str) -> int:
     values = _axis_values(axis)
     for index, candidate in enumerate(values):
         if candidate == value or abs(candidate - value) < 1e-12:
             return index
     raise ValueError(f"value {value} not part of axis {axis}")
+
+
+def _same_axis_value(left: _AxisValue, right: _AxisValue) -> bool:
+    if isinstance(left, bool) or isinstance(right, bool):
+        return left is right
+    return left == right or abs(left - right) < 1e-9
+
+
+def _axis_group(axis: str) -> Sequence[str]:
+    if axis in _GRID_AXES:
+        return _GRID_AXES
+    if axis in _TREND_AXES:
+        return _TREND_AXES
+    raise ValueError(f"unknown tuned axis: {axis}")
+
+
+def _matches_every_nonchanged_axis(
+    candidate: ParameterCandidate,
+    other_candidate: ParameterCandidate,
+    *,
+    axis: str,
+) -> bool:
+    return all(
+        _same_axis_value(
+            _axis_key(other_axis, candidate),
+            _axis_key(other_axis, other_candidate),
+        )
+        for other_axis in _axis_group(axis)
+        if other_axis != axis
+    )
 
 
 def _every_in_surface_neighbor_positive(
@@ -178,6 +303,22 @@ def _every_in_surface_neighbor_positive(
     config_index: Mapping[str, "ParameterCandidate"],
     min_positive_window_share: float,
 ) -> bool:
+    if axis == "require_macd_bullish":
+        observed_values: set[bool] = set()
+        for other_hash, other_point in surface.items():
+            other_candidate = config_index.get(other_hash)
+            if other_candidate is None or not _matches_every_nonchanged_axis(
+                candidate, other_candidate, axis=axis,
+            ):
+                continue
+            other_value = _axis_key(axis, other_candidate)
+            if not isinstance(other_value, bool):
+                continue
+            if other_point.positive_window_share + 1e-9 < min_positive_window_share:
+                return False
+            observed_values.add(other_value)
+        return observed_values == set(TREND_REQUIRE_MACD_BULLISH)
+
     axis_index = _index_axis(_axis_key(axis, candidate), axis)
     values = _axis_values(axis)
     if axis_index == 0 or axis_index == len(values) - 1:
@@ -190,11 +331,13 @@ def _every_in_surface_neighbor_positive(
         if other_hash == candidate.config_hash:
             continue
         other_candidate = config_index.get(other_hash)
-        if other_candidate is None:
+        if other_candidate is None or not _matches_every_nonchanged_axis(
+            candidate, other_candidate, axis=axis,
+        ):
             continue
         other_axis_value = _axis_key(axis, other_candidate)
-        is_lower = other_axis_value == lower_value or abs(other_axis_value - lower_value) < 1e-9
-        is_upper = other_axis_value == upper_value or abs(other_axis_value - upper_value) < 1e-9
+        is_lower = _same_axis_value(other_axis_value, lower_value)
+        is_upper = _same_axis_value(other_axis_value, upper_value)
         if not (is_lower or is_upper):
             continue
         if other_point.positive_window_share + 1e-9 < min_positive_window_share:
@@ -208,7 +351,7 @@ def _every_in_surface_neighbor_positive(
 
 def _candidate_key(
     candidate: ParameterCandidate, axes: Sequence[str],
-) -> tuple[float, ...]:
+) -> tuple[_AxisValue, ...]:
     return tuple(_axis_key(axis, candidate) for axis in axes)
 
 
@@ -224,9 +367,10 @@ def stable_parameter_neighborhood(
 
     * it sits at a non-edge position on every canonical tuned axis;
     * the candidate's own OOS subperiods clear ``min_positive_window_share``;
-    * every adjacent candidate that is actually present in ``results`` on
-      every tuned axis also clears the threshold (both lower and upper
-      adjacent positions, when present, must pass).
+    * every numeric axis has a passing lower and upper immediate neighbor
+      with every other axis unchanged; and
+    * categorical MACD stability has both observed values passing with every
+      other axis unchanged.
 
     When the plateau has even cardinality the more conservative
     (lower-risk) candidate wins.
