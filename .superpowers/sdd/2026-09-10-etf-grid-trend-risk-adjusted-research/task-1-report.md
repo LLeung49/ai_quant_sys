@@ -8,6 +8,9 @@
 - Added focused tests for pass, defensive parameter optimization, invalid data,
   non-finite and boolean numerics, incomplete evidence, and structural-change
   conclusions.
+- Fix round 1: added a strict positive-integer OOS-window count and
+  `cost_drag` (total cost / recorded initial OOS NAV). Cost drag is finite,
+  bounded to [0, 1], and must not exceed 2% for any non-blocked conclusion.
 
 ## Files changed
 
@@ -24,7 +27,7 @@ Command:
 $env:PYTHONPATH='src'; python -m pytest tests/asset_allocation/etf_adaptive/research/test_decision.py -q
 ```
 
-Output: `7 passed, 1 warning in 0.08s`. The warning is an existing inability
+Output: `10 passed, 1 warning in 0.08s`. The warning is an existing inability
 to write `.pytest_cache` in this worktree; it does not affect test execution.
 
 ## Commit
@@ -32,10 +35,12 @@ to write `.pytest_cache` in this worktree; it does not affect test execution.
 `5e6c2b98f61a8841b31c7eb02f6230738e92b913` — `feat: add risk-adjusted
 research decisions`.
 
+Fix-round commit: `b119ecf6200bb269669363231723700c3741fd06` — `fix: harden
+research decision evidence`.
+
 ## Concerns
 
 No strategy, broker, execution, GRID, or TREND logic changed. Decision
 thresholds are explicit and intentionally conservative; execution evidence is
-validated for finite, non-negative cost/turnover and exposure constrained to
-the [0, 1] range, since this contract has no portfolio-value-normalized cost
-limit from which to derive an additional ceiling.
+validated for finite, non-negative cost/turnover, exposure constrained to the
+[0, 1] range, and cost drag capped at 2%.
