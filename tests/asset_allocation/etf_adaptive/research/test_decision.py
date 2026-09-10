@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from math import inf
 
+import pytest
+
 from asset_allocation.etf_adaptive.research.decision import (
     ResearchConclusion,
     ResearchEvidence,
@@ -26,6 +28,7 @@ def _evidence(**overrides: object) -> ResearchEvidence:
         "exposure_ratio": 0.80,
         "turnover": 1.0,
         "total_cost": 100.0,
+        "cost_drag": 0.01,
     }
     values.update(overrides)
     return ResearchEvidence(**values)  # type: ignore[arg-type]
@@ -58,6 +61,27 @@ def test_invalid_data_fails_closed_with_data_valid_blocker() -> None:
 
     assert summary.conclusion is ResearchConclusion.DO_NOT_TRADE
     assert "data_valid" in summary.blockers
+
+
+@pytest.mark.parametrize("oos_window_count", (0, 3.5))
+def test_nonpositive_or_fractional_oos_window_count_fails_closed(
+    oos_window_count: object,
+) -> None:
+    """A count validation regression must not accept invalid OOS windows."""
+
+    summary = evaluate_research_decision(_evidence(oos_window_count=oos_window_count))
+
+    assert summary.conclusion is ResearchConclusion.DO_NOT_TRADE
+    assert "oos_window_count" in summary.blockers
+
+
+def test_excessive_cost_drag_fails_closed() -> None:
+    """Removing execution-cost bounds must not promote an uneconomic result."""
+
+    summary = evaluate_research_decision(_evidence(cost_drag=0.03))
+
+    assert summary.conclusion is ResearchConclusion.DO_NOT_TRADE
+    assert "cost_drag" in summary.blockers
 
 
 def test_nonfinite_numeric_evidence_fails_closed() -> None:

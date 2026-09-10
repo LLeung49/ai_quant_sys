@@ -18,7 +18,11 @@ class ResearchConclusion(str, Enum):
 
 @dataclass(frozen=True)
 class ResearchEvidence:
-    """Comparable out-of-sample evidence for one strategy configuration."""
+    """Comparable out-of-sample evidence for one strategy configuration.
+
+    ``cost_drag`` is supplied upstream as total cost divided by the recorded
+    initial OOS NAV.
+    """
 
     data_valid: bool
     oos_window_count: int
@@ -33,6 +37,7 @@ class ResearchEvidence:
     exposure_ratio: float
     turnover: float
     total_cost: float
+    cost_drag: float
 
 
 @dataclass(frozen=True)
@@ -55,6 +60,7 @@ _NUMERIC_FIELDS = (
     "exposure_ratio",
     "turnover",
     "total_cost",
+    "cost_drag",
 )
 _RISK_ADJUSTED_FIELDS = (
     "drawdown_improvement",
@@ -68,10 +74,15 @@ _MIN_NON_LAGGING_SHARE = 0.60
 _BOUNDED_RETURN_LAG = -0.002
 _MATERIAL_DRAWDOWN_IMPROVEMENT = 0.10
 _MATERIAL_CVAR5_IMPROVEMENT = 0.01
+_MAX_COST_DRAG = 0.02
 
 
 def _is_finite_number(value: object) -> bool:
     return isinstance(value, (int, float)) and not isinstance(value, bool) and isfinite(value)
+
+
+def _is_positive_integer(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
 
 
 def _invalid_evidence_blockers(evidence: ResearchEvidence) -> tuple[str, ...]:
@@ -82,6 +93,8 @@ def _invalid_evidence_blockers(evidence: ResearchEvidence) -> tuple[str, ...]:
     for field in ("data_valid", "stable_parameter_region"):
         if not isinstance(getattr(evidence, field, None), bool):
             blockers.append(field)
+    if not _is_positive_integer(evidence.oos_window_count):
+        blockers.append("oos_window_count")
     if evidence.data_valid is not True:
         blockers.append("data_valid")
     if _is_finite_number(evidence.oos_non_lagging_share) and not 0.0 <= evidence.oos_non_lagging_share <= 1.0:
@@ -92,6 +105,8 @@ def _invalid_evidence_blockers(evidence: ResearchEvidence) -> tuple[str, ...]:
         blockers.append("turnover")
     if _is_finite_number(evidence.total_cost) and evidence.total_cost < 0.0:
         blockers.append("total_cost")
+    if _is_finite_number(evidence.cost_drag) and not 0.0 <= evidence.cost_drag <= _MAX_COST_DRAG:
+        blockers.append("cost_drag")
     return tuple(dict.fromkeys(blockers))
 
 
