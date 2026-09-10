@@ -6,11 +6,12 @@ from decimal import Decimal
 from enum import Enum
 from typing import Protocol, Sequence
 
-from ..config import AdaptiveConfig
+from ..config import AdaptiveConfig, CostConfig
 from ..contracts import DataQualityError, DualPriceBar, SubLayer
+from ..execution import commission, execution_fee
 from ..indicators import IndicatorSnapshot, compute_indicators
 from ..state import BacktestRequest
-from ..state import BacktestEvent, DailyNav
+from ..state import BacktestEvent, DailyNav, Side
 from .baselines import BaselineKind, run_baseline, run_baselines
 from .decision import DecisionSummary, ResearchConclusion, ResearchEvidence, evaluate_research_decision
 from .metrics import PerformanceMetrics, Trade, calculate_performance
@@ -116,6 +117,7 @@ class ValidationWindowResult:
     benchmark_cash_sessions: int = 0
     grid_training_surface: tuple[TrainingSurfaceSummary, ...] = ()
     trend_training_surface: tuple[TrainingSurfaceSummary, ...] = ()
+    cost_config: CostConfig | None = None
 
 
 class _Provider(Protocol):
@@ -263,8 +265,8 @@ def run_instrument_validation(
             benchmark = benchmark_nav[-1] / benchmark_nav[0] - 1
             strategy_result = runs[BaselineKind.FULL_ADAPTIVE].result
             benchmark_result = runs[BaselineKind.BUY_AND_HOLD].result
-            strategy_metrics = _recorded_performance(strategy_result.nav, strategy_result.events)
-            benchmark_metrics = _recorded_performance(benchmark_result.nav, benchmark_result.events)
+            strategy_metrics = _recorded_performance(strategy_result.nav, strategy_result.events, config.cost)
+            benchmark_metrics = _recorded_performance(benchmark_result.nav, benchmark_result.events, config.cost)
             strategy_invested, strategy_cash = _recorded_exposure(strategy_result.nav)
             benchmark_invested, benchmark_cash = _recorded_exposure(benchmark_result.nav)
             results.append(ValidationWindowResult(
@@ -276,6 +278,7 @@ def run_instrument_validation(
                 strategy_metrics, benchmark_metrics,
                 strategy_invested, strategy_cash, benchmark_invested, benchmark_cash,
                 grid_surface, trend_surface,
+                config.cost,
             ))
     except (ValueError, DataQualityError) as exc:
         return _data_rejected_result(target, as_of_date, str(exc), tuple(results))
@@ -285,11 +288,14 @@ def run_instrument_validation(
     benchmark_annual = _annual_return(benchmark_path)
     strategy_drawdown = abs(max_drawdown(strategy_path))
     benchmark_drawdown = abs(max_drawdown(benchmark_path))
+    initial_oos_nav = float(results[0].strategy_daily_nav[0].total)
     strategy_metrics = calculate_performance(
-        strategy_path, _recorded_trades(tuple(event for row in results for event in row.strategy_events)),
+        tuple(value * initial_oos_nav for value in strategy_path),
+        tuple(trade for row in results for trade in _recorded_trades(row.strategy_events, row.cost_config)),
     )
     benchmark_metrics = calculate_performance(
-        benchmark_path, _recorded_trades(tuple(event for row in results for event in row.benchmark_events)),
+        tuple(value * initial_oos_nav for value in benchmark_path),
+        tuple(trade for row in results for trade in _recorded_trades(row.benchmark_events, row.cost_config)),
     )
     evidence = _research_evidence(results, strategy_metrics, benchmark_metrics)
     decision = evaluate_research_decision(evidence)
@@ -389,20 +395,38 @@ def _screen_training_candidates(stock_code, provider, dates, initial_cash, candi
     return (selected[0] if selected else None), summaries
 
 
-def _recorded_trades(events: Sequence[BacktestEvent]) -> tuple[Trade, ...]:
+def _recorded_trades(
+    events: Sequence[BacktestEvent],
+    cost_config: CostConfig | None,
+) -> tuple[Trade, ...]:
     trades: list[Trade] = []
     for event in events:
         payload = dict(event.payload)
         if event.kind == "fill":
+            side = Side(payload.get("side", ""))
+            shares = int(payload.get("shares", "0"))
+            price = Decimal(payload.get("raw_price", "0"))
+            notional = price * shares
+            if cost_config is None:
+                recorded_fee = Decimal(payload.get("commission", "0"))
+                slippage_cost = Decimal(payload.get("slippage_cost", "0"))
+                minimum_applied = payload.get("minimum_commission_applied") == "true"
+            else:
+                recorded_fee = Decimal(payload.get("commission", "0"))
+                reconstructed_fee = execution_fee(notional, side, cost_config)
+                bps = Decimal(str(cost_config.slippage_bps)) / Decimal("10000")
+                raw_open = price / (Decimal("1") + bps if side is Side.BUY else Decimal("1") - bps)
+                slippage_cost = abs(price - raw_open) * shares
+                minimum_applied = commission(notional, cost_config) == Decimal(str(cost_config.minimum_commission))
             trades.append(Trade(
                 signal_date=event.event_date,
                 fill_date=event.event_date,
-                side=payload.get("side", ""),
-                shares=int(payload.get("shares", "0")),
-                raw_price=float(payload.get("raw_price", "0")),
-                commission=Decimal(payload.get("commission", "0")),
-                slippage_cost=Decimal(payload.get("slippage_cost", "0")),
-                minimum_commission_applied=payload.get("minimum_commission_applied") == "true",
+                side=side.value,
+                shares=shares,
+                raw_price=float(price),
+                commission=max(recorded_fee, reconstructed_fee) if cost_config is not None else recorded_fee,
+                slippage_cost=slippage_cost,
+                minimum_commission_applied=minimum_applied,
                 is_unfilled=False,
             ))
         elif event.kind == "rejected_order":
@@ -420,9 +444,11 @@ def _recorded_trades(events: Sequence[BacktestEvent]) -> tuple[Trade, ...]:
     return tuple(trades)
 
 
-def _recorded_performance(nav: Sequence[DailyNav], events: Sequence[BacktestEvent]) -> PerformanceMetrics:
+def _recorded_performance(
+    nav: Sequence[DailyNav], events: Sequence[BacktestEvent], cost_config: CostConfig | None = None,
+) -> PerformanceMetrics:
     """Calculate research metrics solely from the persisted backtest result."""
-    return calculate_performance(tuple(float(point.total) for point in nav), _recorded_trades(events))
+    return calculate_performance(tuple(float(point.total) for point in nav), _recorded_trades(events, cost_config))
 
 
 def _recorded_exposure(nav: Sequence[DailyNav]) -> tuple[int, int]:
@@ -476,26 +502,11 @@ def _no_trade_result(
     *,
     data_valid: bool = True,
 ) -> InstrumentValidationResult:
-    evidence = ResearchEvidence(
-        data_valid=data_valid,
-        oos_window_count=1,
-        oos_non_lagging_share=0.0,
-        stable_parameter_region=False,
-        annual_excess=0.0,
-        drawdown_improvement=0.0,
-        sharpe_excess=0.0,
-        sortino_excess=0.0,
-        calmar_excess=0.0,
-        cvar5_improvement=0.0,
-        exposure_ratio=0.0,
-        turnover=0.0,
-        total_cost=0.0,
-        initial_oos_nav=1.0,
-        cost_drag=0.0,
-    )
+    blocker = "data_valid" if not data_valid else "stable_parameter_region"
     return InstrumentValidationResult(
         target, status, as_of_date, reason, windows,
-        scope=target.scope, evidence=evidence, decision=evaluate_research_decision(evidence),
+        scope=target.scope,
+        decision=DecisionSummary(ResearchConclusion.DO_NOT_TRADE, (blocker,)),
     )
 
 
