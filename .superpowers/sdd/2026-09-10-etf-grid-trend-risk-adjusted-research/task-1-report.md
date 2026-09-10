@@ -29,7 +29,7 @@ to write `.pytest_cache` in this worktree; it does not affect test execution.
 
 ## Commit
 
-`2427fa6de39f2d8d66b28fb66c63d2f9feada210` — `feat: add risk-adjusted
+`5e6c2b98f61a8841b31c7eb02f6230738e92b913` — `feat: add risk-adjusted
 research decisions`.
 
 ## Concerns
