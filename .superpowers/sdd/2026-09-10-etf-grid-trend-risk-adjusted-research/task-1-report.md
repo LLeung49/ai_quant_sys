@@ -11,6 +11,9 @@
 - Fix round 1: added a strict positive-integer OOS-window count and
   `cost_drag` (total cost / recorded initial OOS NAV). Cost drag is finite,
   bounded to [0, 1], and must not exceed 2% for any non-blocked conclusion.
+- Fix round 2: added `initial_oos_nav`, requiring it to be finite and
+  positive. The evaluator verifies `cost_drag == total_cost / initial_oos_nav`
+  with `rel_tol=1e-9` and `abs_tol=1e-12` before reaching a conclusion.
 
 ## Files changed
 
@@ -27,7 +30,7 @@ Command:
 $env:PYTHONPATH='src'; python -m pytest tests/asset_allocation/etf_adaptive/research/test_decision.py -q
 ```
 
-Output: `10 passed, 1 warning in 0.08s`. The warning is an existing inability
+Output: `13 passed, 1 warning in 0.08s`. The warning is an existing inability
 to write `.pytest_cache` in this worktree; it does not affect test execution.
 
 ## Commit
@@ -37,6 +40,9 @@ research decisions`.
 
 Fix-round commit: `b119ecf6200bb269669363231723700c3741fd06` — `fix: harden
 research decision evidence`.
+
+Fix-round 2 commit: `5b97948643f46b9bb948921c7adaea57619fcaed` — `fix: verify
+research cost drag`.
 
 ## Concerns
 
