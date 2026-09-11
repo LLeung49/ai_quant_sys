@@ -1,10 +1,11 @@
 """Fixed-universe contracts for independent ETF strategy validation."""
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import date
 from decimal import Decimal
 from enum import Enum
-from typing import Protocol, Sequence
+from hashlib import sha256
+from typing import Mapping, Protocol, Sequence
 
 from ..config import AdaptiveConfig, CostConfig
 from ..contracts import DataQualityError, DualPriceBar, SubLayer
@@ -81,6 +82,7 @@ class InstrumentValidationResult:
     strategy_cash_sessions: int = 0
     benchmark_invested_sessions: int = 0
     benchmark_cash_sessions: int = 0
+    run_manifest: Mapping[str, object] | None = None
 
 
 @dataclass(frozen=True)
@@ -118,6 +120,7 @@ class ValidationWindowResult:
     grid_training_surface: tuple[TrainingSurfaceSummary, ...] = ()
     trend_training_surface: tuple[TrainingSurfaceSummary, ...] = ()
     cost_config: CostConfig | None = None
+    selected_config: Mapping[str, object] | None = None
 
 
 class _Provider(Protocol):
@@ -279,6 +282,7 @@ def run_instrument_validation(
                 strategy_invested, strategy_cash, benchmark_invested, benchmark_cash,
                 grid_surface, trend_surface,
                 config.cost,
+                asdict(config),
             ))
     except (ValueError, DataQualityError) as exc:
         return _data_rejected_result(target, as_of_date, str(exc), tuple(results))
@@ -309,6 +313,7 @@ def run_instrument_validation(
         sum(row.strategy_cash_sessions for row in results),
         sum(row.benchmark_invested_sessions for row in results),
         sum(row.benchmark_cash_sessions for row in results),
+        _run_manifest(target, start_date, as_of_date, provider, bars, results),
     )
 
 
@@ -481,7 +486,49 @@ def _research_evidence(
         total_cost=total_cost,
         initial_oos_nav=initial_oos_nav,
         cost_drag=total_cost / initial_oos_nav,
+        persistent_failure_windows=sum(
+            row.strategy_return < row.benchmark_return
+            and row.strategy_metrics is not None
+            and row.benchmark_metrics is not None
+            and row.strategy_metrics.sharpe <= row.benchmark_metrics.sharpe
+            for row in results
+        ),
     )
+
+
+def _run_manifest(
+    target: ValidationTarget,
+    start_date: date,
+    as_of_date: date,
+    provider: object,
+    bars: Sequence[DualPriceBar],
+    windows: Sequence[ValidationWindowResult],
+) -> Mapping[str, object]:
+    """Record enough immutable evidence to replay and audit a formal run."""
+    data_fingerprint = sha256(repr(tuple(bars)).encode("utf-8")).hexdigest()
+    return {
+        "schema_version": 1,
+        "runner": "run_instrument_validation",
+        "source_provider": type(getattr(provider, "_provider", provider)).__name__,
+        "data_cutoff": as_of_date.isoformat(),
+        "requested_start": start_date.isoformat(),
+        "data_fingerprint": data_fingerprint,
+        "target": {
+            "exposure_id": target.exposure_id,
+            "stock_code": target.stock_code,
+            "sub_layer": target.sub_layer.value,
+            "scope": target.scope.value,
+        },
+        "selected_configs": [
+            {"window_id": row.window_id, "config_hash": row.config_hash,
+             "config": row.selected_config}
+            for row in windows
+        ],
+        "screened_axes": {
+            "grid": ["step_pct", "unit_pct", "fixed_initial_pct", "atr_stop_multiple", "cooldown_sessions"],
+            "trend": ["risk_per_unit", "add_n", "max_units", "amount_ratio_min", "stop_n", "require_macd_bullish"],
+        },
+    }
 
 
 def _data_rejected_result(

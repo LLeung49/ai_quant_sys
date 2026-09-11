@@ -70,12 +70,18 @@ def _approved_layer_benchmarks(
     }
 
 
-def _approved_research_fields(config_hash: str) -> dict[str, object]:
+def _approved_research_fields(config_hash: str, targets: list[dict[str, str]]) -> dict[str, object]:
+    specs = tuple(TargetSpec(
+        item["stock_code"], item.get("tracking_index_code", ""), item["layer"],
+        Decimal(item["weight"]), SubLayer(item["sub_layer"]),
+        Decimal(item["sub_layer_budget"]), InstrumentType(item["instrument_type"]),
+    ) for item in targets)
+    universe_hash = shadow_module.selection_universe_hash(specs)
     return {
-        "research_approval": _approval(config_hash),
+        "research_approval": {**_approval(config_hash), "universe_hash": universe_hash},
         "layer_benchmarks": _approved_layer_benchmarks(
             config_hash=config_hash,
-            universe_hash="universe-hash",
+            universe_hash=universe_hash,
             data_cutoff=DATA_CUTOFF.isoformat(),
         ),
     }
@@ -135,23 +141,16 @@ class _StubProvider:
 
 def _store_with_selection() -> InMemoryShadowStore:
     store = InMemoryShadowStore()
+    targets = [{
+        "stock_code": "510300.SH", "weight": "1", "layer": "broad_beta",
+        "tracking_index_code": "000300.SH", "sub_layer": "broad_domestic_core",
+        "sub_layer_budget": "100000", "instrument_type": "etf", "config_hash": "cfg-shadow-1",
+    }]
     record = FrozenConfigRecord(
         config_hash="cfg-shadow-1",
         config=AdaptiveConfig.default(),
         selection_payload={
-            **_approved_research_fields("cfg-shadow-1"),
-            "targets": [
-                {
-                    "stock_code": "510300.SH",
-                    "weight": "1",
-                    "layer": "broad_beta",
-                    "tracking_index_code": "000300.SH",
-                    "sub_layer": "broad_domestic_core",
-                    "sub_layer_budget": "100000",
-                    "instrument_type": "etf",
-                    "config_hash": "cfg-shadow-1",
-                },
-            ],
+            **_approved_research_fields("cfg-shadow-1", targets), "targets": targets,
         },
         data_cutoff=DATA_CUTOFF,
         activation_date=date(2026, 8, 1),
@@ -164,25 +163,15 @@ def _store_with_selection() -> InMemoryShadowStore:
 
 def _store_with_layered_target_budgets() -> InMemoryShadowStore:
     store = InMemoryShadowStore()
+    targets = [
+        {"stock_code":"510300.SH","tracking_index_code":"000300.SH","layer":"broad_beta","sub_layer":"broad_domestic_core","sub_layer_budget":"42000","instrument_type":"etf","weight":"0.6","config_hash":"cfg-layered-budget"},
+        {"stock_code":"510500.SH","tracking_index_code":"000905.SH","layer":"broad_beta","sub_layer":"broad_domestic_core","sub_layer_budget":"42000","instrument_type":"etf","weight":"0.4","config_hash":"cfg-layered-budget"},
+    ]
     store.activate_frozen_config(FrozenConfigRecord(
         config_hash="cfg-layered-budget",
         config=AdaptiveConfig.default(),
         selection_payload={
-            **_approved_research_fields("cfg-layered-budget"),
-            "targets": [
-                {
-                    "stock_code": "510300.SH", "tracking_index_code": "000300.SH",
-                    "layer": "broad_beta", "sub_layer": "broad_domestic_core",
-                    "sub_layer_budget": "42000", "instrument_type": "etf", "weight": "0.6",
-                    "config_hash": "cfg-layered-budget",
-                },
-                {
-                    "stock_code": "510500.SH", "tracking_index_code": "000905.SH",
-                    "layer": "broad_beta", "sub_layer": "broad_domestic_core",
-                    "sub_layer_budget": "42000", "instrument_type": "etf", "weight": "0.4",
-                    "config_hash": "cfg-layered-budget",
-                },
-            ],
+            **_approved_research_fields("cfg-layered-budget", targets), "targets": targets,
         },
         data_cutoff=DATA_CUTOFF,
         activation_date=date(2026, 8, 1),
@@ -309,16 +298,17 @@ def test_cost_boundary_dispatches_etf_and_china_a_stock_schedules() -> None:
 
 
 def test_active_selection_rejects_missing_or_mismatched_target_config_hash() -> None:
+    targets = [{
+        "stock_code": "510300.SH", "tracking_index_code": "000300.SH",
+        "layer": "broad_beta", "sub_layer": "broad_domestic_core",
+        "sub_layer_budget": "42000", "instrument_type": "etf", "weight": "1",
+    }]
     frozen = FrozenConfigRecord(
         config_hash="parent-hash",
         config=AdaptiveConfig.default(),
         selection_payload={
-            **_approved_research_fields("parent-hash"),
-            "targets": [{
-                "stock_code": "510300.SH", "tracking_index_code": "000300.SH",
-                "layer": "broad_beta", "sub_layer": "broad_domestic_core",
-                "sub_layer_budget": "42000", "instrument_type": "etf", "weight": "1",
-            }],
+            **_approved_research_fields("parent-hash", targets),
+            "targets": targets,
         },
         data_cutoff=DATA_CUTOFF,
         activation_date=date(2026, 8, 1),
@@ -333,7 +323,7 @@ def test_active_selection_rejects_missing_or_mismatched_target_config_hash() -> 
         **{
             **frozen.__dict__,
             "selection_payload": {
-                **_approved_research_fields("parent-hash"),
+                **_approved_research_fields("parent-hash", targets),
                 "targets": [{
                     **frozen.selection_payload["targets"][0], "config_hash": "another-hash",
                 }],
@@ -388,6 +378,11 @@ def test_shadow_runner_requires_research_approval_for_every_advice_record() -> N
 
 
 def _frozen_with_research_approval(approval: object) -> FrozenConfigRecord:
+    target = TargetSpec("510300.SH", "000300.SH", "broad_beta", Decimal("1"),
+                        SubLayer.DOMESTIC_CORE, Decimal("42000"), InstrumentType.ETF)
+    universe_hash = shadow_module.selection_universe_hash((target,))
+    if isinstance(approval, dict) and approval.get("universe_hash") == "universe-hash":
+        approval = {**approval, "universe_hash": universe_hash}
     return FrozenConfigRecord(
         config_hash="parent-hash",
         config=AdaptiveConfig.default(),
@@ -395,7 +390,7 @@ def _frozen_with_research_approval(approval: object) -> FrozenConfigRecord:
             "research_approval": approval,
             "layer_benchmarks": _approved_layer_benchmarks(
                 config_hash="parent-hash",
-                universe_hash="universe-hash",
+                universe_hash=universe_hash,
                 data_cutoff=DATA_CUTOFF.isoformat(),
             ),
             "targets": [{
@@ -441,6 +436,17 @@ def test_active_selection_accepts_matching_passed_research_approval() -> None:
 
     assert selection.config_hash == "parent-hash"
     assert selection.data_cutoff == DATA_CUTOFF
+
+
+@pytest.mark.parametrize("field,value", [
+    ("stock_code", "510500.SH"), ("tracking_index_code", "000905.SH"),
+    ("sub_layer_budget", "84000"),
+])
+def test_active_selection_rejects_tampered_approved_targets(field, value) -> None:
+    frozen = _frozen_with_research_approval(_approval("parent-hash"))
+    frozen.selection_payload["targets"][0][field] = value
+    with pytest.raises(ValueError, match="universe_hash"):
+        shadow_module._build_active_selection(frozen)
 
 
 def test_active_selection_rejects_layer_artifact_with_different_approval_identity() -> None:

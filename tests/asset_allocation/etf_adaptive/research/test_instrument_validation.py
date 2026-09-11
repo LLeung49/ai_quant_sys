@@ -265,3 +265,9 @@ def test_oos_only_prices_do_not_change_training_hashes_or_activate_nonpassing_de
     assert baseline.strategy_metrics is not None
     assert baseline.strategy_metrics.turnover == 3.0
     assert all(end in {day for window in windows for day in window.train_dates} for _, end in training_requests)
+    # Reproducibility evidence records actual selected parameters and the exact
+    # data snapshot; changing only OOS bars must change the latter, not the former.
+    assert baseline.run_manifest is not None and changed_oos.run_manifest is not None
+    assert baseline.run_manifest["data_fingerprint"] != changed_oos.run_manifest["data_fingerprint"]
+    assert baseline.run_manifest["selected_configs"] == changed_oos.run_manifest["selected_configs"]
+    assert all(window.selected_config is not None for window in baseline.windows)

@@ -39,6 +39,7 @@ class ResearchEvidence:
     total_cost: float
     initial_oos_nav: float
     cost_drag: float
+    persistent_failure_windows: int = 0
 
 
 @dataclass(frozen=True)
@@ -97,6 +98,12 @@ def _invalid_evidence_blockers(evidence: ResearchEvidence) -> tuple[str, ...]:
             blockers.append(field)
     if not _is_positive_integer(evidence.oos_window_count):
         blockers.append("oos_window_count")
+    if (
+        not isinstance(evidence.persistent_failure_windows, int)
+        or isinstance(evidence.persistent_failure_windows, bool)
+        or evidence.persistent_failure_windows < 0
+    ):
+        blockers.append("persistent_failure_windows")
     if evidence.data_valid is not True:
         blockers.append("data_valid")
     if _is_finite_number(evidence.oos_non_lagging_share) and not 0.0 <= evidence.oos_non_lagging_share <= 1.0:
@@ -156,9 +163,13 @@ def evaluate_research_decision(evidence: ResearchEvidence) -> DecisionSummary:
     )
     positive_risk_adjusted = _has_positive_risk_adjusted_evidence(evidence)
 
+    if not adequate_oos:
+        return DecisionSummary(ResearchConclusion.DO_NOT_TRADE, ("oos_evidence",))
+
     if (
         evidence.annual_excess <= -0.01
         and all(getattr(evidence, field) <= 0.0 for field in _RISK_ADJUSTED_FIELDS)
+        and evidence.persistent_failure_windows >= _MIN_OOS_WINDOWS
     ):
         return DecisionSummary(ResearchConclusion.EVALUATE_STRUCTURAL_CHANGE, ())
 
@@ -180,4 +191,7 @@ def evaluate_research_decision(evidence: ResearchEvidence) -> DecisionSummary:
             tuple(blockers),
         )
 
-    return DecisionSummary(ResearchConclusion.EVALUATE_STRUCTURAL_CHANGE, ())
+    return DecisionSummary(
+        ResearchConclusion.DO_NOT_TRADE,
+        ("persistent_failure_evidence",),
+    )

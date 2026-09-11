@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from hashlib import sha256
+import json
 from typing import Iterable, Mapping, Protocol, Sequence
 
 from .backtest_provider import AdaptiveBacktestDataProvider
@@ -509,11 +510,6 @@ def run_shadow_date(
 
 def _build_active_selection(frozen) -> ActiveSelection:
     payload = frozen.selection_payload or {}
-    _require_passing_layer_benchmarks(
-        payload,
-        config_hash=frozen.config_hash,
-        data_cutoff=frozen.data_cutoff,
-    )
     raw_targets = payload.get("targets", ())
     if not isinstance(raw_targets, Sequence) or isinstance(raw_targets, (str, bytes)):
         raise ValueError("frozen selection targets must be a sequence")
@@ -553,6 +549,12 @@ def _build_active_selection(frozen) -> ActiveSelection:
             instrument_type=instrument_type,
         ))
     _validate_active_targets(targets)
+    _require_passing_layer_benchmarks(
+        payload,
+        config_hash=frozen.config_hash,
+        data_cutoff=frozen.data_cutoff,
+        universe_hash=selection_universe_hash(targets),
+    )
     return ActiveSelection(
         config_hash=frozen.config_hash,
         config=frozen.config,
@@ -566,6 +568,7 @@ def _require_passing_layer_benchmarks(
     *,
     config_hash: str,
     data_cutoff: date,
+    universe_hash: str,
 ) -> None:
     """Reject new research payloads that record a failed layer-level gate.
 
@@ -582,6 +585,7 @@ def _require_passing_layer_benchmarks(
         raw,
         config_hash=config_hash,
         data_cutoff=data_cutoff,
+        universe_hash=universe_hash,
     )
 
 
@@ -607,6 +611,7 @@ def _require_matching_research_approval(
     *,
     config_hash: str,
     data_cutoff: date,
+    universe_hash: str,
 ) -> None:
     """Require one immutable identity across approval and both layer results."""
 
@@ -616,9 +621,11 @@ def _require_matching_research_approval(
         raise ValueError("research approval conclusion must be passed")
     if approval.get("config_hash") != config_hash:
         raise ValueError("research approval config_hash must match frozen selection")
-    universe_hash = approval.get("universe_hash")
-    if not isinstance(universe_hash, str) or not universe_hash.strip():
+    approved_universe_hash = approval.get("universe_hash")
+    if not isinstance(approved_universe_hash, str) or not approved_universe_hash.strip():
         raise ValueError("research approval universe_hash must be non-empty")
+    if approved_universe_hash != universe_hash:
+        raise ValueError("research approval universe_hash must match active targets")
     approval_cutoff = approval.get("data_cutoff")
     if not isinstance(approval_cutoff, str):
         raise ValueError("research approval data_cutoff must be an ISO date")
@@ -645,6 +652,23 @@ def _require_matching_research_approval(
             raise ValueError(f"research approval layer universe_hash mismatch: {layer}")
         if artifact.get("data_cutoff") != approval_cutoff:
             raise ValueError(f"research approval layer data_cutoff mismatch: {layer}")
+
+
+def selection_universe_hash(targets: Sequence[TargetSpec]) -> str:
+    """Hash the actual funded targets that daily advice is allowed to use."""
+    body = [
+        {
+            "stock_code": item.stock_code,
+            "tracking_index_code": item.tracking_index_code,
+            "layer": item.layer,
+            "sub_layer": item.sub_layer.value if item.sub_layer else None,
+            "sub_layer_budget": str(item.sub_layer_budget),
+            "instrument_type": item.instrument_type.value,
+            "weight": str(item.weight),
+        }
+        for item in sorted(targets, key=lambda value: (value.stock_code, value.sub_layer.value if value.sub_layer else ""))
+    ]
+    return sha256(json.dumps(body, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
 
 def _as_decimal_weight(weight: Decimal | float) -> Decimal:

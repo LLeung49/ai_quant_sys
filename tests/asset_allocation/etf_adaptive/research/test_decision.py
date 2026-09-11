@@ -144,7 +144,24 @@ def test_persistent_negative_return_and_risk_adjusted_evidence_needs_structural_
             sortino_excess=-0.10,
             calmar_excess=-0.10,
             cvar5_improvement=-0.01,
+            persistent_failure_windows=4,
         )
     )
 
     assert summary.conclusion is ResearchConclusion.EVALUATE_STRUCTURAL_CHANGE
+
+
+@pytest.mark.parametrize("count", (1, 2))
+def test_insufficient_oos_blocks_even_positive_evidence(count) -> None:
+    result = evaluate_research_decision(_evidence(oos_window_count=count))
+    assert result.conclusion is ResearchConclusion.DO_NOT_TRADE
+    assert "oos_evidence" in result.blockers
+
+
+def test_aggregate_negative_metrics_do_not_prove_persistent_failure() -> None:
+    result = evaluate_research_decision(_evidence(
+        annual_excess=-0.03, drawdown_improvement=-0.01, sharpe_excess=-0.1,
+        sortino_excess=-0.1, calmar_excess=-0.1, cvar5_improvement=-0.01,
+    ))
+    assert result.conclusion is ResearchConclusion.DO_NOT_TRADE
+    assert "persistent_failure_evidence" in result.blockers

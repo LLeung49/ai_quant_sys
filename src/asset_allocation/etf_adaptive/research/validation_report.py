@@ -26,6 +26,7 @@ class ValidationArtifactManifest:
     summary_json: Path
     windows_csv: Path
     trades_csv: Path
+    daily_nav_csv: Path
     report_markdown: Path
     chart_png: Path
 
@@ -101,6 +102,22 @@ def _evidence_blockers(result: InstrumentValidationResult) -> list[str]:
         blockers.append("benchmark_exposure")
     if result.rejection_reason:
         blockers.append(result.rejection_reason)
+    manifest = result.run_manifest
+    required_manifest_fields = {
+        "schema_version", "runner", "source_provider", "data_cutoff", "requested_start",
+        "data_fingerprint", "target", "selected_configs", "screened_axes",
+    }
+    if not isinstance(manifest, dict) or not required_manifest_fields.issubset(manifest):
+        blockers.append("run_manifest")
+    elif (
+        manifest["data_cutoff"] != result.as_of_date.isoformat()
+        or not isinstance(manifest["selected_configs"], list)
+        or len(manifest["selected_configs"]) != len(result.windows)
+        or not isinstance(manifest["screened_axes"], dict)
+    ):
+        blockers.append("run_manifest")
+    if any(not isinstance(window.selected_config, dict) for window in result.windows):
+        blockers.append("selected_config")
     return list(dict.fromkeys(blockers))
 
 
@@ -166,6 +183,7 @@ def _window_row(window: ValidationWindowResult) -> dict[str, object]:
         "window_id": window.window_id, "training_end": window.training_end.isoformat(),
         "validation_start": window.validation_start.isoformat(), "config_hash": window.config_hash,
         "strategy_return": window.strategy_return, "benchmark_return": window.benchmark_return,
+        "selected_config": json.dumps(window.selected_config, ensure_ascii=False, sort_keys=True),
         "excess_return": window.strategy_return - window.benchmark_return,
         **{f"strategy_{name}": strategy[name] if strategy else None for name in _METRIC_NAMES},
         **{f"benchmark_{name}": benchmark[name] if benchmark else None for name in _METRIC_NAMES},
@@ -218,6 +236,23 @@ def _trade_rows(result: InstrumentValidationResult) -> list[dict[str, object]]:
                     "side": payload.get("side", ""), "shares": payload.get("shares", ""),
                     "raw_price": payload.get("raw_price", ""), "reason": payload.get("reason", ""),
                     "commission": payload.get("commission", ""), "config_hash": window.config_hash,
+                })
+    return rows
+
+
+def _daily_nav_rows(result: InstrumentValidationResult) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for window in result.windows:
+        for role, nav in (("strategy", window.strategy_daily_nav), ("buy_and_hold", window.benchmark_daily_nav)):
+            for point in nav:
+                rows.append({
+                    "window_id": window.window_id,
+                    "role": role,
+                    "nav_date": point.nav_date.isoformat(),
+                    "cash": str(point.cash),
+                    "market_value": str(point.market_value),
+                    "total_nav": str(point.total),
+                    "exposure": int(point.market_value > 0),
                 })
     return rows
 
@@ -361,7 +396,12 @@ def write_validation_artifacts(result: InstrumentValidationResult, output_dir: P
         "sub_layer": result.target.sub_layer.value,
         "scope": result.scope.value,
         "status": result.status.value,
-        "activation_eligible": result.activation_eligible,
+        "activation_eligible": bool(
+            result.activation_eligible
+            and not blockers
+            and result.decision is not None
+            and result.decision.conclusion is ResearchConclusion.PASSED
+        ),
         "decision": _decision_payload(result, blockers),
         "comparison": _comparison(result, blockers),
         "oos_distribution": _distribution(window_rows) if not blockers else None,
@@ -370,6 +410,7 @@ def write_validation_artifacts(result: InstrumentValidationResult, output_dir: P
             "data_cutoff": result.as_of_date.isoformat(),
             "config_hashes": sorted({window.config_hash for window in result.windows}),
             "training_surface": _training_surface(result),
+            "run_manifest": result.run_manifest,
         },
         "windows": window_rows if not blockers else None,
     }
@@ -379,6 +420,8 @@ def write_validation_artifacts(result: InstrumentValidationResult, output_dir: P
     _write_csv(staging / "windows.csv", window_rows, list(window_rows[0]) if window_rows else ["window_id"])
     trades = _trade_rows(result)
     _write_csv(staging / "trades.csv", trades, ["window_id", "role", "trade_date", "kind", "side", "shares", "raw_price", "reason", "commission", "config_hash"])
+    daily_nav = _daily_nav_rows(result)
+    _write_csv(staging / "daily_nav.csv", daily_nav, ["window_id", "role", "nav_date", "cash", "market_value", "total_nav", "exposure"])
     (staging / "attribution.json").write_text(json.dumps(attribution, ensure_ascii=False, indent=2), encoding="utf-8")
     (staging / "report.md").write_text(_markdown(summary, attribution), encoding="utf-8")
     _plot(result, staging / "validation_chart.png")
@@ -387,4 +430,4 @@ def write_validation_artifacts(result: InstrumentValidationResult, output_dir: P
     for window in result.windows:
         _plot(replace(result, windows=(window,)), charts_dir / f"{window.window_id}.png")
     publish_directory(staging, output_dir)
-    return ValidationArtifactManifest(output_dir / "summary.json", output_dir / "windows.csv", output_dir / "trades.csv", output_dir / "report.md", output_dir / "validation_chart.png")
+    return ValidationArtifactManifest(output_dir / "summary.json", output_dir / "windows.csv", output_dir / "trades.csv", output_dir / "daily_nav.csv", output_dir / "report.md", output_dir / "validation_chart.png")

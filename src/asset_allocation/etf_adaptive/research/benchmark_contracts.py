@@ -16,6 +16,7 @@ from ..contracts import AssetLayer, SubLayer, asset_layer_for
 from .decision import (
     DecisionSummary,
     ResearchEvidence,
+    ResearchConclusion,
     evaluate_research_decision,
 )
 from .metrics import PerformanceMetrics
@@ -192,6 +193,9 @@ def evaluate_layer_research_decision(
     strategy_metrics: PerformanceMetrics,
     benchmark_metrics: PerformanceMetrics,
     initial_oos_nav: float,
+    data_valid: bool = False,
+    stable_parameter_region: bool = False,
+    exposure_ratio: float = 0.0,
 ) -> DecisionSummary:
     """Classify fixed-weight layer evidence with the Task 1 decision contract."""
 
@@ -206,13 +210,17 @@ def evaluate_layer_research_decision(
         raise ValueError("initial_oos_nav must be positive")
     if gate.total_windows <= 0:
         raise ValueError("gate total_windows must be positive")
+    if not data_valid or not stable_parameter_region or exposure_ratio <= 0.0:
+        return DecisionSummary(
+            ResearchConclusion.DO_NOT_TRADE,
+            ("layer_prerequisites",),
+        )
 
     return evaluate_research_decision(ResearchEvidence(
-        data_valid=True,
+        data_valid=data_valid,
         oos_window_count=gate.total_windows,
         oos_non_lagging_share=gate.non_lagging_windows / gate.total_windows,
-        # Strategic layer weights are fixed and not selected from OOS output.
-        stable_parameter_region=True,
+        stable_parameter_region=stable_parameter_region,
         annual_excess=strategy_metrics.annual_return - benchmark_metrics.annual_return,
         drawdown_improvement=(
             strategy_metrics.max_drawdown - benchmark_metrics.max_drawdown
@@ -221,7 +229,7 @@ def evaluate_layer_research_decision(
         sortino_excess=strategy_metrics.sortino - benchmark_metrics.sortino,
         calmar_excess=strategy_metrics.calmar - benchmark_metrics.calmar,
         cvar5_improvement=strategy_metrics.cvar5 - benchmark_metrics.cvar5,
-        exposure_ratio=1.0,
+        exposure_ratio=exposure_ratio,
         turnover=strategy_metrics.turnover,
         total_cost=strategy_metrics.total_cost,
         initial_oos_nav=initial_nav,

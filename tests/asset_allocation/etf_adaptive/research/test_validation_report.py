@@ -56,6 +56,8 @@ def _recorded_result() -> InstrumentValidationResult:
         2, 1, 3, 0,
         (TrainingSurfaceSummary("grid-hash", (True, True), (0.01, 0.02), 1.0),),
         (TrainingSurfaceSummary("trend-hash", (True, True), (0.01, 0.02), 1.0),),
+        None,
+        {"grid": {"step_pct": 0.02}, "trend": {"stop_n": 2.0}, "cost": {"slippage_bps": 3.0}},
     )
     evidence = ResearchEvidence(
         data_valid=True, oos_window_count=3, oos_non_lagging_share=1.0,
@@ -74,6 +76,16 @@ def _recorded_result() -> InstrumentValidationResult:
         strategy_metrics=strategy_metrics, benchmark_metrics=benchmark_metrics,
         strategy_invested_sessions=6, strategy_cash_sessions=3,
         benchmark_invested_sessions=9, benchmark_cash_sessions=0,
+        run_manifest={
+            "schema_version": 1, "runner": "test", "source_provider": "test",
+            "data_cutoff": "2026-09-08", "requested_start": "2025-01-02",
+            "data_fingerprint": "test", "target": {"stock_code": "159915.SZ"},
+            "selected_configs": [
+                {"window_id": item.window_id, "config_hash": item.config_hash, "config": item.selected_config}
+                for item in (window, replace(window, window_id="wf_001"), replace(window, window_id="wf_002"))
+            ],
+            "screened_axes": {"grid": ["step_pct"], "trend": ["stop_n"]},
+        },
     )
 
 
@@ -94,6 +106,7 @@ def test_write_validation_artifacts_publishes_recorded_risk_adjusted_decision_re
     assert "事件归因" in report
     assert manifest.chart_png.exists() and manifest.chart_png.stat().st_size > 1_000
     assert (tmp_path / "159915.SZ" / "charts" / "wf_000.png").exists()
+    assert manifest.daily_nav_csv.exists()
 
 
 def test_write_validation_artifacts_fails_closed_when_recorded_evidence_is_absent(tmp_path: Path) -> None:
@@ -137,3 +150,12 @@ def test_write_validation_artifacts_marks_inconsistent_oos_window_evidence_as_in
     assert summary["decision"]["conclusion"] == "do_not_trade"
     assert "oos_window_count" in summary["decision"]["blockers"]
     assert summary["comparison"] is None
+
+
+def test_report_without_reproducibility_evidence_cannot_approve(tmp_path: Path) -> None:
+    result = replace(_recorded_result(), run_manifest=None)
+    manifest = write_validation_artifacts(result, tmp_path / "missing-provenance")
+    summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
+    assert summary["decision"]["conclusion"] == "do_not_trade"
+    assert summary["activation_eligible"] is False
+    assert "run_manifest" in summary["decision"]["blockers"]

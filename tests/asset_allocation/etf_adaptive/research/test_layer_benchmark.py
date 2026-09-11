@@ -141,8 +141,8 @@ def test_layer_artifact_requires_a_passing_risk_adjusted_decision() -> None:
     assert result.gate.passed is True
     assert artifact["passed"] is False
     assert artifact["decision"] == {
-        "conclusion": "continue_parameter_optimization",
-        "blockers": ["oos_evidence"],
+        "conclusion": "do_not_trade",
+        "blockers": ["layer_prerequisites"],
     }
     assert artifact["strategy_metrics"]["sortino"] == pytest.approx(
         result.strategy_metrics.sortino
@@ -241,6 +241,16 @@ def test_first_window_excess_uses_normalized_pre_window_capital() -> None:
     )
 
     assert excess == pytest.approx((-0.07,))
+
+
+def test_missing_layer_prerequisites_cannot_produce_actionable_decision() -> None:
+    from asset_allocation.etf_adaptive.research.decision import ResearchConclusion
+    result = aggregate_layer_evidence(
+        StrategicPortfolio("beta", AssetLayer.BROAD_BETA, {SubLayer.DOMESTIC_CORE: 1.0}),
+        {SubLayer.DOMESTIC_CORE: _evidence(SubLayer.DOMESTIC_CORE, (1.0, 1.1, 1.21), (1.0, .95, 1.2))},
+    )
+    assert result.decision.conclusion is ResearchConclusion.DO_NOT_TRADE
+    assert "layer_prerequisites" in result.decision.blockers
 
 
 def test_layer_aggregation_rejects_window_boundary_misalignment() -> None:
