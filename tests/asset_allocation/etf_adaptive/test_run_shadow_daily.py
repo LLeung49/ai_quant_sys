@@ -330,6 +330,100 @@ def test_active_selection_rejects_a_recorded_failed_layer_benchmark() -> None:
         shadow_module._build_active_selection(frozen)
 
 
+def _approved_layer_benchmarks(*, config_hash: str, universe_hash: str, data_cutoff: str) -> dict[str, object]:
+    return {
+        layer: {
+            "passed": True,
+            "decision": {"conclusion": "passed", "blockers": []},
+            "config_hash": config_hash,
+            "universe_hash": universe_hash,
+            "data_cutoff": data_cutoff,
+        }
+        for layer in ("defensive", "broad_beta")
+    }
+
+
+def _frozen_with_research_approval(approval: object) -> FrozenConfigRecord:
+    return FrozenConfigRecord(
+        config_hash="parent-hash",
+        config=AdaptiveConfig.default(),
+        selection_payload={
+            "research_approval": approval,
+            "layer_benchmarks": _approved_layer_benchmarks(
+                config_hash="parent-hash",
+                universe_hash="universe-hash",
+                data_cutoff=DATA_CUTOFF.isoformat(),
+            ),
+            "targets": [{
+                "stock_code": "510300.SH", "tracking_index_code": "000300.SH",
+                "layer": "broad_beta", "sub_layer": "broad_domestic_core",
+                "sub_layer_budget": "42000", "instrument_type": "etf", "weight": "1",
+                "config_hash": "parent-hash",
+            }],
+        },
+        data_cutoff=DATA_CUTOFF,
+        activation_date=date(2026, 8, 1),
+        review_date=date(2027, 2, 1),
+        activated_at=datetime(2026, 8, 1, 17, 0),
+    )
+
+
+@pytest.mark.parametrize("approval", [
+    None,
+    {"conclusion": "passed", "config_hash": "another-hash", "universe_hash": "universe-hash", "data_cutoff": "2026-09-01", "data_audit_passed": True},
+    {"conclusion": "passed", "config_hash": "parent-hash", "universe_hash": "", "data_cutoff": "2026-09-01", "data_audit_passed": True},
+    {"conclusion": "passed", "config_hash": "parent-hash", "universe_hash": "universe-hash", "data_cutoff": "2026-09-02", "data_audit_passed": True},
+    {"conclusion": "continue_parameter_optimization", "config_hash": "parent-hash", "universe_hash": "universe-hash", "data_cutoff": "2026-09-01", "data_audit_passed": True},
+])
+def test_active_selection_rejects_missing_or_mismatched_research_approval(approval: object) -> None:
+    """Break caught: a current approval payload can bypass immutable research identity checks."""
+
+    with pytest.raises(ValueError, match="research approval"):
+        shadow_module._build_active_selection(_frozen_with_research_approval(approval))
+
+
+def test_active_selection_accepts_matching_passed_research_approval() -> None:
+    approval = {
+        "conclusion": "passed",
+        "config_hash": "parent-hash",
+        "universe_hash": "universe-hash",
+        "data_cutoff": DATA_CUTOFF.isoformat(),
+        "data_audit_passed": True,
+    }
+
+    selection = shadow_module._build_active_selection(
+        _frozen_with_research_approval(approval)
+    )
+
+    assert selection.config_hash == "parent-hash"
+    assert selection.data_cutoff == DATA_CUTOFF
+
+
+def test_active_selection_rejects_layer_artifact_with_different_approval_identity() -> None:
+    """Break caught: approval identity is accepted even when one layer artifact is from another universe."""
+
+    approval = {
+        "conclusion": "passed",
+        "config_hash": "parent-hash",
+        "universe_hash": "universe-hash",
+        "data_cutoff": DATA_CUTOFF.isoformat(),
+        "data_audit_passed": True,
+    }
+    frozen = _frozen_with_research_approval(approval)
+    payload = dict(frozen.selection_payload)
+    layer_benchmarks = dict(payload["layer_benchmarks"])
+    layer_benchmarks["broad_beta"] = {
+        **layer_benchmarks["broad_beta"],
+        "universe_hash": "different-universe-hash",
+    }
+    payload["layer_benchmarks"] = layer_benchmarks
+
+    with pytest.raises(ValueError, match="research approval"):
+        shadow_module._build_active_selection(
+            FrozenConfigRecord(**{**frozen.__dict__, "selection_payload": payload})
+        )
+
+
 def test_shadow_runner_requires_active_frozen_selection() -> None:
     store = InMemoryShadowStore()
     provider = _StubProvider()

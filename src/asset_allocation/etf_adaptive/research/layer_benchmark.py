@@ -3,16 +3,23 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 from ..contracts import AssetLayer, SubLayer
 from .baselines import BaselineKind
-from .benchmark_contracts import BenchmarkSeries, PortfolioGate, StrategicPortfolio, evaluate_portfolio_gate
+from .benchmark_contracts import (
+    BenchmarkSeries,
+    PortfolioGate,
+    StrategicPortfolio,
+    evaluate_layer_research_decision,
+    evaluate_portfolio_gate,
+)
 from .bluechip_execution import BlueChipBasketEvidence
+from .decision import DecisionSummary, ResearchConclusion
 from .execution_evidence import StitchedNavPoint, TargetEvidence
 
 LayerEvidence = TargetEvidence | BlueChipBasketEvidence
-from .metrics import calculate_performance
+from .metrics import PerformanceMetrics, calculate_performance
 
 
 @dataclass(frozen=True)
@@ -20,7 +27,10 @@ class LayerBenchmarkResult:
     portfolio: StrategicPortfolio
     strategy_nav: tuple[float, ...]
     benchmark_nav: tuple[float, ...]
+    strategy_metrics: PerformanceMetrics
+    benchmark_metrics: PerformanceMetrics
     gate: PortfolioGate
+    decision: DecisionSummary
     marginal_excess_contribution: Mapping[SubLayer, float]
     bluechip_member_contribution: Mapping[str, float] | None = None
 
@@ -72,6 +82,26 @@ def _weighted_nav(
     )
 
 
+def _window_excess_returns(
+    strategy_nav: tuple[float, ...],
+    benchmark_nav: tuple[float, ...],
+    paths: Mapping[SubLayer, tuple[StitchedNavPoint, ...]],
+) -> tuple[float, ...]:
+    """Return one aligned strategy-minus-B&H return for each OOS window."""
+
+    reference = next(iter(paths.values()))
+    grouped: dict[str, list[int]] = {}
+    for index, point in enumerate(reference):
+        grouped.setdefault(point.window_id, []).append(index)
+    if not grouped:
+        raise ValueError("layer evidence must contain at least one OOS observation")
+    return tuple(
+        (strategy_nav[indexes[-1]] / strategy_nav[indexes[0]] - 1.0)
+        - (benchmark_nav[indexes[-1]] / benchmark_nav[indexes[0]] - 1.0)
+        for _, indexes in sorted(grouped.items())
+    )
+
+
 def aggregate_layer_evidence(
     portfolio: StrategicPortfolio,
     evidence_by_exposure: Mapping[SubLayer, LayerEvidence],
@@ -85,13 +115,19 @@ def aggregate_layer_evidence(
     benchmark_nav = _weighted_nav(portfolio.weights, benchmark_paths)
     strategy_metrics = calculate_performance(strategy_nav, ())
     benchmark_metrics = calculate_performance(benchmark_nav, ())
-    excess = (strategy_nav[-1] / strategy_nav[0] - 1.0) - (
-        benchmark_nav[-1] / benchmark_nav[0] - 1.0
+    window_excess_returns = _window_excess_returns(
+        strategy_nav, benchmark_nav, strategy_paths,
     )
     gate = evaluate_portfolio_gate(
         BenchmarkSeries("full_adaptive", strategy_metrics.annual_return, strategy_metrics.max_drawdown),
         BenchmarkSeries("buy_and_hold", benchmark_metrics.annual_return, benchmark_metrics.max_drawdown),
-        (excess,),
+        window_excess_returns,
+    )
+    decision = evaluate_layer_research_decision(
+        gate=gate,
+        strategy_metrics=strategy_metrics,
+        benchmark_metrics=benchmark_metrics,
+        initial_oos_nav=strategy_nav[0],
     )
     contribution = {
         sub_layer: portfolio.weights[sub_layer]
@@ -102,7 +138,10 @@ def aggregate_layer_evidence(
         portfolio=portfolio,
         strategy_nav=strategy_nav,
         benchmark_nav=benchmark_nav,
+        strategy_metrics=strategy_metrics,
+        benchmark_metrics=benchmark_metrics,
         gate=gate,
+        decision=decision,
         marginal_excess_contribution=contribution,
     )
 
@@ -147,7 +186,10 @@ def aggregate_defensive_evidence(
         portfolio=result.portfolio,
         strategy_nav=result.strategy_nav,
         benchmark_nav=result.benchmark_nav,
+        strategy_metrics=result.strategy_metrics,
+        benchmark_metrics=result.benchmark_metrics,
         gate=result.gate,
+        decision=result.decision,
         marginal_excess_contribution=result.marginal_excess_contribution,
         bluechip_member_contribution=contribution,
     )
@@ -159,10 +201,16 @@ def layer_benchmark_artifact(result: LayerBenchmarkResult) -> dict[str, object]:
     if not isinstance(result, LayerBenchmarkResult):
         raise ValueError("result must be a LayerBenchmarkResult")
     artifact = {
-        "passed": result.gate.passed,
+        "passed": result.decision.conclusion is ResearchConclusion.PASSED,
         "return_passed": result.gate.return_passed,
         "drawdown_passed": result.gate.drawdown_passed,
         "majority_windows_passed": result.gate.majority_windows_passed,
+        "strategy_metrics": asdict(result.strategy_metrics),
+        "benchmark_metrics": asdict(result.benchmark_metrics),
+        "decision": {
+            "conclusion": result.decision.conclusion.value,
+            "blockers": list(result.decision.blockers),
+        },
         "strategy_nav": result.strategy_nav,
         "benchmark_nav": result.benchmark_nav,
         "marginal_excess_contribution": {

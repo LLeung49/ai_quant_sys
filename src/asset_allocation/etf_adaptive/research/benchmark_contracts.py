@@ -13,6 +13,12 @@ from datetime import date
 import math
 
 from ..contracts import AssetLayer, SubLayer, asset_layer_for
+from .decision import (
+    DecisionSummary,
+    ResearchEvidence,
+    evaluate_research_decision,
+)
+from .metrics import PerformanceMetrics
 
 
 MAX_DRAWDOWN_TOLERANCE: float = 0.02
@@ -178,3 +184,46 @@ def evaluate_portfolio_gate(
         non_lagging_windows=non_lagging,
         total_windows=len(excess),
     )
+
+
+def evaluate_layer_research_decision(
+    *,
+    gate: PortfolioGate,
+    strategy_metrics: PerformanceMetrics,
+    benchmark_metrics: PerformanceMetrics,
+    initial_oos_nav: float,
+) -> DecisionSummary:
+    """Classify fixed-weight layer evidence with the Task 1 decision contract."""
+
+    if not isinstance(gate, PortfolioGate):
+        raise ValueError("gate must be a PortfolioGate")
+    if not isinstance(strategy_metrics, PerformanceMetrics):
+        raise ValueError("strategy_metrics must be PerformanceMetrics")
+    if not isinstance(benchmark_metrics, PerformanceMetrics):
+        raise ValueError("benchmark_metrics must be PerformanceMetrics")
+    initial_nav = _require_finite(initial_oos_nav, "initial_oos_nav")
+    if initial_nav <= 0.0:
+        raise ValueError("initial_oos_nav must be positive")
+    if gate.total_windows <= 0:
+        raise ValueError("gate total_windows must be positive")
+
+    return evaluate_research_decision(ResearchEvidence(
+        data_valid=True,
+        oos_window_count=gate.total_windows,
+        oos_non_lagging_share=gate.non_lagging_windows / gate.total_windows,
+        # Strategic layer weights are fixed and not selected from OOS output.
+        stable_parameter_region=True,
+        annual_excess=strategy_metrics.annual_return - benchmark_metrics.annual_return,
+        drawdown_improvement=(
+            strategy_metrics.max_drawdown - benchmark_metrics.max_drawdown
+        ),
+        sharpe_excess=strategy_metrics.sharpe - benchmark_metrics.sharpe,
+        sortino_excess=strategy_metrics.sortino - benchmark_metrics.sortino,
+        calmar_excess=strategy_metrics.calmar - benchmark_metrics.calmar,
+        cvar5_improvement=strategy_metrics.cvar5 - benchmark_metrics.cvar5,
+        exposure_ratio=1.0,
+        turnover=strategy_metrics.turnover,
+        total_cost=strategy_metrics.total_cost,
+        initial_oos_nav=initial_nav,
+        cost_drag=strategy_metrics.total_cost / initial_nav,
+    ))

@@ -509,7 +509,11 @@ def run_shadow_date(
 
 def _build_active_selection(frozen) -> ActiveSelection:
     payload = frozen.selection_payload or {}
-    _require_passing_layer_benchmarks(payload)
+    _require_passing_layer_benchmarks(
+        payload,
+        config_hash=frozen.config_hash,
+        data_cutoff=frozen.data_cutoff,
+    )
     raw_targets = payload.get("targets", ())
     if not isinstance(raw_targets, Sequence) or isinstance(raw_targets, (str, bytes)):
         raise ValueError("frozen selection targets must be a sequence")
@@ -557,7 +561,12 @@ def _build_active_selection(frozen) -> ActiveSelection:
     )
 
 
-def _require_passing_layer_benchmarks(payload: Mapping[str, object]) -> None:
+def _require_passing_layer_benchmarks(
+    payload: Mapping[str, object],
+    *,
+    config_hash: str,
+    data_cutoff: date,
+) -> None:
     """Reject new research payloads that record a failed layer-level gate.
 
     Historic frozen records did not carry layer research evidence and remain
@@ -566,9 +575,23 @@ def _require_passing_layer_benchmarks(payload: Mapping[str, object]) -> None:
     """
 
     raw = payload.get("layer_benchmarks")
-    if raw is None:
+    if "research_approval" not in payload:
+        _require_legacy_passing_layer_benchmarks(raw)
         return
+    _require_matching_research_approval(
+        payload["research_approval"],
+        raw,
+        config_hash=config_hash,
+        data_cutoff=data_cutoff,
+    )
+
+
+def _require_legacy_passing_layer_benchmarks(raw: object) -> None:
+    """Keep historic records replayable without treating them as new approval."""
+
     if not isinstance(raw, Mapping):
+        if raw is None:
+            return
         raise ValueError("layer benchmark evidence must be a mapping")
     expected = {"defensive", "broad_beta"}
     if set(raw) != expected:
@@ -577,6 +600,52 @@ def _require_passing_layer_benchmarks(payload: Mapping[str, object]) -> None:
         result = raw[layer]
         if not isinstance(result, Mapping) or result.get("passed") is not True:
             raise ValueError(f"layer benchmark did not pass: {layer}")
+
+
+def _require_matching_research_approval(
+    approval: object,
+    layer_benchmarks: object,
+    *,
+    config_hash: str,
+    data_cutoff: date,
+) -> None:
+    """Require one immutable identity across approval and both layer results."""
+
+    if not isinstance(approval, Mapping):
+        raise ValueError("research approval must be a mapping")
+    if approval.get("conclusion") != "passed":
+        raise ValueError("research approval conclusion must be passed")
+    if approval.get("config_hash") != config_hash:
+        raise ValueError("research approval config_hash must match frozen selection")
+    universe_hash = approval.get("universe_hash")
+    if not isinstance(universe_hash, str) or not universe_hash.strip():
+        raise ValueError("research approval universe_hash must be non-empty")
+    approval_cutoff = approval.get("data_cutoff")
+    if not isinstance(approval_cutoff, str):
+        raise ValueError("research approval data_cutoff must be an ISO date")
+    try:
+        parsed_cutoff = date.fromisoformat(approval_cutoff)
+    except ValueError as exc:
+        raise ValueError("research approval data_cutoff must be an ISO date") from exc
+    if parsed_cutoff != data_cutoff:
+        raise ValueError("research approval data_cutoff must match frozen selection")
+    if approval.get("data_audit_passed") is not True:
+        raise ValueError("research approval data_audit_passed must be true")
+    if not isinstance(layer_benchmarks, Mapping) or set(layer_benchmarks) != {"defensive", "broad_beta"}:
+        raise ValueError("research approval requires defensive and broad_beta layer benchmarks")
+    for layer in ("defensive", "broad_beta"):
+        artifact = layer_benchmarks[layer]
+        if not isinstance(artifact, Mapping):
+            raise ValueError(f"research approval layer artifact must be a mapping: {layer}")
+        decision = artifact.get("decision")
+        if artifact.get("passed") is not True or not isinstance(decision, Mapping) or decision.get("conclusion") != "passed":
+            raise ValueError(f"research approval layer decision did not pass: {layer}")
+        if artifact.get("config_hash") != config_hash:
+            raise ValueError(f"research approval layer config_hash mismatch: {layer}")
+        if artifact.get("universe_hash") != universe_hash:
+            raise ValueError(f"research approval layer universe_hash mismatch: {layer}")
+        if artifact.get("data_cutoff") != approval_cutoff:
+            raise ValueError(f"research approval layer data_cutoff mismatch: {layer}")
 
 
 def _as_decimal_weight(weight: Decimal | float) -> Decimal:

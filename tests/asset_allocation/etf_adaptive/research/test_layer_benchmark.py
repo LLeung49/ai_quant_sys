@@ -33,7 +33,7 @@ from asset_allocation.etf_adaptive.research.layer_benchmark import (
 
 
 def _evidence(sub_layer: SubLayer, strategy: tuple[float, ...], benchmark: tuple[float, ...]) -> TargetEvidence:
-    dates = (date(2024, 1, 2), date(2024, 1, 3), date(2024, 1, 4))
+    dates = tuple(date(2024, 1, 2 + offset) for offset in range(len(strategy)))
     entry = WhitelistEntry(
         exposure_id=sub_layer.value,
         sub_layer=sub_layer,
@@ -88,18 +88,58 @@ def test_defensive_layer_uses_fixed_weights_and_can_pass_with_one_lagging_target
     assert result.benchmark_nav[-1] == pytest.approx(1.12858)
     assert result.gate.passed is True
     assert result.marginal_excess_contribution[SubLayer.DEFENSIVE_BLUE_CHIP] < 0
-    assert layer_benchmark_artifact(result) == {
-        "passed": True,
-        "return_passed": True,
-        "drawdown_passed": True,
-        "majority_windows_passed": True,
-        "strategy_nav": pytest.approx((1.0, 1.09287, 1.175015)),
-        "benchmark_nav": pytest.approx((1.0, 1.06429, 1.12858)),
-        "marginal_excess_contribution": {
-            "defensive_dividend_etf": pytest.approx(0.06429),
-            "defensive_blue_chip": pytest.approx(-0.017855),
-        },
+    artifact = layer_benchmark_artifact(result)
+    assert artifact["passed"] is False
+    assert artifact["decision"]["conclusion"] != "passed"
+    assert artifact["strategy_nav"] == pytest.approx((1.0, 1.09287, 1.175015))
+    assert artifact["benchmark_nav"] == pytest.approx((1.0, 1.06429, 1.12858))
+    assert artifact["marginal_excess_contribution"] == {
+        "defensive_dividend_etf": pytest.approx(0.06429),
+        "defensive_blue_chip": pytest.approx(-0.017855),
     }
+
+
+def test_layer_artifact_requires_a_passing_risk_adjusted_decision() -> None:
+    """Break caught: a legacy return/drawdown gate alone authorizes a layer."""
+
+    portfolio = StrategicPortfolio(
+        "defensive_strategy",
+        AssetLayer.DEFENSIVE,
+        {
+            SubLayer.DEFENSIVE_DIVIDEND_ETF: 0.6429,
+            SubLayer.DEFENSIVE_BLUE_CHIP: 0.3571,
+        },
+    )
+    result = aggregate_layer_evidence(
+        portfolio,
+        {
+            SubLayer.DEFENSIVE_DIVIDEND_ETF: _evidence(
+                SubLayer.DEFENSIVE_DIVIDEND_ETF,
+                (1.0, 1.1, 1.0, 0.93, 1.3, 1.5),
+                (1.0, 1.1, 0.8, 0.6, 1.0, 1.2),
+            ),
+            SubLayer.DEFENSIVE_BLUE_CHIP: _evidence(
+                SubLayer.DEFENSIVE_BLUE_CHIP,
+                (1.0, 1.1, 1.0, 0.93, 1.3, 1.5),
+                (1.0, 1.1, 0.8, 0.6, 1.0, 1.2),
+            ),
+        },
+    )
+
+    artifact = layer_benchmark_artifact(result)
+
+    assert result.gate.passed is True
+    assert artifact["passed"] is False
+    assert artifact["decision"] == {
+        "conclusion": "continue_parameter_optimization",
+        "blockers": ["oos_evidence"],
+    }
+    assert artifact["strategy_metrics"]["sortino"] == pytest.approx(
+        result.strategy_metrics.sortino
+    )
+    assert artifact["benchmark_metrics"]["cvar5"] == pytest.approx(
+        result.benchmark_metrics.cvar5
+    )
 
 
 def test_layer_aggregation_rejects_misaligned_dates() -> None:
