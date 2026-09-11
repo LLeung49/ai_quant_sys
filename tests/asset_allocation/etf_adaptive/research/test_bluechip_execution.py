@@ -84,3 +84,30 @@ def test_aggregate_bluechip_paths_rejects_missing_or_misaligned_members() -> Non
                 "601088.SH": (StitchedNavPoint("wf_000", date(2024, 1, 3), 1.0),),
             },
         )
+
+
+def test_aggregate_bluechip_paths_rejects_members_with_different_window_ids() -> None:
+    """Break caught: equal dates conceal different walk-forward windows."""
+
+    basket = BlueChipBasket(
+        "H30269.CSI",
+        date(2024, 1, 2),
+        (
+            BlueChipConstituent("600900.SH", 0.6, "a" * 64),
+            BlueChipConstituent("601088.SH", 0.4, "b" * 64),
+        ),
+    )
+    first = (
+        StitchedNavPoint("wf_000", date(2024, 1, 2), 1.0),
+        StitchedNavPoint("wf_000", date(2024, 1, 3), 1.1),
+    )
+    different_window = (
+        StitchedNavPoint("wf_001", date(2024, 1, 2), 1.0),
+        StitchedNavPoint("wf_001", date(2024, 1, 3), 1.1),
+    )
+
+    with pytest.raises(ValueError, match="window"):
+        aggregate_bluechip_paths(
+            basket,
+            {"600900.SH": first, "601088.SH": different_window},
+        )

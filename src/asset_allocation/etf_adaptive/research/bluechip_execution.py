@@ -147,10 +147,10 @@ def aggregate_bluechip_paths(basket: BlueChipBasket, paths: Mapping[str, Sequenc
     if set(paths)!=expected: raise ValueError("paths must exactly cover basket members")
     reference=None
     for code in expected:
-        dates=tuple(point.nav_date for point in paths[code])
-        if not dates: raise ValueError("member path must not be empty")
-        if reference is None: reference=dates
-        elif dates!=reference: raise ValueError("member paths must be aligned")
+        boundaries=tuple((point.window_id, point.nav_date) for point in paths[code])
+        if not boundaries: raise ValueError("member path must not be empty")
+        if reference is None: reference=boundaries
+        elif boundaries!=reference: raise ValueError("member window boundaries must be aligned")
     nav=tuple(sum(member.weight*paths[member.stock_code][index].nav_total for member in basket.members) for index in range(len(reference)))
     contribution={member.stock_code: member.weight*(paths[member.stock_code][-1].nav_total-1.0) for member in basket.members}
     return BlueChipPath(

@@ -27,6 +27,7 @@ from asset_allocation.etf_adaptive.research.bluechip_execution import (
     BlueChipPath,
 )
 from asset_allocation.etf_adaptive.research.layer_benchmark import (
+    _window_excess_returns,
     aggregate_defensive_evidence,
     aggregate_layer_evidence,
     layer_benchmark_artifact,
@@ -223,6 +224,23 @@ def test_layer_window_excess_uses_the_prior_compounded_capital_basis() -> None:
 
     assert result.gate.non_lagging_windows == 2
     assert result.gate.passed is True
+
+
+def test_first_window_excess_uses_normalized_pre_window_capital() -> None:
+    """Break caught: the benchmark's first observed NAV becomes its opening capital."""
+
+    excess = _window_excess_returns(
+        (1.00, 1.05),
+        (1.10, 1.12),
+        {
+            SubLayer.DOMESTIC_CORE: (
+                StitchedNavPoint("wf_000", date(2024, 1, 2), 1.00),
+                StitchedNavPoint("wf_000", date(2024, 1, 3), 1.05),
+            ),
+        },
+    )
+
+    assert excess == pytest.approx((-0.07,))
 
 
 def test_layer_aggregation_rejects_window_boundary_misalignment() -> None:

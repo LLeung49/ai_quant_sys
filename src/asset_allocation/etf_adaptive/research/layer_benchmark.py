@@ -111,8 +111,8 @@ def _window_excess_returns(
         grouped[-1][1].append(index)
     if not grouped:
         raise ValueError("layer evidence must contain at least one OOS observation")
-    strategy_basis = strategy_nav[0]
-    benchmark_basis = benchmark_nav[0]
+    strategy_basis = 1.0
+    benchmark_basis = 1.0
     excess_returns: list[float] = []
     for _, indexes in grouped:
         strategy_end = strategy_nav[indexes[-1]]
