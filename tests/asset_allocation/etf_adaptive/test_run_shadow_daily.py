@@ -45,6 +45,42 @@ CALENDAR: tuple[date, ...] = tuple(date(2026, 8, day) for day in range(31, 32)) 
 DATA_CUTOFF = date(2026, 9, 1)
 
 
+def _approval(config_hash: str) -> dict[str, object]:
+    return {
+        "conclusion": "passed",
+        "config_hash": config_hash,
+        "universe_hash": "universe-hash",
+        "data_cutoff": DATA_CUTOFF.isoformat(),
+        "data_audit_passed": True,
+    }
+
+
+def _approved_layer_benchmarks(
+    *, config_hash: str, universe_hash: str, data_cutoff: str,
+) -> dict[str, object]:
+    return {
+        layer: {
+            "passed": True,
+            "decision": {"conclusion": "passed", "blockers": []},
+            "config_hash": config_hash,
+            "universe_hash": universe_hash,
+            "data_cutoff": data_cutoff,
+        }
+        for layer in ("defensive", "broad_beta")
+    }
+
+
+def _approved_research_fields(config_hash: str) -> dict[str, object]:
+    return {
+        "research_approval": _approval(config_hash),
+        "layer_benchmarks": _approved_layer_benchmarks(
+            config_hash=config_hash,
+            universe_hash="universe-hash",
+            data_cutoff=DATA_CUTOFF.isoformat(),
+        ),
+    }
+
+
 def _after_close() -> datetime:
     return datetime(2026, 9, 1, 17, 0)
 
@@ -103,6 +139,7 @@ def _store_with_selection() -> InMemoryShadowStore:
         config_hash="cfg-shadow-1",
         config=AdaptiveConfig.default(),
         selection_payload={
+            **_approved_research_fields("cfg-shadow-1"),
             "targets": [
                 {
                     "stock_code": "510300.SH",
@@ -131,6 +168,7 @@ def _store_with_layered_target_budgets() -> InMemoryShadowStore:
         config_hash="cfg-layered-budget",
         config=AdaptiveConfig.default(),
         selection_payload={
+            **_approved_research_fields("cfg-layered-budget"),
             "targets": [
                 {
                     "stock_code": "510300.SH", "tracking_index_code": "000300.SH",
@@ -275,6 +313,7 @@ def test_active_selection_rejects_missing_or_mismatched_target_config_hash() -> 
         config_hash="parent-hash",
         config=AdaptiveConfig.default(),
         selection_payload={
+            **_approved_research_fields("parent-hash"),
             "targets": [{
                 "stock_code": "510300.SH", "tracking_index_code": "000300.SH",
                 "layer": "broad_beta", "sub_layer": "broad_domestic_core",
@@ -294,6 +333,7 @@ def test_active_selection_rejects_missing_or_mismatched_target_config_hash() -> 
         **{
             **frozen.__dict__,
             "selection_payload": {
+                **_approved_research_fields("parent-hash"),
                 "targets": [{
                     **frozen.selection_payload["targets"][0], "config_hash": "another-hash",
                 }],
@@ -309,6 +349,7 @@ def test_active_selection_rejects_a_recorded_failed_layer_benchmark() -> None:
         config_hash="parent-hash",
         config=AdaptiveConfig.default(),
         selection_payload={
+            "research_approval": _approval("parent-hash"),
             "layer_benchmarks": {
                 "defensive": {"passed": False},
                 "broad_beta": {"passed": True},
@@ -326,21 +367,24 @@ def test_active_selection_rejects_a_recorded_failed_layer_benchmark() -> None:
         activated_at=datetime(2026, 8, 1, 17, 0),
     )
 
-    with pytest.raises(ValueError, match="layer benchmark"):
+    with pytest.raises(ValueError, match="research approval"):
         shadow_module._build_active_selection(frozen)
 
 
-def _approved_layer_benchmarks(*, config_hash: str, universe_hash: str, data_cutoff: str) -> dict[str, object]:
-    return {
-        layer: {
-            "passed": True,
-            "decision": {"conclusion": "passed", "blockers": []},
-            "config_hash": config_hash,
-            "universe_hash": universe_hash,
-            "data_cutoff": data_cutoff,
-        }
-        for layer in ("defensive", "broad_beta")
-    }
+def test_shadow_runner_requires_research_approval_for_every_advice_record() -> None:
+    """Break caught: an approval-free legacy payload can still emit daily advice."""
+
+    approved = _store_with_selection().load_active_frozen_config(TARGET)
+    assert approved is not None
+    legacy_store = InMemoryShadowStore()
+    legacy_store.activate_frozen_config(FrozenConfigRecord(
+        **{**approved.__dict__, "selection_payload": {
+            "targets": approved.selection_payload["targets"],
+        }},
+    ))
+
+    with pytest.raises(ValueError, match="research approval"):
+        run_shadow_date(TARGET, _after_close(), legacy_store, _StubProvider())
 
 
 def _frozen_with_research_approval(approval: object) -> FrozenConfigRecord:

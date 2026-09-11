@@ -1,7 +1,8 @@
 """Execute and aggregate independently-held PIT blue-chip constituent paths."""
 from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from decimal import Decimal
 
 from ..backtest_provider import AdaptiveBacktestDataProvider
 from ..contracts import SubLayer
@@ -10,6 +11,7 @@ from .benchmark_contracts import WhitelistEntry
 from .bluechip_basket import BlueChipBasket
 from .execution_evidence import (
     StitchedNavPoint,
+    ExecutionCostTurnover,
     TargetEvidence,
     TargetWalkForwardConfig,
     run_target_walk_forward,
@@ -32,6 +34,8 @@ class BlueChipBasketEvidence:
     basket: BlueChipBasket
     member_evidence: Mapping[str, TargetEvidence]
     paths: Mapping[BaselineKind, BlueChipPath]
+    initial_cash: Decimal | None = None
+    execution_evidence: Mapping[BaselineKind, ExecutionCostTurnover] = field(default_factory=dict)
 
     @property
     def stitched_paths(self) -> Mapping[BaselineKind, tuple[StitchedNavPoint, ...]]:
@@ -101,7 +105,40 @@ def run_bluechip_basket_walk_forward(
         )
         for kind in BaselineKind
     }
-    return BlueChipBasketEvidence(basket, member_evidence, paths)
+    execution_evidence = _aggregate_execution_evidence(basket, member_evidence)
+    return BlueChipBasketEvidence(
+        basket,
+        member_evidence,
+        paths,
+        next(iter(member_evidence.values())).initial_cash,
+        execution_evidence,
+    )
+
+
+def _aggregate_execution_evidence(
+    basket: BlueChipBasket,
+    member_evidence: Mapping[str, TargetEvidence],
+) -> Mapping[BaselineKind, ExecutionCostTurnover]:
+    """Weight only execution evidence recorded for every PIT constituent."""
+
+    expected = frozenset({BaselineKind.FULL_ADAPTIVE, BaselineKind.BUY_AND_HOLD})
+    if any(frozenset(evidence.execution_evidence) != expected for evidence in member_evidence.values()):
+        return {}
+    return {
+        kind: ExecutionCostTurnover(
+            total_cost=sum(
+                member.weight * member_evidence[member.stock_code]
+                .execution_evidence[kind].total_cost
+                for member in basket.members
+            ),
+            turnover=sum(
+                member.weight * member_evidence[member.stock_code]
+                .execution_evidence[kind].turnover
+                for member in basket.members
+            ),
+        )
+        for kind in expected
+    }
 
 
 def aggregate_bluechip_paths(basket: BlueChipBasket, paths: Mapping[str, Sequence[StitchedNavPoint]]) -> BlueChipPath:

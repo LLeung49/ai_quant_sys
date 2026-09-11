@@ -14,6 +14,7 @@ from asset_allocation.etf_adaptive.research.benchmark_contracts import (
     WhitelistEntry,
 )
 from asset_allocation.etf_adaptive.research.execution_evidence import (
+    ExecutionCostTurnover,
     StitchedNavPoint,
     TargetEvidence,
 )
@@ -59,6 +60,10 @@ def _evidence(sub_layer: SubLayer, strategy: tuple[float, ...], benchmark: tuple
                 StitchedNavPoint("wf_000", day, nav) for day, nav in zip(dates, benchmark)
             ),
         },
+        execution_evidence={
+            BaselineKind.FULL_ADAPTIVE: ExecutionCostTurnover(0.01, 0.25),
+            BaselineKind.BUY_AND_HOLD: ExecutionCostTurnover(0.005, 0.05),
+        },
     )
 
 
@@ -86,6 +91,10 @@ def test_defensive_layer_uses_fixed_weights_and_can_pass_with_one_lagging_target
 
     assert result.strategy_nav[-1] == pytest.approx(1.175015)
     assert result.benchmark_nav[-1] == pytest.approx(1.12858)
+    assert result.strategy_metrics.total_cost == pytest.approx(0.01)
+    assert result.strategy_metrics.turnover == pytest.approx(0.25)
+    assert result.benchmark_metrics.total_cost == pytest.approx(0.005)
+    assert result.benchmark_metrics.turnover == pytest.approx(0.05)
     assert result.gate.passed is True
     assert result.marginal_excess_contribution[SubLayer.DEFENSIVE_BLUE_CHIP] < 0
     artifact = layer_benchmark_artifact(result)
@@ -157,10 +166,88 @@ def test_layer_aggregation_rejects_misaligned_dates() -> None:
             BaselineKind.FULL_ADAPTIVE: evidence.stitched_paths[BaselineKind.FULL_ADAPTIVE][1:],
             BaselineKind.BUY_AND_HOLD: evidence.stitched_paths[BaselineKind.BUY_AND_HOLD],
         },
+        execution_evidence=evidence.execution_evidence,
     )
 
     with pytest.raises(ValueError, match="aligned"):
         aggregate_layer_evidence(portfolio, {SubLayer.DOMESTIC_CORE: bad})
+
+
+def test_layer_aggregation_rejects_missing_recorded_execution_evidence() -> None:
+    """Break caught: missing fills turn cost and turnover into invented zeroes."""
+
+    portfolio = StrategicPortfolio(
+        "beta_strategy", AssetLayer.BROAD_BETA, {SubLayer.DOMESTIC_CORE: 1.0},
+    )
+
+    with pytest.raises(ValueError, match="execution evidence"):
+        aggregate_layer_evidence(
+            portfolio,
+            {SubLayer.DOMESTIC_CORE: TargetEvidence(
+                entry=_evidence(SubLayer.DOMESTIC_CORE, (1.0, 1.1, 1.2), (1.0, 1.05, 1.1)).entry,
+                initial_cash=Decimal("100"),
+                paths={},
+                stitched_paths=_evidence(
+                    SubLayer.DOMESTIC_CORE, (1.0, 1.1, 1.2), (1.0, 1.05, 1.1),
+                ).stitched_paths,
+            )},
+        )
+
+
+def test_layer_window_excess_uses_the_prior_compounded_capital_basis() -> None:
+    """Break caught: a later window drops its opening-session return from excess."""
+
+    portfolio = StrategicPortfolio(
+        "beta_strategy", AssetLayer.BROAD_BETA, {SubLayer.DOMESTIC_CORE: 1.0},
+    )
+    evidence = _evidence(SubLayer.DOMESTIC_CORE, (1.0, 1.1, 1.21), (1.0, 0.95, 1.2))
+    dates = (date(2024, 1, 2), date(2024, 1, 3), date(2024, 1, 4))
+    aligned = TargetEvidence(
+        entry=evidence.entry,
+        initial_cash=evidence.initial_cash,
+        paths=evidence.paths,
+        stitched_paths={
+            BaselineKind.FULL_ADAPTIVE: tuple(
+                StitchedNavPoint(window_id, day, nav)
+                for window_id, day, nav in zip(("wf_000", "wf_001", "wf_001"), dates, (1.0, 1.1, 1.21))
+            ),
+            BaselineKind.BUY_AND_HOLD: tuple(
+                StitchedNavPoint(window_id, day, nav)
+                for window_id, day, nav in zip(("wf_000", "wf_001", "wf_001"), dates, (1.0, 0.95, 1.2))
+            ),
+        },
+        execution_evidence=evidence.execution_evidence,
+    )
+
+    result = aggregate_layer_evidence(portfolio, {SubLayer.DOMESTIC_CORE: aligned})
+
+    assert result.gate.non_lagging_windows == 2
+    assert result.gate.passed is True
+
+
+def test_layer_aggregation_rejects_window_boundary_misalignment() -> None:
+    """Break caught: strategy and benchmark windows can describe different OOS boundaries."""
+
+    portfolio = StrategicPortfolio(
+        "beta_strategy", AssetLayer.BROAD_BETA, {SubLayer.DOMESTIC_CORE: 1.0},
+    )
+    evidence = _evidence(SubLayer.DOMESTIC_CORE, (1.0, 1.1, 1.2), (1.0, 1.05, 1.1))
+    misaligned = TargetEvidence(
+        entry=evidence.entry,
+        initial_cash=evidence.initial_cash,
+        paths=evidence.paths,
+        stitched_paths={
+            BaselineKind.FULL_ADAPTIVE: evidence.stitched_paths[BaselineKind.FULL_ADAPTIVE],
+            BaselineKind.BUY_AND_HOLD: tuple(
+                StitchedNavPoint("different_window", point.nav_date, point.nav_total)
+                for point in evidence.stitched_paths[BaselineKind.BUY_AND_HOLD]
+            ),
+        },
+        execution_evidence=evidence.execution_evidence,
+    )
+
+    with pytest.raises(ValueError, match="window"):
+        aggregate_layer_evidence(portfolio, {SubLayer.DOMESTIC_CORE: misaligned})
 
 
 def test_defensive_adapter_uses_basket_weight_and_reports_stock_contribution() -> None:
@@ -185,6 +272,11 @@ def test_defensive_adapter_uses_basket_weight_and_reports_stock_contribution() -
                 tuple(StitchedNavPoint("wf_000", day, nav) for day, nav in zip(dates, (1.0, 1.0, 1.0))),
                 {"600900.SH": 0.01, "601088.SH": -0.02},
             ),
+        },
+        initial_cash=Decimal("100"),
+        execution_evidence={
+            BaselineKind.FULL_ADAPTIVE: ExecutionCostTurnover(0.01, 0.25),
+            BaselineKind.BUY_AND_HOLD: ExecutionCostTurnover(0.005, 0.05),
         },
     )
 

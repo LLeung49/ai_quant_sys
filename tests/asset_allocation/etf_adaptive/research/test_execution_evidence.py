@@ -107,6 +107,10 @@ def test_target_walk_forward_runs_all_five_aligned_execution_paths() -> None:
     )
 
     assert set(evidence.paths) == set(BaselineKind)
+    assert set(evidence.execution_evidence) == {
+        BaselineKind.FULL_ADAPTIVE,
+        BaselineKind.BUY_AND_HOLD,
+    }
     for path in evidence.paths.values():
         assert path[0].window_id == "wf_000"
         assert tuple(point.nav_date for point in path[0].nav) == _window().validation_dates

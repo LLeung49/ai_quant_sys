@@ -576,8 +576,7 @@ def _require_passing_layer_benchmarks(
 
     raw = payload.get("layer_benchmarks")
     if "research_approval" not in payload:
-        _require_legacy_passing_layer_benchmarks(raw)
-        return
+        raise ValueError("research approval is required before daily advice")
     _require_matching_research_approval(
         payload["research_approval"],
         raw,
@@ -586,7 +585,7 @@ def _require_passing_layer_benchmarks(
     )
 
 
-def _require_legacy_passing_layer_benchmarks(raw: object) -> None:
+def _validate_legacy_layer_benchmarks_for_audit(raw: object) -> None:
     """Keep historic records replayable without treating them as new approval."""
 
     if not isinstance(raw, Mapping):
