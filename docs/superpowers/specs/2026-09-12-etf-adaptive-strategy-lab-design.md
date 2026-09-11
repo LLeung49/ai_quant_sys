@@ -1,7 +1,7 @@
 # ETF Adaptive Strategy Lab Design
 
-**Date:** 2026-09-12  
-**Status:** approved design, awaiting implementation-plan review  
+**Date:** 2026-09-12
+**Status:** approved design, awaiting implementation-plan review
 **Scope:** defensive base and broad-beta research only; no broker order submission.
 
 ## Goal
