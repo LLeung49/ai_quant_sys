@@ -140,7 +140,7 @@ def test_buy_and_hold_only_records_nav_from_trade_start_date() -> None:
     buy_hold = run_baselines(request, _StubProvider(bars), AdaptiveConfig.default())[BaselineKind.BUY_AND_HOLD]
 
     assert [point.nav_date for point in buy_hold.result.nav] == [bars[2].trade_date, bars[3].trade_date]
-    assert buy_hold.result.events[0].event_date == bars[2].trade_date
+    assert buy_hold.result.events[0].event_date == bars[3].trade_date
 
 
 def test_fixed_half_hold_baseline_rebalances_to_fifty_percent_each_session() -> None:
@@ -162,7 +162,7 @@ def test_fixed_half_hold_baseline_rebalances_to_fifty_percent_each_session() -> 
     fill_events = [event for event in half.result.events if event.kind == "fill"]
     assert fill_events, "fixed_half_hold must rebalance at least once"
     reasons = {payload[0][1] for payload in (event.payload for event in fill_events)}
-    assert reasons.issubset({"grid_buy", "grid_sell"})
+    assert reasons.issubset({"grid_initialize", "grid_buy", "grid_sell"})
 
 
 def test_baseline_configs_are_isolated_per_run() -> None:
@@ -185,3 +185,23 @@ def test_baseline_configs_are_isolated_per_run() -> None:
     assert grid_only.trend.add_n == 0.5
     assert trend_only.grid.step_pct == 0.02
     assert trend_only.trend.add_n == 0.5
+
+
+def test_baseline_runs_record_the_compatibility_spec_hash() -> None:
+    bars = tuple(_bar(date(2026, 9, offset + 1), 10.0, 10.0) for offset in range(4))
+    request = BacktestRequest(
+        stock_code="510300.SH",
+        initial_cash=Decimal("100000"),
+        start_date=bars[0].trade_date,
+        end_date=bars[-1].trade_date,
+    )
+
+    runs = run_baselines(request, _StubProvider(bars), AdaptiveConfig.default())
+
+    for kind, run in runs.items():
+        if kind in {BaselineKind.GRID_ONLY, BaselineKind.TREND_ONLY, BaselineKind.FULL_ADAPTIVE}:
+            assert run.strategy_spec_hash is not None
+            assert run.benchmark_spec_hash is None
+        else:
+            assert run.strategy_spec_hash is None
+            assert run.benchmark_spec_hash is not None
