@@ -6,11 +6,11 @@ import pytest
 from asset_allocation.etf_adaptive.config import AdaptiveConfig
 from asset_allocation.etf_adaptive.contracts import ETFEligibility, ExecutionAvailability
 from asset_allocation.etf_adaptive.engine import AdaptiveBacktestEngine, apply_exit_fill, process_close
-from asset_allocation.etf_adaptive import engine as engine_module
 from asset_allocation.etf_adaptive.execution import ExecutionSimulator
 from asset_allocation.etf_adaptive.contracts import CorporateAction, CorporateActionType, DualPriceBar
 from asset_allocation.etf_adaptive.engine import apply_session_actions
 from asset_allocation.etf_adaptive.indicators import IndicatorSnapshot
+from asset_allocation.etf_adaptive.strategy_policy import FULL_ADAPTIVE_POLICY
 from asset_allocation.etf_adaptive.state import (
     BacktestRequest,
     BacktestEvent,
@@ -23,6 +23,21 @@ from asset_allocation.etf_adaptive.state import (
     StrategyState,
     TrendUnit,
 )
+
+
+class _ScriptedPolicy:
+    """Policy fixture that keeps engine/execution tests independent of indicators."""
+
+    policy_id = "scripted"
+
+    def __init__(self, decisions):
+        self._decisions = decisions
+
+    def process_close(self, *_):
+        return next(self._decisions)
+
+    def apply_fill(self, state, fill, config):
+        return FULL_ADAPTIVE_POLICY.apply_fill(state, fill, config)
 
 
 def test_grid_to_trend_cancels_grid_logic_and_creates_trend_intent() -> None:
@@ -228,10 +243,11 @@ def test_warmup_sessions_do_not_change_validation_account_or_emit_events(
         "asset_allocation.etf_adaptive.indicators.compute_indicators",
         lambda values: (object(),) * len(values),
     )
-    monkeypatch.setattr(engine_module, "process_close", lambda *_: next(decisions))
     config = AdaptiveConfig.default()
 
-    result = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend)).run_with_data(
+    result = AdaptiveBacktestEngine(
+        config, ExecutionSimulator(config.cost, config.trend), policy=_ScriptedPolicy(decisions),
+    ).run_with_data(
         BacktestRequest("510300.SH", Decimal("100000"), dates[0], dates[-1], dates[2]),
         bars,
         {bar.trade_date: ETFEligibility(True, (), "broad", 252, 20_000_000.0) for bar in bars},
@@ -294,9 +310,10 @@ def test_locked_stop_is_retried_but_locked_entry_expires(monkeypatch: pytest.Mon
         "asset_allocation.etf_adaptive.indicators.compute_indicators",
         lambda values: (object(),) * len(values),
     )
-    monkeypatch.setattr(engine_module, "process_close", lambda *_: next(decisions))
     config = AdaptiveConfig.default()
-    result = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend)).run_with_data(
+    result = AdaptiveBacktestEngine(
+        config, ExecutionSimulator(config.cost, config.trend), policy=_ScriptedPolicy(decisions),
+    ).run_with_data(
         BacktestRequest(
             "510300.SH", Decimal("120000"), start_date=dates[0], end_date=dates[-1],
         ), bars,
@@ -331,10 +348,11 @@ def test_protective_stop_retries_after_an_unexecutable_session(
         Decision(StrategyState(cash=Decimal("116000"), position_shares=1_000), ()),
     ))
     monkeypatch.setattr("asset_allocation.etf_adaptive.indicators.compute_indicators", lambda values: (object(),) * len(values))
-    monkeypatch.setattr(engine_module, "process_close", lambda *_: next(decisions))
     config = AdaptiveConfig.default()
 
-    result = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend)).run_with_data(
+    result = AdaptiveBacktestEngine(
+        config, ExecutionSimulator(config.cost, config.trend), policy=_ScriptedPolicy(decisions),
+    ).run_with_data(
         BacktestRequest(
             "510300.SH", Decimal("120000"), start_date=dates[0], end_date=dates[-1],
         ), bars,
@@ -369,10 +387,11 @@ def test_locked_rebalance_emits_resolved_side_in_rejection_event(
         Decision(StrategyState(cash=Decimal("120000"), position_shares=initial_shares), ()),
     ))
     monkeypatch.setattr("asset_allocation.etf_adaptive.indicators.compute_indicators", lambda values: (object(),) * len(values))
-    monkeypatch.setattr(engine_module, "process_close", lambda *_: next(decisions))
     config = AdaptiveConfig.default()
 
-    result = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend)).run_with_data(
+    result = AdaptiveBacktestEngine(
+        config, ExecutionSimulator(config.cost, config.trend), policy=_ScriptedPolicy(decisions),
+    ).run_with_data(
         BacktestRequest(
             "510300.SH", Decimal("120000"), start_date=dates[0], end_date=dates[-1],
         ), bars,
@@ -402,10 +421,11 @@ def test_consecutive_locked_sessions_keep_one_protective_exit(monkeypatch: pytes
         for _ in dates
     ))
     monkeypatch.setattr("asset_allocation.etf_adaptive.indicators.compute_indicators", lambda values: (object(),) * len(values))
-    monkeypatch.setattr(engine_module, "process_close", lambda *_: next(decisions))
     config = AdaptiveConfig.default()
 
-    result = AdaptiveBacktestEngine(config, ExecutionSimulator(config.cost, config.trend)).run_with_data(
+    result = AdaptiveBacktestEngine(
+        config, ExecutionSimulator(config.cost, config.trend), policy=_ScriptedPolicy(decisions),
+    ).run_with_data(
         BacktestRequest(
             "510300.SH", Decimal("120000"), start_date=dates[0], end_date=dates[-1],
         ), bars,
