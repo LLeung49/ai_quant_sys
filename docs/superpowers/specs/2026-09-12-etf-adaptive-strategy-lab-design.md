@@ -103,8 +103,11 @@ the reason for each state change. Derive attribution from this recorded stream:
 - cash-period opportunity cost versus the fair B&H path;
 - commissions, slippage and rejected-order impact.
 
-Attribution is explanatory, not a selector. Totals must reconcile to the
-recorded strategy-versus-B&H NAV difference within a documented tolerance.
+Attribution is explanatory, not a selector. GRID/TREND/transition/cash
+contributions reconcile to the recorded net strategy-versus-B&H NAV difference
+within a documented tolerance. Commission and slippage are separately reported
+diagnostics, because the recorded net NAV already includes them and adding them
+again would double count costs.
 
 ### 4. Experiment manifests and reports
 

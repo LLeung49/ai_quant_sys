@@ -325,10 +325,12 @@ exist.
 Append one `DailyStrategyObservation` after each completed engine session using
 only the state, executed fills and that session's NAV. In attribution, compare
 the strategy and B&H daily returns: assign invested-day excess by observed
-regime, cash-day benchmark return to `cash_opportunity_cost`, and execution
-commission/slippage to `execution_cost`. Assign the first post-regime-switch
-session to `transition_return`. Raise if dates are misaligned or the absolute
-reconciliation error exceeds `1e-9` after summation.
+regime and cash-day benchmark return to `cash_opportunity_cost`. Assign the
+first post-regime-switch session to `transition_return`. Report execution
+commission/slippage as `execution_cost`, but exclude that diagnostic from the
+net-excess reconciliation because recorded NAV is already cost-net. Raise if
+dates are misaligned or the absolute reconciliation error of the mode,
+transition and cash components exceeds `1e-9` after summation.
 
 - [ ] **Step 4: Run attribution and engine tests**
 
