@@ -13,12 +13,14 @@ from pathlib import Path
 
 import pytest
 
+from asset_allocation.etf_adaptive.config import AdaptiveConfig
 from asset_allocation.etf_adaptive.research.run_research import (
     ResearchArtifact,
     ResearchRunConfig,
     build_parser,
     run_research,
     _explicit_evidence,
+    _evidence_baseline_provenance,
     _research_scope,
     _validated_layer_benchmarks,
 )
@@ -32,6 +34,10 @@ from asset_allocation.etf_adaptive.contracts import (
 )
 from asset_allocation.etf_adaptive.frozen_selection import FrozenSelection
 from asset_allocation.etf_adaptive.research.selection import CandidateMetrics, ProductMetrics, SubLayerSelectionEvidence
+from asset_allocation.etf_adaptive.research.baselines import BaselineKind, BaselineRun
+from asset_allocation.etf_adaptive.research.benchmark_contracts import WhitelistEntry
+from asset_allocation.etf_adaptive.research.execution_evidence import TargetEvidence
+from asset_allocation.etf_adaptive.state import BacktestRequest, BacktestResult
 
 
 REPORTS_ROOT = Path("D:/aiQuant/ai_quant_sys/reports/pytest-run-research-tmp")
@@ -235,6 +241,78 @@ def test_run_research_freezes_only_evidence_supported_layered_targets(
     assert portfolio["equal_weight"]["weights"] == {"513500.SH": pytest.approx(1.0)}
     selection = FrozenSelection.from_research_manifest(config.output_dir / "manifest.json")
     assert selection.targets[0].config_hash == selection.config_hash
+
+
+def test_normal_research_route_publishes_target_evidence_baseline_provenance(reports_dir: Path) -> None:
+    as_of = date(2026, 9, 1)
+    config = ResearchRunConfig(
+        as_of,
+        reports_dir / "provenance-out",
+        extra={"sub_layer_budgets": {"broad_overseas_mature": "48000"}},
+    )
+    empty_result = BacktestResult(BacktestRequest("513500.SH", Decimal("100000")), (), ())
+    strategy_run = BaselineRun(
+        BaselineKind.FULL_ADAPTIVE, AdaptiveConfig.default(), empty_result,
+        notes=("strategy_spec=full_adaptive@1", "strategy_spec_hash=strategy-hash"),
+        strategy_spec_hash="strategy-hash",
+    )
+    benchmark_run = BaselineRun(
+        BaselineKind.BUY_AND_HOLD, AdaptiveConfig.default(), empty_result,
+        notes=("benchmark_spec=buy_and_hold@1", "benchmark_spec_hash=benchmark-hash"),
+        benchmark_spec_hash="benchmark-hash",
+    )
+    target_evidence = TargetEvidence(
+        WhitelistEntry(
+            "nasdaq_100", SubLayer.OVERSEAS_MATURE, "513500.SH", "159941.SZ",
+            date(2020, 1, 1), None, "a" * 64, 1.0,
+        ),
+        Decimal("100000"), {}, {},
+        baseline_provenance={
+            strategy_run.kind: strategy_run.provenance,
+            benchmark_run.kind: benchmark_run.provenance,
+        },
+    )
+
+    class LayeredProvider:
+        def load_instruments(self, requested_as_of: date):
+            return (LayeredInstrument(
+                "513500.SH", requested_as_of, InstrumentType.ETF, "broad", "nasdaq_or_sp500", True,
+            ),)
+
+        def load_research_evidence(self, requested_as_of: date, stock_code: str):
+            return {
+                "product": ProductMetrics(stock_code, "NDX", 0.9, 20_000_000.0, 0.98, 0.02, 0.1, SubLayer.OVERSEAS_MATURE),
+                "candidate": CandidateMetrics(stock_code, 0.1, 0.1, 0.5, 0.02),
+                "oos_returns": (-0.1, 0.2222222222),
+                "target_evidence": target_evidence,
+            }
+
+        def load_selection_evidence(self, requested_as_of: date, sub_layer: SubLayer, budget: SubLayerBudget):
+            return SubLayerSelectionEvidence(
+                budget, frozenset(), 0.05, Decimal("1000"), 1.0, 0.3,
+            )
+
+    run_research(config, provider=LayeredProvider())
+
+    manifest = json.loads((config.output_dir / "manifest.json").read_text(encoding="utf-8"))
+    provenance = manifest["baseline_provenance"]
+    assert provenance["513500.SH/full_adaptive"]["strategy_spec_hash"] == "strategy-hash"
+    assert provenance["513500.SH/buy_and_hold"]["benchmark_spec_hash"] == "benchmark-hash"
+    assert "strategy_spec=full_adaptive@1" in provenance["513500.SH/full_adaptive"]["notes"]
+    assert "benchmark_spec=buy_and_hold@1" in provenance["513500.SH/buy_and_hold"]["notes"]
+
+
+def test_research_evidence_rejects_nonexclusive_baseline_provenance() -> None:
+    with pytest.raises(ValueError, match="invalid_walk_forward_evidence"):
+        _evidence_baseline_provenance({
+            "baseline_provenance": {
+                "full_adaptive": {
+                    "notes": ("ambiguous",),
+                    "strategy_spec_hash": "strategy-hash",
+                    "benchmark_spec_hash": "benchmark-hash",
+                },
+            },
+        })
 
 
 def test_run_research_rejects_positive_two_price_candidate_without_return_evidence(

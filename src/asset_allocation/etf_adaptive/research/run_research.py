@@ -24,6 +24,7 @@ from ..contracts import DualPriceBar, LayeredInstrument, SubLayer, SubLayerBudge
 from ..layers import validate_sub_layer
 from ..frozen_selection import _canonical_hash
 from .portfolio import evaluate_sub_layer_portfolios
+from .execution_evidence import TargetEvidence
 from .report import ResearchArtifact, write_research_report
 from .selection import (
     CandidateMetrics,
@@ -124,6 +125,7 @@ def _default_artifact_factory(provider: _LayeredResearchProvider, run_config: Re
         sub_layers: dict[str, dict[str, object]] = {}
         targets: list[dict[str, str]] = []
         audit_rows: list[dict[str, object]] = []
+        baseline_provenance: dict[str, Mapping[str, object]] = {}
         candidates: dict[SubLayer, list[tuple[LayeredInstrument, ProductMetrics, CandidateMetrics, tuple[float, ...]]]] = {}
         for instrument in provider.load_instruments(config.as_of_date):
             sub_layer = validate_sub_layer(instrument)
@@ -139,9 +141,15 @@ def _default_artifact_factory(provider: _LayeredResearchProvider, run_config: Re
                 })
                 continue
             try:
+                raw_evidence = evidence_loader(config.as_of_date, instrument.stock_code)
                 product, candidate, returns = _explicit_evidence(
-                    evidence_loader(config.as_of_date, instrument.stock_code), instrument, sub_layer,
+                    raw_evidence, instrument, sub_layer,
                 )
+                for kind, provenance in _evidence_baseline_provenance(raw_evidence).items():
+                    provenance_key = f"{instrument.stock_code}/{kind}"
+                    prior = baseline_provenance.setdefault(provenance_key, provenance)
+                    if prior != provenance:
+                        raise ValueError("inconsistent_baseline_provenance")
             except ValueError as exc:
                 audit_rows.append({"stock_code": instrument.stock_code, "sub_layer": sub_layer.value,
                                    "accepted": False, "reason": str(exc)})
@@ -227,6 +235,7 @@ def _default_artifact_factory(provider: _LayeredResearchProvider, run_config: Re
             },
             frozen_selection=frozen_selection,
             sub_layers=sub_layers,
+            baseline_provenance=baseline_provenance,
         )
     return _factory
 
@@ -297,6 +306,51 @@ def _explicit_evidence(
     )):
         raise ValueError("invalid_walk_forward_evidence")
     return product, candidate, tuple(float(value) for value in returns)
+
+
+def _evidence_baseline_provenance(raw: object) -> dict[str, Mapping[str, object]]:
+    """Extract published baseline identities from normal provider evidence fail-closed."""
+
+    if not isinstance(raw, Mapping):
+        raise ValueError("missing_walk_forward_evidence")
+    inline_present = "baseline_provenance" in raw
+    target_present = "target_evidence" in raw
+    inline = _normalize_baseline_provenance(raw["baseline_provenance"]) if inline_present else None
+    target: dict[str, Mapping[str, object]] | None = None
+    if target_present:
+        target_evidence = raw["target_evidence"]
+        if not isinstance(target_evidence, TargetEvidence):
+            raise ValueError("invalid_walk_forward_evidence")
+        target = _normalize_baseline_provenance(target_evidence.baseline_provenance)
+    if inline is not None and target is not None and inline != target:
+        raise ValueError("inconsistent_baseline_provenance")
+    return inline if inline is not None else (target if target is not None else {})
+
+
+def _normalize_baseline_provenance(raw: object) -> dict[str, Mapping[str, object]]:
+    if not isinstance(raw, Mapping):
+        raise ValueError("invalid_walk_forward_evidence")
+    normalized: dict[str, Mapping[str, object]] = {}
+    for kind, payload in raw.items():
+        name = getattr(kind, "value", kind)
+        if not isinstance(name, str) or not name or not isinstance(payload, Mapping):
+            raise ValueError("invalid_walk_forward_evidence")
+        strategy_hash = payload.get("strategy_spec_hash")
+        benchmark_hash = payload.get("benchmark_spec_hash")
+        notes = payload.get("notes")
+        if (
+            (strategy_hash is None) == (benchmark_hash is None)
+            or not isinstance(strategy_hash or benchmark_hash, str)
+            or not isinstance(notes, (tuple, list))
+            or not all(isinstance(note, str) for note in notes)
+        ):
+            raise ValueError("invalid_walk_forward_evidence")
+        normalized[name] = {
+            "notes": tuple(notes),
+            "strategy_spec_hash": strategy_hash,
+            "benchmark_spec_hash": benchmark_hash,
+        }
+    return normalized
 
 
 def _finite_number(value: object) -> bool:
