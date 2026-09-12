@@ -65,6 +65,7 @@ class TargetEvidence:
     paths: Mapping[BaselineKind, tuple[WindowExecutionPath, ...]]
     stitched_paths: Mapping[BaselineKind, tuple[StitchedNavPoint, ...]]
     execution_evidence: Mapping[BaselineKind, ExecutionCostTurnover] = field(default_factory=dict)
+    baseline_provenance: Mapping[BaselineKind, Mapping[str, object]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -203,6 +204,7 @@ def run_target_walk_forward(
     paths: dict[BaselineKind, list[WindowExecutionPath]] = {
         kind: [] for kind in BaselineKind
     }
+    baseline_provenance: dict[BaselineKind, Mapping[str, object]] = {}
     for window in config.windows:
         _validate_window_inputs(entry, provider, window)
         request = BacktestRequest(
@@ -220,6 +222,10 @@ def run_target_walk_forward(
                 run.result.events,
                 run.config.cost,
             ))
+            recorded_provenance = run.provenance
+            prior_provenance = baseline_provenance.setdefault(kind, recorded_provenance)
+            if prior_provenance != recorded_provenance:
+                raise ValueError("baseline provenance must remain stable across validation windows")
     frozen_paths = {kind: tuple(value) for kind, value in paths.items()}
     return TargetEvidence(
         entry=entry,
@@ -234,6 +240,7 @@ def run_target_walk_forward(
             for kind, path in frozen_paths.items()
             if kind in {BaselineKind.FULL_ADAPTIVE, BaselineKind.BUY_AND_HOLD}
         },
+        baseline_provenance=baseline_provenance,
     )
 
 

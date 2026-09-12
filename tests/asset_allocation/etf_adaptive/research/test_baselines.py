@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from asset_allocation.etf_adaptive.config import AdaptiveConfig
+from asset_allocation.etf_adaptive.config import AdaptiveConfig, CostConfig
 from asset_allocation.etf_adaptive.contracts import ETFEligibility, ExecutionAvailability, DualPriceBar
 from asset_allocation.etf_adaptive.research.baselines import (
     BaselineKind,
@@ -205,3 +205,15 @@ def test_baseline_runs_record_the_compatibility_spec_hash() -> None:
         else:
             assert run.strategy_spec_hash is None
             assert run.benchmark_spec_hash is not None
+
+
+def test_fixed_half_reported_provenance_hash_changes_with_execution_costs() -> None:
+    bars = tuple(_bar(date(2026, 9, offset + 1), 10.0, 10.0) for offset in range(4))
+    request = BacktestRequest("510300.SH", Decimal("100000"), bars[0].trade_date, bars[-1].trade_date)
+
+    default_run = run_baselines(request, _StubProvider(bars), AdaptiveConfig.default())[BaselineKind.FIXED_HALF_HOLD]
+    higher_cost_run = run_baselines(
+        request, _StubProvider(bars), AdaptiveConfig(cost=CostConfig(commission_rate=0.0002)),
+    )[BaselineKind.FIXED_HALF_HOLD]
+
+    assert default_run.benchmark_spec_hash != higher_cost_run.benchmark_spec_hash

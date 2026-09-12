@@ -60,18 +60,22 @@ class BenchmarkSpec:
     benchmark_id: str
     version: str
     rebalance_sessions: int | None
+    target_weight: float = 1.0
 
     def __post_init__(self) -> None:
         if self.rebalance_sessions is not None and (
             not isinstance(self.rebalance_sessions, int) or self.rebalance_sessions < 1
         ):
             raise ValueError("rebalance_sessions must be a positive integer or None")
+        if not isinstance(self.target_weight, (int, float)) or not 0 < self.target_weight <= 1:
+            raise ValueError("target_weight must be in (0, 1]")
 
     def spec_hash(self) -> str:
         return _hash_spec({
             "benchmark_id": self.benchmark_id,
             "version": self.version,
             "rebalance_sessions": self.rebalance_sessions,
+            "target_weight": self.target_weight,
         })
 
 
@@ -84,8 +88,18 @@ GRID_ONLY_SPEC = StrategySpec(
 TREND_ONLY_SPEC = StrategySpec(
     "trend_only", "1", AdaptiveConfig.default(), TREND_ONLY_POLICY.policy_id,
 )
-BUY_AND_HOLD_SPEC = BenchmarkSpec("buy_and_hold", "1", None)
-FIXED_HALF_SPEC = BenchmarkSpec("fixed_half_hold", "1", 1)
+BUY_AND_HOLD_SPEC = BenchmarkSpec("buy_and_hold", "1", None, 1.0)
+FIXED_HALF_SPEC = BenchmarkSpec("fixed_half_hold", "1", 1, 0.5)
+
+
+def benchmark_provenance_hash(spec: BenchmarkSpec, config: AdaptiveConfig) -> str:
+    """Identify a benchmark run including its policy target and cost model."""
+
+    return _hash_spec({
+        "benchmark_spec_hash": spec.spec_hash(),
+        "config_hash": config.config_hash(),
+        "target_weight": spec.target_weight,
+    })
 
 
 def run_strategy_spec(
@@ -212,7 +226,7 @@ def _benchmark_intent(
     total = state.cash + Decimal(str(raw_close)) * state.position_shares
     if total <= 0:
         return None
-    target_value = total / Decimal("2")
+    target_value = total * Decimal(str(spec.target_weight))
     position_value = Decimal(str(raw_close)) * state.position_shares
     difference = target_value - position_value
     one_lot_value = Decimal(str(raw_close)) * 100

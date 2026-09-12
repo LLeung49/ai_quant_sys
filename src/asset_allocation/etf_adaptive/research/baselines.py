@@ -17,6 +17,7 @@ from .strategy_specs import (
     TREND_ONLY_SPEC,
     BenchmarkSpec,
     StrategySpec,
+    benchmark_provenance_hash,
     run_benchmark_spec,
     run_strategy_spec,
 )
@@ -38,6 +39,16 @@ class BaselineRun:
     notes: tuple[str, ...] = field(default_factory=tuple)
     strategy_spec_hash: str | None = None
     benchmark_spec_hash: str | None = None
+
+    @property
+    def provenance(self) -> Mapping[str, object]:
+        """Publishable identity and notes for this mutually-exclusive baseline run."""
+
+        return {
+            "notes": self.notes,
+            "strategy_spec_hash": self.strategy_spec_hash,
+            "benchmark_spec_hash": self.benchmark_spec_hash,
+        }
 
 
 def run_baselines(
@@ -77,13 +88,15 @@ def run_baseline(
 
     benchmark_spec = _benchmark_spec_for(kind)
     if benchmark_spec is not None:
-        spec_hash = benchmark_spec.spec_hash()
+        spec_hash = benchmark_provenance_hash(benchmark_spec, base_config)
         return BaselineRun(
             kind=kind,
             config=base_config,
             result=run_benchmark_spec(benchmark_spec, base_config, request, provider),
             notes=(
                 f"benchmark_spec={benchmark_spec.benchmark_id}@{benchmark_spec.version}",
+                f"benchmark_config_hash={base_config.config_hash()}",
+                f"benchmark_target_weight={benchmark_spec.target_weight}",
                 f"benchmark_spec_hash={spec_hash}",
             ),
             benchmark_spec_hash=spec_hash,

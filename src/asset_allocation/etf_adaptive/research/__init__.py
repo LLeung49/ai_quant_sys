@@ -19,6 +19,7 @@ from .strategy_specs import (
     TREND_ONLY_SPEC,
     BenchmarkSpec,
     StrategySpec,
+    benchmark_provenance_hash,
     run_benchmark_spec,
     run_strategy_spec,
 )
@@ -118,6 +119,7 @@ __all__ = [
     "WalkForwardResult",
     "WalkForwardWindow",
     "attribute_by_mode",
+    "benchmark_provenance_hash",
     "BUY_AND_HOLD_SPEC",
     "build_equal_weight",
     "build_inverse_volatility",

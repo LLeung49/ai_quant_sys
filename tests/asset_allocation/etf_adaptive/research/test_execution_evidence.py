@@ -111,6 +111,10 @@ def test_target_walk_forward_runs_all_five_aligned_execution_paths() -> None:
         BaselineKind.FULL_ADAPTIVE,
         BaselineKind.BUY_AND_HOLD,
     }
+    assert evidence.baseline_provenance[BaselineKind.FULL_ADAPTIVE]["strategy_spec_hash"] is not None
+    assert evidence.baseline_provenance[BaselineKind.FULL_ADAPTIVE]["benchmark_spec_hash"] is None
+    assert evidence.baseline_provenance[BaselineKind.BUY_AND_HOLD]["strategy_spec_hash"] is None
+    assert evidence.baseline_provenance[BaselineKind.BUY_AND_HOLD]["benchmark_spec_hash"] is not None
     for path in evidence.paths.values():
         assert path[0].window_id == "wf_000"
         assert tuple(point.nav_date for point in path[0].nav) == _window().validation_dates

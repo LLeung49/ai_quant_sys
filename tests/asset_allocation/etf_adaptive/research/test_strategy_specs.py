@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import date, timedelta
 from decimal import Decimal
 
-from asset_allocation.etf_adaptive.config import AdaptiveConfig
+import pytest
+
+from asset_allocation.etf_adaptive.config import AdaptiveConfig, CostConfig
 from asset_allocation.etf_adaptive.contracts import (
     CorporateAction,
     CorporateActionType,
@@ -14,8 +17,10 @@ from asset_allocation.etf_adaptive.contracts import (
     ExecutionAvailability,
 )
 from asset_allocation.etf_adaptive.research.strategy_specs import (
+    BUY_AND_HOLD_SPEC,
     FIXED_HALF_SPEC,
     GRID_ONLY_SPEC,
+    benchmark_provenance_hash,
     run_benchmark_spec,
     run_strategy_spec,
 )
@@ -23,9 +28,10 @@ from asset_allocation.etf_adaptive.state import BacktestRequest
 
 
 class _Provider:
-    def __init__(self, bars: tuple[DualPriceBar, ...], actions=()) -> None:
+    def __init__(self, bars: tuple[DualPriceBar, ...], actions=(), ineligible_dates=()) -> None:
         self._bars = bars
         self._actions = tuple(actions)
+        self._ineligible_dates = frozenset(ineligible_dates)
 
     def load_bars(self, stock_code, start_date, end_date):
         return tuple(
@@ -41,12 +47,10 @@ class _Provider:
 
     def load_eligibility(self, stock_code, bars):
         return {
-            bar.trade_date: ETFEligibility(
-                eligible=True,
-                rejection_reasons=(),
-                exposure_group="core_broad",
-                history_session_count=252,
-                average_amount_20d=20_000_000.0,
+            bar.trade_date: (
+                ETFEligibility(False, ("not_eligible",), None, 0, None)
+                if bar.trade_date in self._ineligible_dates
+                else ETFEligibility(True, (), "core_broad", 252, 20_000_000.0)
             )
             for bar in bars
         }
@@ -105,17 +109,71 @@ def test_fixed_half_benchmark_records_shared_cost_model() -> None:
     assert sum(_fill_commission(event) for event in result.events) > 0
 
 
-def test_benchmark_records_each_duplicate_corporate_action_once() -> None:
+def test_benchmark_provenance_hash_binds_cost_and_target_identity() -> None:
+    default_config = AdaptiveConfig.default()
+    higher_cost_config = AdaptiveConfig(cost=CostConfig(commission_rate=0.0002))
+    higher_target_spec = replace(FIXED_HALF_SPEC, target_weight=0.60)
+
+    recorded = benchmark_provenance_hash(FIXED_HALF_SPEC, default_config)
+
+    assert recorded != benchmark_provenance_hash(FIXED_HALF_SPEC, higher_cost_config)
+    assert recorded != benchmark_provenance_hash(higher_target_spec, default_config)
+
+
+@pytest.mark.parametrize("spec", (BUY_AND_HOLD_SPEC, FIXED_HALF_SPEC))
+def test_benchmark_signal_at_close_fills_next_session_with_cost_and_slippage(spec) -> None:
+    request, provider = _request_and_provider()
+
+    result = run_benchmark_spec(spec, AdaptiveConfig.default(), request, provider)
+
+    first_fill = next(event for event in result.events if event.kind == "fill")
+    assert first_fill.event_date == provider._bars[1].trade_date
+    assert _fill_commission(first_fill) > 0
+    assert Decimal(dict(first_fill.payload)["raw_price"]) > Decimal(str(provider._bars[1].raw_open))
+
+
+@pytest.mark.parametrize("spec", (BUY_AND_HOLD_SPEC, FIXED_HALF_SPEC))
+def test_ineligible_benchmark_signal_never_creates_a_fill(spec) -> None:
+    request, provider = _request_and_provider()
+    provider = _Provider(provider._bars, ineligible_dates={bar.trade_date for bar in provider._bars})
+
+    result = run_benchmark_spec(spec, AdaptiveConfig.default(), request, provider)
+
+    assert not [event for event in result.events if event.kind == "fill"]
+
+
+@pytest.mark.parametrize("spec", (BUY_AND_HOLD_SPEC, FIXED_HALF_SPEC))
+@pytest.mark.parametrize("unavailable", ("locked", "suspended"))
+def test_benchmark_uses_execution_simulator_for_unavailable_next_bar(spec, unavailable) -> None:
+    request, provider = _request_and_provider()
+    next_bar = provider._bars[1]
+    if unavailable == "locked":
+        next_bar = replace(next_bar, execution_availability=ExecutionAvailability(True, False, "locked"))
+    else:
+        next_bar = replace(next_bar, suspended=True)
+    provider = _Provider((provider._bars[0], next_bar))
+    request = replace(request, end_date=next_bar.trade_date)
+
+    result = run_benchmark_spec(spec, AdaptiveConfig.default(), request, provider)
+
+    assert not [event for event in result.events if event.kind == "fill"]
+    assert [event for event in result.events if event.kind == "rejected_order"]
+
+
+@pytest.mark.parametrize("spec", (BUY_AND_HOLD_SPEC, FIXED_HALF_SPEC))
+def test_benchmark_records_each_duplicate_corporate_action_once(spec) -> None:
     request, provider = _request_and_provider()
     action = CorporateAction(
         stock_code=request.stock_code,
-        effective_date=request.start_date + timedelta(days=3),
+        effective_date=request.start_date + timedelta(days=1),
         action_type=CorporateActionType.CASH_DIVIDEND,
         cash_per_share=Decimal("0.10"),
         share_multiplier=Decimal("1"),
     )
     provider = _Provider(provider._bars, (action, action))
 
-    result = run_benchmark_spec(FIXED_HALF_SPEC, AdaptiveConfig.default(), request, provider)
+    result = run_benchmark_spec(spec, AdaptiveConfig.default(), request, provider)
 
-    assert [event.kind for event in result.events].count("corporate_action") == 1
+    event_kinds = [event.kind for event in result.events]
+    assert event_kinds.count("corporate_action") == 1
+    assert event_kinds.index("corporate_action") < event_kinds.index("fill")

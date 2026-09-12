@@ -52,6 +52,7 @@ class ResearchArtifact:
     artifacts: Mapping[str, Any] = field(default_factory=lambda: MappingProxyType({}))
     frozen_selection: Mapping[str, Any] | None = None
     sub_layers: Mapping[str, Mapping[str, Any]] = field(default_factory=lambda: MappingProxyType({}))
+    baseline_provenance: Mapping[str, Mapping[str, Any]] = field(default_factory=lambda: MappingProxyType({}))
 
 
 @dataclass(frozen=True)
@@ -150,6 +151,9 @@ def write_research_report(
             name: {"budget": str(payload["budget"]), "products": list(payload.get("products", ())) }
             for name, payload in validated_sub_layers.items()
         }
+    baseline_provenance = _validated_baseline_provenance(artifact.baseline_provenance)
+    if baseline_provenance:
+        manifest_payload["baseline_provenance"] = baseline_provenance
     _dump_json(staging / "manifest.json", manifest_payload)
     for name, payload in validated_sub_layers.items():
         sub_layer_dir = staging / "sub_layers" / name
@@ -217,6 +221,8 @@ def write_research_report(
     )
     if not isinstance(executive_report, str):
         executive_report = json.dumps(executive_report, ensure_ascii=False, sort_keys=True, default=_json_default)
+    if baseline_provenance:
+        executive_report = f"{executive_report.rstrip()}\n\n{_baseline_provenance_markdown(baseline_provenance)}\n"
     (staging / "executive_report.md").write_text(executive_report, encoding="utf-8")
 
     artifact_paths = {name: str(output_dir / name) for name in REPORT_FILES}
@@ -245,3 +251,36 @@ def _validated_sub_layers(sub_layers: Mapping[str, Mapping[str, Any]]) -> dict[s
             raise ValueError("sub-layer artifact payload must be a mapping")
         validated[approved] = payload
     return validated
+
+
+def _validated_baseline_provenance(
+    provenance: Mapping[str, Mapping[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Normalize mutually exclusive strategy/benchmark identities for publication."""
+
+    normalized: dict[str, dict[str, Any]] = {}
+    for kind, payload in provenance.items():
+        if not isinstance(kind, str) or not kind or not isinstance(payload, Mapping):
+            raise ValueError("baseline provenance must map non-empty names to mappings")
+        strategy_hash = payload.get("strategy_spec_hash")
+        benchmark_hash = payload.get("benchmark_spec_hash")
+        if (strategy_hash is None) == (benchmark_hash is None):
+            raise ValueError("baseline provenance requires exactly one spec hash")
+        if not isinstance(strategy_hash or benchmark_hash, str):
+            raise ValueError("baseline provenance hashes must be strings")
+        notes = payload.get("notes", ())
+        if not isinstance(notes, (tuple, list)) or not all(isinstance(note, str) for note in notes):
+            raise ValueError("baseline provenance notes must be strings")
+        normalized[kind] = {
+            "notes": list(notes),
+            "strategy_spec_hash": strategy_hash,
+            "benchmark_spec_hash": benchmark_hash,
+        }
+    return normalized
+
+
+def _baseline_provenance_markdown(provenance: Mapping[str, Mapping[str, Any]]) -> str:
+    lines = ["## Baseline provenance"]
+    for kind, payload in sorted(provenance.items()):
+        lines.append(f"- {kind}: {', '.join(payload['notes'])}")
+    return "\n".join(lines)

@@ -5,16 +5,20 @@ from __future__ import annotations
 import json
 import shutil
 import uuid
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 
+from asset_allocation.etf_adaptive.config import AdaptiveConfig
+from asset_allocation.etf_adaptive.research.baselines import BaselineKind, BaselineRun
 from asset_allocation.etf_adaptive.research.report import (
     ResearchArtifact,
     write_research_report,
 )
 import asset_allocation.etf_adaptive.research.report as report_module
 from asset_allocation.etf_adaptive.frozen_selection import FrozenSelection, _canonical_hash
+from asset_allocation.etf_adaptive.state import BacktestRequest, BacktestResult
 
 
 REPORTS_ROOT = Path("D:/aiQuant/ai_quant_sys/reports/pytest-report-tmp")
@@ -194,3 +198,33 @@ def test_report_manifest_payload_serializes_data_cutoff_iso(output_dir: Path) ->
 
     assert payload["data_cutoff"] == "2026-09-01"
     assert len(payload["data_cutoff"]) == 10
+
+
+def test_report_publishes_mutually_exclusive_baseline_provenance(output_dir: Path) -> None:
+    from dataclasses import replace
+
+    request = BacktestRequest("510300.SH", Decimal("100000"))
+    empty_result = BacktestResult(request, (), ())
+    strategy_run = BaselineRun(
+        BaselineKind.FULL_ADAPTIVE, AdaptiveConfig.default(), empty_result,
+        notes=("strategy_spec=full_adaptive@1", "strategy_spec_hash=strategy-hash"),
+        strategy_spec_hash="strategy-hash",
+    )
+    benchmark_run = BaselineRun(
+        BaselineKind.FIXED_HALF_HOLD, AdaptiveConfig.default(), empty_result,
+        notes=("benchmark_spec=fixed_half_hold@1", "benchmark_spec_hash=benchmark-hash"),
+        benchmark_spec_hash="benchmark-hash",
+    )
+    artifact = replace(_research_result(), baseline_provenance={
+        strategy_run.kind.value: strategy_run.provenance,
+        benchmark_run.kind.value: benchmark_run.provenance,
+    })
+
+    write_research_report(artifact, output_dir)
+
+    manifest = json.loads((output_dir / "manifest.json").read_text(encoding="utf-8"))
+    report = (output_dir / "executive_report.md").read_text(encoding="utf-8")
+    assert manifest["baseline_provenance"]["full_adaptive"]["strategy_spec_hash"] == "strategy-hash"
+    assert manifest["baseline_provenance"]["fixed_half_hold"]["benchmark_spec_hash"] == "benchmark-hash"
+    assert "strategy_spec_hash=strategy-hash" in report
+    assert "benchmark_spec_hash=benchmark-hash" in report
