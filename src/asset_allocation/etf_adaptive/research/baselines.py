@@ -74,33 +74,59 @@ def run_baseline(
 
     strategy_spec = _strategy_spec_for(kind, base_config)
     if strategy_spec is not None:
-        spec_hash = strategy_spec.spec_hash()
+        provenance = baseline_provenance_for(kind, base_config)
+        spec_hash = provenance["strategy_spec_hash"]
+        assert isinstance(spec_hash, str)
         return BaselineRun(
             kind=kind,
             config=strategy_spec.config,
             result=run_strategy_spec(strategy_spec, request, provider),
-            notes=(
-                f"strategy_spec={strategy_spec.strategy_id}@{strategy_spec.version}",
-                f"strategy_spec_hash={spec_hash}",
-            ),
+            notes=provenance["notes"],
             strategy_spec_hash=spec_hash,
         )
 
     benchmark_spec = _benchmark_spec_for(kind)
     if benchmark_spec is not None:
-        spec_hash = benchmark_provenance_hash(benchmark_spec, base_config)
+        provenance = baseline_provenance_for(kind, base_config)
+        spec_hash = provenance["benchmark_spec_hash"]
+        assert isinstance(spec_hash, str)
         return BaselineRun(
             kind=kind,
             config=base_config,
             result=run_benchmark_spec(benchmark_spec, base_config, request, provider),
-            notes=(
+            notes=provenance["notes"],
+            benchmark_spec_hash=spec_hash,
+        )
+    raise ValueError(f"unsupported baseline kind: {kind!r}")
+
+
+def baseline_provenance_for(kind: BaselineKind, base_config: AdaptiveConfig) -> Mapping[str, object]:
+    """Return the immutable identity a baseline kind must record for a config."""
+
+    strategy_spec = _strategy_spec_for(kind, base_config)
+    if strategy_spec is not None:
+        spec_hash = strategy_spec.spec_hash()
+        return {
+            "notes": (
+                f"strategy_spec={strategy_spec.strategy_id}@{strategy_spec.version}",
+                f"strategy_spec_hash={spec_hash}",
+            ),
+            "strategy_spec_hash": spec_hash,
+            "benchmark_spec_hash": None,
+        }
+    benchmark_spec = _benchmark_spec_for(kind)
+    if benchmark_spec is not None:
+        spec_hash = benchmark_provenance_hash(benchmark_spec, base_config)
+        return {
+            "notes": (
                 f"benchmark_spec={benchmark_spec.benchmark_id}@{benchmark_spec.version}",
                 f"benchmark_config_hash={base_config.config_hash()}",
                 f"benchmark_target_weight={benchmark_spec.target_weight}",
                 f"benchmark_spec_hash={spec_hash}",
             ),
-            benchmark_spec_hash=spec_hash,
-        )
+            "strategy_spec_hash": None,
+            "benchmark_spec_hash": spec_hash,
+        }
     raise ValueError(f"unsupported baseline kind: {kind!r}")
 
 

@@ -118,6 +118,9 @@ def test_target_walk_forward_runs_all_five_aligned_execution_paths() -> None:
     for path in evidence.paths.values():
         assert path[0].window_id == "wf_000"
         assert tuple(point.nav_date for point in path[0].nav) == _window().validation_dates
+    for kind, paths in evidence.paths.items():
+        assert paths[0].baseline_kind is kind
+        assert paths[0].baseline_provenance == evidence.baseline_provenance[kind]
 
 
 def test_target_walk_forward_rejects_missing_aligned_bars() -> None:

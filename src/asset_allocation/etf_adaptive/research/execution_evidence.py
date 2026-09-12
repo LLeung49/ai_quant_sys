@@ -41,6 +41,9 @@ class WindowExecutionPath:
     nav: tuple[DailyNav, ...]
     events: tuple[BacktestEvent, ...] = ()
     cost_config: CostConfig | None = None
+    baseline_kind: BaselineKind | None = None
+    config: AdaptiveConfig | None = None
+    baseline_provenance: Mapping[str, object] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -221,6 +224,9 @@ def run_target_walk_forward(
                 run.result.nav,
                 run.result.events,
                 run.config.cost,
+                kind,
+                run.config,
+                run.provenance,
             ))
             recorded_provenance = run.provenance
             prior_provenance = baseline_provenance.setdefault(kind, recorded_provenance)

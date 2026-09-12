@@ -25,6 +25,7 @@ from ..layers import validate_sub_layer
 from ..frozen_selection import _canonical_hash
 from .portfolio import evaluate_sub_layer_portfolios
 from .execution_evidence import TargetEvidence
+from .baselines import baseline_provenance_for
 from .report import ResearchArtifact, write_research_report
 from .selection import (
     CandidateMetrics,
@@ -315,16 +316,46 @@ def _evidence_baseline_provenance(raw: object) -> dict[str, Mapping[str, object]
         raise ValueError("missing_walk_forward_evidence")
     inline_present = "baseline_provenance" in raw
     target_present = "target_evidence" in raw
+    if inline_present and not target_present:
+        raise ValueError("invalid_walk_forward_evidence")
     inline = _normalize_baseline_provenance(raw["baseline_provenance"]) if inline_present else None
     target: dict[str, Mapping[str, object]] | None = None
     if target_present:
         target_evidence = raw["target_evidence"]
         if not isinstance(target_evidence, TargetEvidence):
             raise ValueError("invalid_walk_forward_evidence")
-        target = _normalize_baseline_provenance(target_evidence.baseline_provenance)
+        target = _recorded_target_provenance(target_evidence)
     if inline is not None and target is not None and inline != target:
         raise ValueError("inconsistent_baseline_provenance")
     return inline if inline is not None else (target if target is not None else {})
+
+
+def _recorded_target_provenance(target_evidence: TargetEvidence) -> dict[str, Mapping[str, object]]:
+    """Derive trusted provenance from actual window-level baseline executions."""
+
+    if not isinstance(target_evidence.paths, Mapping) or not target_evidence.paths:
+        raise ValueError("invalid_walk_forward_evidence")
+    recorded: dict[str, Mapping[str, object]] = {}
+    for kind, paths in target_evidence.paths.items():
+        name = getattr(kind, "value", kind)
+        if not isinstance(name, str) or not name or not isinstance(paths, tuple) or not paths:
+            raise ValueError("invalid_walk_forward_evidence")
+        per_window: list[dict[str, Mapping[str, object]]] = []
+        for path in paths:
+            if path.baseline_kind is not kind or not isinstance(path.config, AdaptiveConfig):
+                raise ValueError("invalid_walk_forward_evidence")
+            expected = _normalize_baseline_provenance({kind: baseline_provenance_for(kind, path.config)})
+            actual = _normalize_baseline_provenance({kind: path.baseline_provenance})
+            if actual != expected:
+                raise ValueError("inconsistent_baseline_provenance")
+            per_window.append(actual)
+        if any(window != per_window[0] for window in per_window[1:]):
+            raise ValueError("inconsistent_baseline_provenance")
+        recorded[name] = per_window[0][name]
+    aggregate = _normalize_baseline_provenance(target_evidence.baseline_provenance)
+    if aggregate != recorded:
+        raise ValueError("inconsistent_baseline_provenance")
+    return recorded
 
 
 def _normalize_baseline_provenance(raw: object) -> dict[str, Mapping[str, object]]:

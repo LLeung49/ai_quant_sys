@@ -6,7 +6,7 @@ import json
 import math
 import shutil
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -26,6 +26,7 @@ from asset_allocation.etf_adaptive.research.run_research import (
 )
 from asset_allocation.etf_adaptive.contracts import (
     DualPriceBar,
+    ETFEligibility,
     ExecutionAvailability,
     InstrumentType,
     LayeredInstrument,
@@ -34,10 +35,14 @@ from asset_allocation.etf_adaptive.contracts import (
 )
 from asset_allocation.etf_adaptive.frozen_selection import FrozenSelection
 from asset_allocation.etf_adaptive.research.selection import CandidateMetrics, ProductMetrics, SubLayerSelectionEvidence
-from asset_allocation.etf_adaptive.research.baselines import BaselineKind, BaselineRun
+from asset_allocation.etf_adaptive.research.baselines import BaselineKind
 from asset_allocation.etf_adaptive.research.benchmark_contracts import WhitelistEntry
-from asset_allocation.etf_adaptive.research.execution_evidence import TargetEvidence
-from asset_allocation.etf_adaptive.state import BacktestRequest, BacktestResult
+from asset_allocation.etf_adaptive.research.execution_evidence import (
+    TargetEvidence,
+    TargetWalkForwardConfig,
+    run_target_walk_forward,
+)
+from asset_allocation.etf_adaptive.research.walk_forward import WalkForwardWindow
 
 
 REPORTS_ROOT = Path("D:/aiQuant/ai_quant_sys/reports/pytest-run-research-tmp")
@@ -244,34 +249,20 @@ def test_run_research_freezes_only_evidence_supported_layered_targets(
 
 
 def test_normal_research_route_publishes_target_evidence_baseline_provenance(reports_dir: Path) -> None:
-    as_of = date(2026, 9, 1)
+    as_of = date(2026, 9, 3)
     config = ResearchRunConfig(
         as_of,
         reports_dir / "provenance-out",
         extra={"sub_layer_budgets": {"broad_overseas_mature": "48000"}},
     )
-    empty_result = BacktestResult(BacktestRequest("513500.SH", Decimal("100000")), (), ())
-    strategy_run = BaselineRun(
-        BaselineKind.FULL_ADAPTIVE, AdaptiveConfig.default(), empty_result,
-        notes=("strategy_spec=full_adaptive@1", "strategy_spec_hash=strategy-hash"),
-        strategy_spec_hash="strategy-hash",
+    bars = tuple(_research_bar("513500.SH", day, 10.0 + offset) for offset, day in enumerate((
+        date(2026, 9, 1), date(2026, 9, 2), date(2026, 9, 3),
+    )))
+    entry = WhitelistEntry(
+        "nasdaq_100", SubLayer.OVERSEAS_MATURE, "513500.SH", "159941.SZ",
+        date(2020, 1, 1), None, "a" * 64, 1.0,
     )
-    benchmark_run = BaselineRun(
-        BaselineKind.BUY_AND_HOLD, AdaptiveConfig.default(), empty_result,
-        notes=("benchmark_spec=buy_and_hold@1", "benchmark_spec_hash=benchmark-hash"),
-        benchmark_spec_hash="benchmark-hash",
-    )
-    target_evidence = TargetEvidence(
-        WhitelistEntry(
-            "nasdaq_100", SubLayer.OVERSEAS_MATURE, "513500.SH", "159941.SZ",
-            date(2020, 1, 1), None, "a" * 64, 1.0,
-        ),
-        Decimal("100000"), {}, {},
-        baseline_provenance={
-            strategy_run.kind: strategy_run.provenance,
-            benchmark_run.kind: benchmark_run.provenance,
-        },
-    )
+    window = WalkForwardWindow("wf_000", (date(2026, 8, 31),), tuple(bar.trade_date for bar in bars))
 
     class LayeredProvider:
         def load_instruments(self, requested_as_of: date):
@@ -280,6 +271,10 @@ def test_normal_research_route_publishes_target_evidence_baseline_provenance(rep
             ),)
 
         def load_research_evidence(self, requested_as_of: date, stock_code: str):
+            target_evidence = run_target_walk_forward(
+                entry, self,
+                TargetWalkForwardConfig((window,), Decimal("100000"), AdaptiveConfig.default()),
+            )
             return {
                 "product": ProductMetrics(stock_code, "NDX", 0.9, 20_000_000.0, 0.98, 0.02, 0.1, SubLayer.OVERSEAS_MATURE),
                 "candidate": CandidateMetrics(stock_code, 0.1, 0.1, 0.5, 0.02),
@@ -287,19 +282,90 @@ def test_normal_research_route_publishes_target_evidence_baseline_provenance(rep
                 "target_evidence": target_evidence,
             }
 
+        def load_bars(self, stock_code: str, start_date: date, end_date: date):
+            return tuple(bar for bar in bars if start_date <= bar.trade_date <= end_date)
+
+        def load_actions(self, stock_code: str, start_date: date, end_date: date):
+            return ()
+
+        def load_eligibility(self, stock_code: str, requested_bars):
+            return {
+                bar.trade_date: ETFEligibility(True, (), "core_broad", 252, 20_000_000.0)
+                for bar in requested_bars
+            }
+
         def load_selection_evidence(self, requested_as_of: date, sub_layer: SubLayer, budget: SubLayerBudget):
             return SubLayerSelectionEvidence(
                 budget, frozenset(), 0.05, Decimal("1000"), 1.0, 0.3,
             )
 
-    run_research(config, provider=LayeredProvider())
+    provider = LayeredProvider()
+    derived_evidence = run_target_walk_forward(
+        entry, provider,
+        TargetWalkForwardConfig((window,), Decimal("100000"), AdaptiveConfig.default()),
+    )
+    run_research(config, provider=provider)
 
     manifest = json.loads((config.output_dir / "manifest.json").read_text(encoding="utf-8"))
     provenance = manifest["baseline_provenance"]
-    assert provenance["513500.SH/full_adaptive"]["strategy_spec_hash"] == "strategy-hash"
-    assert provenance["513500.SH/buy_and_hold"]["benchmark_spec_hash"] == "benchmark-hash"
-    assert "strategy_spec=full_adaptive@1" in provenance["513500.SH/full_adaptive"]["notes"]
-    assert "benchmark_spec=buy_and_hold@1" in provenance["513500.SH/buy_and_hold"]["notes"]
+    assert provenance["513500.SH/full_adaptive"] == {
+        **derived_evidence.baseline_provenance[BaselineKind.FULL_ADAPTIVE],
+        "notes": list(derived_evidence.baseline_provenance[BaselineKind.FULL_ADAPTIVE]["notes"]),
+    }
+    assert provenance["513500.SH/buy_and_hold"] == {
+        **derived_evidence.baseline_provenance[BaselineKind.BUY_AND_HOLD],
+        "notes": list(derived_evidence.baseline_provenance[BaselineKind.BUY_AND_HOLD]["notes"]),
+    }
+
+
+def test_normal_research_route_rejects_tampered_target_evidence_provenance(reports_dir: Path) -> None:
+    # The execution evidence helper is exercised above; this regression isolates
+    # a post-execution aggregate-hash tamper before report publication.
+    as_of = date(2026, 9, 3)
+    config = ResearchRunConfig(as_of, reports_dir / "tampered-provenance", extra={
+        "sub_layer_budgets": {"broad_overseas_mature": "48000"},
+    })
+    bars = tuple(_research_bar("513500.SH", day, 10.0 + offset) for offset, day in enumerate((
+        date(2026, 9, 1), date(2026, 9, 2), date(2026, 9, 3),
+    )))
+    entry = WhitelistEntry("nasdaq_100", SubLayer.OVERSEAS_MATURE, "513500.SH", "159941.SZ", date(2020, 1, 1), None, "a" * 64, 1.0)
+    window = WalkForwardWindow("wf_000", (date(2026, 8, 31),), tuple(bar.trade_date for bar in bars))
+
+    class LayeredProvider:
+        def load_instruments(self, requested_as_of: date):
+            return (LayeredInstrument("513500.SH", requested_as_of, InstrumentType.ETF, "broad", "nasdaq_or_sp500", True),)
+
+        def load_research_evidence(self, requested_as_of: date, stock_code: str):
+            actual = run_target_walk_forward(entry, self, TargetWalkForwardConfig((window,), Decimal("100000"), AdaptiveConfig.default()))
+            tampered = dict(actual.baseline_provenance)
+            tampered[BaselineKind.FULL_ADAPTIVE] = {
+                **tampered[BaselineKind.FULL_ADAPTIVE], "strategy_spec_hash": "tampered",
+            }
+            return {
+                "product": ProductMetrics(stock_code, "NDX", 0.9, 20_000_000.0, 0.98, 0.02, 0.1, SubLayer.OVERSEAS_MATURE),
+                "candidate": CandidateMetrics(stock_code, 0.1, 0.1, 0.5, 0.02),
+                "oos_returns": (-0.1, 0.2222222222),
+                "target_evidence": replace(actual, baseline_provenance=tampered),
+            }
+
+        def load_bars(self, stock_code: str, start_date: date, end_date: date):
+            return tuple(bar for bar in bars if start_date <= bar.trade_date <= end_date)
+
+        def load_actions(self, stock_code: str, start_date: date, end_date: date):
+            return ()
+
+        def load_eligibility(self, stock_code: str, requested_bars):
+            return {bar.trade_date: ETFEligibility(True, (), "core_broad", 252, 20_000_000.0) for bar in requested_bars}
+
+        def load_selection_evidence(self, requested_as_of: date, sub_layer: SubLayer, budget: SubLayerBudget):
+            return SubLayerSelectionEvidence(budget, frozenset(), 0.05, Decimal("1000"), 1.0, 0.3)
+
+    run_research(config, provider=LayeredProvider())
+
+    manifest = json.loads((config.output_dir / "manifest.json").read_text(encoding="utf-8"))
+    audit = json.loads((config.output_dir / "universe_audit.json").read_text(encoding="utf-8"))
+    assert "baseline_provenance" not in manifest
+    assert audit["rows"][0]["reason"] == "inconsistent_baseline_provenance"
 
 
 def test_research_evidence_rejects_nonexclusive_baseline_provenance() -> None:
@@ -313,6 +379,29 @@ def test_research_evidence_rejects_nonexclusive_baseline_provenance() -> None:
                 },
             },
         })
+
+
+def test_research_evidence_rejects_unverified_inline_baseline_provenance() -> None:
+    with pytest.raises(ValueError, match="invalid_walk_forward_evidence"):
+        _evidence_baseline_provenance({
+            "baseline_provenance": {
+                "full_adaptive": {
+                    "notes": ("strategy_spec=full_adaptive@1",),
+                    "strategy_spec_hash": "unverified",
+                    "benchmark_spec_hash": None,
+                },
+            },
+        })
+
+
+def test_research_evidence_rejects_target_provenance_without_recorded_paths() -> None:
+    evidence = TargetEvidence(
+        WhitelistEntry("nasdaq_100", SubLayer.OVERSEAS_MATURE, "513500.SH", "159941.SZ", date(2020, 1, 1), None, "a" * 64, 1.0),
+        Decimal("100000"), {}, {}, baseline_provenance={},
+    )
+
+    with pytest.raises(ValueError, match="invalid_walk_forward_evidence"):
+        _evidence_baseline_provenance({"target_evidence": evidence})
 
 
 def test_run_research_rejects_positive_two_price_candidate_without_return_evidence(
