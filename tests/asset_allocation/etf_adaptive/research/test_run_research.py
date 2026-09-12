@@ -308,6 +308,10 @@ def test_normal_research_route_publishes_target_evidence_baseline_provenance(rep
 
     manifest = json.loads((config.output_dir / "manifest.json").read_text(encoding="utf-8"))
     provenance = manifest["baseline_provenance"]
+    assert set(provenance) == {
+        "513500.SH/buy_and_hold", "513500.SH/fixed_half_hold",
+        "513500.SH/grid_only", "513500.SH/trend_only", "513500.SH/full_adaptive",
+    }
     assert provenance["513500.SH/full_adaptive"] == {
         **derived_evidence.baseline_provenance[BaselineKind.FULL_ADAPTIVE],
         "notes": list(derived_evidence.baseline_provenance[BaselineKind.FULL_ADAPTIVE]["notes"]),
@@ -318,9 +322,12 @@ def test_normal_research_route_publishes_target_evidence_baseline_provenance(rep
     }
 
 
-def test_normal_research_route_rejects_tampered_target_evidence_provenance(reports_dir: Path) -> None:
-    # The execution evidence helper is exercised above; this regression isolates
-    # a post-execution aggregate-hash tamper before report publication.
+@pytest.mark.parametrize("deleted_baseline", (None, *BaselineKind))
+def test_normal_research_route_rejects_tampered_target_evidence_provenance(
+    reports_dir: Path, deleted_baseline: BaselineKind | None,
+) -> None:
+    # Mutate real execution output: changing an aggregate hash or deleting the
+    # same baseline everywhere must both reject evidence before publication.
     as_of = date(2026, 9, 3)
     config = ResearchRunConfig(as_of, reports_dir / "tampered-provenance", extra={
         "sub_layer_budgets": {"broad_overseas_mature": "48000"},
@@ -338,14 +345,25 @@ def test_normal_research_route_rejects_tampered_target_evidence_provenance(repor
         def load_research_evidence(self, requested_as_of: date, stock_code: str):
             actual = run_target_walk_forward(entry, self, TargetWalkForwardConfig((window,), Decimal("100000"), AdaptiveConfig.default()))
             tampered = dict(actual.baseline_provenance)
-            tampered[BaselineKind.FULL_ADAPTIVE] = {
-                **tampered[BaselineKind.FULL_ADAPTIVE], "strategy_spec_hash": "tampered",
-            }
+            if deleted_baseline is None:
+                tampered[BaselineKind.FULL_ADAPTIVE] = {
+                    **tampered[BaselineKind.FULL_ADAPTIVE], "strategy_spec_hash": "tampered",
+                }
+                target_evidence = replace(actual, baseline_provenance=tampered)
+            else:
+                del tampered[deleted_baseline]
+                target_evidence = replace(
+                    actual,
+                    paths={kind: paths for kind, paths in actual.paths.items() if kind is not deleted_baseline},
+                    stitched_paths={kind: paths for kind, paths in actual.stitched_paths.items() if kind is not deleted_baseline},
+                    execution_evidence={kind: evidence for kind, evidence in actual.execution_evidence.items() if kind is not deleted_baseline},
+                    baseline_provenance=tampered,
+                )
             return {
                 "product": ProductMetrics(stock_code, "NDX", 0.9, 20_000_000.0, 0.98, 0.02, 0.1, SubLayer.OVERSEAS_MATURE),
                 "candidate": CandidateMetrics(stock_code, 0.1, 0.1, 0.5, 0.02),
                 "oos_returns": (-0.1, 0.2222222222),
-                "target_evidence": replace(actual, baseline_provenance=tampered),
+                "target_evidence": target_evidence,
             }
 
         def load_bars(self, stock_code: str, start_date: date, end_date: date):
@@ -365,7 +383,12 @@ def test_normal_research_route_rejects_tampered_target_evidence_provenance(repor
     manifest = json.loads((config.output_dir / "manifest.json").read_text(encoding="utf-8"))
     audit = json.loads((config.output_dir / "universe_audit.json").read_text(encoding="utf-8"))
     assert "baseline_provenance" not in manifest
-    assert audit["rows"][0]["reason"] == "inconsistent_baseline_provenance"
+    assert audit["rows"][0]["accepted"] is False
+    assert audit["rows"][0]["reason"] == (
+        "inconsistent_baseline_provenance" if deleted_baseline is None else "invalid_walk_forward_evidence"
+    )
+    report = (config.output_dir / "executive_report.md").read_text(encoding="utf-8")
+    assert "## Baseline provenance" not in report
 
 
 def test_research_evidence_rejects_nonexclusive_baseline_provenance() -> None:

@@ -25,7 +25,7 @@ from ..layers import validate_sub_layer
 from ..frozen_selection import _canonical_hash
 from .portfolio import evaluate_sub_layer_portfolios
 from .execution_evidence import TargetEvidence
-from .baselines import baseline_provenance_for
+from .baselines import BaselineKind, baseline_provenance_for
 from .report import ResearchArtifact, write_research_report
 from .selection import (
     CandidateMetrics,
@@ -333,7 +333,7 @@ def _evidence_baseline_provenance(raw: object) -> dict[str, Mapping[str, object]
 def _recorded_target_provenance(target_evidence: TargetEvidence) -> dict[str, Mapping[str, object]]:
     """Derive trusted provenance from actual window-level baseline executions."""
 
-    if not isinstance(target_evidence.paths, Mapping) or not target_evidence.paths:
+    if not isinstance(target_evidence.paths, Mapping) or set(target_evidence.paths) != set(BaselineKind):
         raise ValueError("invalid_walk_forward_evidence")
     recorded: dict[str, Mapping[str, object]] = {}
     for kind, paths in target_evidence.paths.items():
