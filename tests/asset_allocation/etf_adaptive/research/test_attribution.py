@@ -152,3 +152,32 @@ def test_attribution_marks_first_invested_session_after_cash_regime_switch_as_tr
 
     assert attribution.transition_return == pytest.approx(0.05)
     assert attribution.trend_return == pytest.approx(0.0)
+
+
+def test_attribution_reconciles_grid_stop_liquidation_return_before_cash_classification() -> None:
+    # Break caught: a zero-exposure stop-fill session still contains the prior
+    # GRID holding's recorded price and execution-cost P&L; it is not cash.
+    days = tuple(date(2026, 9, day) for day in range(1, 4))
+    strategy = (
+        DailyNav(days[0], Decimal("1000"), Decimal("0")),
+        DailyNav(days[1], Decimal("4.88"), Decimal("990")),
+        DailyNav(days[2], Decimal("989.76"), Decimal("0")),
+    )
+    benchmark = tuple(DailyNav(day, Decimal("0"), Decimal("1000")) for day in days)
+    observations = (
+        DailyStrategyObservation(days[0], Regime.GRID, 1.0, 0.0, 0, 1, "grid_initialize"),
+        DailyStrategyObservation(days[1], Regime.GRID, 1.0, 0.994, 0, 1, "grid_stop"),
+        DailyStrategyObservation(days[2], Regime.GRID, 0.0, 0.0, 0, 0, "grid_stop"),
+    )
+
+    attribution = build_excess_attribution(
+        strategy,
+        benchmark,
+        observations,
+        (BacktestEvent(days[2], "fill", (("side", "sell"), ("reason", "grid_stop"))),),
+    )
+
+    expected = 994.88 / 1000 - 1 + 989.76 / 994.88 - 1
+    assert attribution.grid_return == pytest.approx(expected)
+    assert attribution.cash_opportunity_cost == pytest.approx(0.0)
+    assert attribution.reconciliation_error == pytest.approx(0.0, abs=1e-9)

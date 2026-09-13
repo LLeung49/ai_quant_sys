@@ -64,6 +64,7 @@ class StrategyState:
     applied_action_ids: tuple[str, ...] = ()
     position_shares: int = 0
     cash: Decimal = Decimal("0")
+    target_exposure: float | None = None
 
 
 @dataclass(frozen=True)

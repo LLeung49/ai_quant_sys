@@ -18,6 +18,7 @@ from .state import (
     DailyStrategyObservation,
     Fill,
     OrderIntent,
+    OrderReason,
 )
 from .execution import ExecutionSimulator
 from .execution import apply_corporate_actions, is_protective_exit, rebase_signal_state
@@ -180,6 +181,11 @@ class AdaptiveBacktestEngine:
                 state = decision.state
                 if not pending:
                     pending = decision.orders
+                    if pending:
+                        state = replace(
+                            state,
+                            target_exposure=_target_exposure(state, pending, bar.raw_close),
+                        )
             daily_nav = DailyNav(
                 bar.trade_date, state.cash, Decimal(str(bar.raw_close)) * state.position_shares,
             )
@@ -202,10 +208,9 @@ def _daily_observation(
     return DailyStrategyObservation(
         nav_date=nav.nav_date,
         regime=state.regime,
-        # The immutable accounting state does not retain an unfilled order's
-        # sizing target.  After a completed session the executable target is
-        # therefore the NAV-marked exposure actually held in that state.
-        target_exposure=actual_exposure,
+        target_exposure=(
+            actual_exposure if state.target_exposure is None else state.target_exposure
+        ),
         actual_exposure=actual_exposure,
         cooldown_remaining=state.cooldown_remaining,
         pending_order_count=len(pending),
@@ -221,6 +226,27 @@ def _state_reason(
     if pending:
         return pending[0].reason.value
     return state.regime.value if state.regime is not None else "cash"
+
+
+def _target_exposure(
+    state: StrategyState,
+    orders: tuple[OrderIntent, ...],
+    raw_close: float,
+) -> float:
+    """Persist the close-time order's intended exposure without replaying it."""
+
+    total = state.cash + Decimal(str(raw_close)) * state.position_shares
+    actual = float(Decimal(str(raw_close)) * state.position_shares / total) if total > 0 else 0.0
+    order = orders[0]
+    if order.reason in {OrderReason.GRID_STOP, OrderReason.TREND_STOP, OrderReason.HARD_STOP}:
+        return 0.0
+    if order.reason is OrderReason.GRID_INITIALIZE:
+        return min(1.0, max(0.0, order.target_budget / float(total))) if total > 0 else 0.0
+    if order.reason is OrderReason.GRID_BUY:
+        return min(1.0, actual + order.target_budget)
+    if order.reason is OrderReason.GRID_SELL:
+        return max(0.0, actual - order.target_budget)
+    return actual
 
 
 def _request_range(request: BacktestRequest) -> tuple[date, date]:

@@ -106,11 +106,13 @@ def build_excess_attribution(
     total_excess = 0.0
     previous_regime = ordered_observations[0].regime
     transition_pending = False
-    for previous_strategy, current_strategy, previous_benchmark, current_benchmark, observation in zip(
+    liquidation_dates = _recorded_liquidation_dates(strategy_events)
+    for previous_strategy, current_strategy, previous_benchmark, current_benchmark, previous_observation, observation in zip(
         strategy_nav,
         strategy_nav[1:],
         benchmark_nav,
         benchmark_nav[1:],
+        ordered_observations,
         ordered_observations[1:],
     ):
         strategy_return = _daily_return(previous_strategy, current_strategy, "strategy")
@@ -120,7 +122,12 @@ def build_excess_attribution(
         transition_pending = transition_pending or (
             previous_regime is not None and observation.regime is not previous_regime
         )
-        if observation.actual_exposure <= 0.0:
+        liquidated = (
+            previous_observation.actual_exposure > 0.0
+            and observation.actual_exposure <= 0.0
+            and current_strategy.nav_date in liquidation_dates
+        )
+        if observation.actual_exposure <= 0.0 and not liquidated:
             cash -= benchmark_return
         elif transition_pending:
             transition += excess
@@ -179,3 +186,11 @@ def _recorded_execution_cost(events: Sequence[BacktestEvent]) -> float:
         total += Decimal(payload.get("commission", "0"))
         total += Decimal(payload.get("slippage_cost", "0"))
     return float(total)
+
+
+def _recorded_liquidation_dates(events: Sequence[BacktestEvent]) -> frozenset:
+    return frozenset(
+        event.event_date
+        for event in events
+        if event.kind == "fill" and dict(event.payload).get("side") == "sell"
+    )

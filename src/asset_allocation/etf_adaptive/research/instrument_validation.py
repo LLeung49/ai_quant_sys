@@ -290,17 +290,18 @@ def run_instrument_validation(
             benchmark_result = runs[BaselineKind.BUY_AND_HOLD].result
             strategy_metrics = _recorded_performance(strategy_result.nav, strategy_result.events, config.cost)
             benchmark_metrics = _recorded_performance(benchmark_result.nav, benchmark_result.events, config.cost)
-            excess_attribution = (
-                build_excess_attribution(
+            if not strategy_result.observations:
+                if target.scope is ValidationScope.FORMAL:
+                    raise ValueError("strategy observations are required for formal validation")
+                excess_attribution = None
+            else:
+                excess_attribution = build_excess_attribution(
                     strategy_result.nav,
                     benchmark_result.nav,
                     strategy_result.observations,
                     strategy_result.events,
                     execution_cost=strategy_metrics.total_cost,
                 )
-                if strategy_result.observations
-                else None
-            )
             strategy_invested, strategy_cash = _recorded_exposure(strategy_result.nav)
             benchmark_invested, benchmark_cash = _recorded_exposure(benchmark_result.nav)
             results.append(ValidationWindowResult(

@@ -21,7 +21,13 @@ from asset_allocation.etf_adaptive.research.instrument_validation import (
 )
 from asset_allocation.etf_adaptive.research.decision import DecisionSummary, ResearchConclusion
 from asset_allocation.etf_adaptive.research.parameters import ParameterCandidate
-from asset_allocation.etf_adaptive.state import BacktestEvent, BacktestResult, DailyNav
+from asset_allocation.etf_adaptive.state import (
+    BacktestEvent,
+    BacktestResult,
+    DailyNav,
+    DailyStrategyObservation,
+    Regime,
+)
 from asset_allocation.etf_adaptive.research.walk_forward import build_windows
 
 
@@ -237,9 +243,12 @@ def oos_validation_pair(
     def run_baselines(request, provider, config):
         bars = provider.load_bars(request.stock_code, request.trade_start_date, request.end_date)
         nav = tuple(DailyNav(bar.trade_date, Decimal("0"), Decimal(str(bar.raw_close))) for bar in bars)
+        observations = tuple(DailyStrategyObservation(
+            point.nav_date, Regime.GRID, 1.0, 1.0, 0, 0, "grid",
+        ) for point in nav)
         strategy_result = BacktestResult(request, (BacktestEvent(request.trade_start_date, "fill", (
             ("side", "buy"), ("shares", "1"), ("raw_price", "100"), ("commission", "0"),
-        )),), nav)
+        )),), nav, observations)
         benchmark_result = BacktestResult(request, (), nav)
         return {
             BaselineKind.FULL_ADAPTIVE: BaselineRun(BaselineKind.FULL_ADAPTIVE, config, strategy_result),
@@ -271,14 +280,14 @@ def oos_validation_pair(
 
     baseline = validate(1.0)
     changed_oos = validate(10.0)
-    return baseline, changed_oos, training_requests, windows
+    return baseline, changed_oos, training_requests, windows, validate
 
 
 def test_oos_only_prices_do_not_change_training_hashes_or_activate_nonpassing_decision(
     oos_validation_pair,
 ) -> None:
     """Training replays never read validation prices, and decision remains the activation gate."""
-    baseline, changed_oos, training_requests, windows = oos_validation_pair
+    baseline, changed_oos, training_requests, windows, _ = oos_validation_pair
 
     assert tuple(window.config_hash for window in baseline.windows) == tuple(window.config_hash for window in changed_oos.windows)
     assert baseline.decision is not None
@@ -296,7 +305,7 @@ def test_oos_only_prices_do_not_change_training_hashes_or_activate_nonpassing_de
 
 
 def test_oos_mutation_cannot_change_recorded_training_scores(oos_validation_pair) -> None:
-    baseline, changed_oos, _, _ = oos_validation_pair
+    baseline, changed_oos, _, _, _ = oos_validation_pair
 
     assert len(baseline.windows) == len(changed_oos.windows) == 3
     assert baseline.windows[0].strategy_return != changed_oos.windows[0].strategy_return
@@ -317,6 +326,42 @@ def test_oos_mutation_cannot_change_recorded_training_scores(oos_validation_pair
             assert selected.rejection_reason is None
             section = "grid" if family == "grid_only" else "trend"
             assert selected.config[section] == before.selected_config[section]
+
+
+def test_formal_validation_rejects_missing_strategy_observations(
+    oos_validation_pair, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Break caught: formal validation cannot publish a decision or manifest
+    # when the recorded state required for causal attribution is absent.
+    from asset_allocation.etf_adaptive.research import instrument_validation as module
+    from asset_allocation.etf_adaptive.research.baselines import BaselineKind, BaselineRun
+
+    _, _, _, _, validate = oos_validation_pair
+    recorded_runs = module.run_baselines
+
+    def missing_observations(request, provider, config):
+        runs = recorded_runs(request, provider, config)
+        strategy = runs[BaselineKind.FULL_ADAPTIVE]
+        return {
+            **runs,
+            BaselineKind.FULL_ADAPTIVE: BaselineRun(
+                strategy.kind,
+                strategy.config,
+                replace(strategy.result, observations=()),
+                strategy.notes,
+                strategy.strategy_spec_hash,
+                strategy.benchmark_spec_hash,
+            ),
+        }
+
+    monkeypatch.setattr(module, "run_baselines", missing_observations)
+
+    result = validate(1.0)
+
+    assert result.status is ValidationStatus.DATA_REJECTED
+    assert result.evidence is None
+    assert result.run_manifest is None
+    assert result.rejection_reason == "strategy observations are required for formal validation"
 
 
 @pytest.mark.parametrize("lower_neighbor", ("present", "missing", "unrelated_axis"))

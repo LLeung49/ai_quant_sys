@@ -293,6 +293,58 @@ def test_daily_engine_observation_records_that_sessions_executed_fill_reason(
     assert result.observations[-1].state_reason == "grid_buy"
 
 
+def test_daily_engine_observation_keeps_pending_grid_target_after_partial_fill(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Break caught: replacing intended exposure with actual NAV exposure makes
+    # a pending/lot-constrained order look fully satisfied.
+    days = (date(2026, 9, 1), date(2026, 9, 2))
+    bars = tuple(
+        DualPriceBar(
+            "510300.SH", day, 1.0, 1.1, 0.9, 1.0,
+            4.0, 4.4, 3.6, 4.0, 20_000_000.0, False, 0.25,
+            4.0, ExecutionAvailability(False, False, "test"),
+        )
+        for day in days
+    )
+    entry = OrderIntent(
+        days[0], Side.BUY, OrderReason.GRID_INITIALIZE, 0.05, (), 900.0, 0.0, "90% target",
+    )
+
+    class _PendingGridPolicy:
+        policy_id = "pending_grid"
+
+        def __init__(self) -> None:
+            self._first = True
+
+        def process_close(self, state, *_):
+            if self._first:
+                self._first = False
+                return Decision(StrategyState(regime=Regime.GRID, cash=state.cash), (entry,))
+            return Decision(state, ())
+
+        def apply_fill(self, state, fill, config):
+            return FULL_ADAPTIVE_POLICY.apply_fill(state, fill, config)
+
+    monkeypatch.setattr(
+        "asset_allocation.etf_adaptive.indicators.compute_indicators",
+        lambda values: (object(),) * len(values),
+    )
+    config = AdaptiveConfig.default()
+    result = AdaptiveBacktestEngine(
+        config, ExecutionSimulator(config.cost, config.trend), policy=_PendingGridPolicy(),
+    ).run_with_data(
+        BacktestRequest("510300.SH", Decimal("1000"), days[0], days[-1]),
+        bars,
+        {day: ETFEligibility(True, (), "broad", 252, 20_000_000.0) for day in days},
+    )
+
+    assert result.observations[0].target_exposure == pytest.approx(0.9)
+    assert result.observations[0].actual_exposure == pytest.approx(0.0)
+    assert result.observations[1].target_exposure == pytest.approx(0.9)
+    assert result.observations[1].actual_exposure < result.observations[1].target_exposure
+
+
 def test_warmup_sessions_do_not_change_validation_account_or_emit_events(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
