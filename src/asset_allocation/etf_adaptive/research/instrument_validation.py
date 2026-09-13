@@ -1,6 +1,6 @@
 """Fixed-universe contracts for independent ETF strategy validation."""
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from datetime import date
 from decimal import Decimal
 from enum import Enum
@@ -14,13 +14,14 @@ from ..indicators import IndicatorSnapshot, compute_indicators
 from ..state import BacktestRequest
 from ..state import BacktestEvent, DailyNav, Side
 from .baselines import BaselineKind, run_baseline, run_baselines
+from .candidate_scoring import TrainingCandidateScore, select_stable_representative
 from .decision import DecisionSummary, ResearchConclusion, ResearchEvidence, evaluate_research_decision
 from .metrics import PerformanceMetrics, Trade, calculate_performance
 from .parameters import (
     ParameterCandidate,
     expand_candidate_axis,
     grid_candidates,
-    stable_parameter_neighborhood,
+    stable_parameter_candidates,
     trend_candidates,
 )
 from .metrics import max_drawdown
@@ -121,6 +122,9 @@ class ValidationWindowResult:
     trend_training_surface: tuple[TrainingSurfaceSummary, ...] = ()
     cost_config: CostConfig | None = None
     selected_config: Mapping[str, object] | None = None
+    candidate_scores: tuple[TrainingCandidateScore, ...] = ()
+    selected_scores: Mapping[str, TrainingCandidateScore] | None = None
+    screened_axes: Mapping[str, tuple[tuple[str, ...], ...]] | None = None
 
 
 class _Provider(Protocol):
@@ -235,6 +239,9 @@ def run_instrument_validation(
                 config = AdaptiveConfig.default()
                 grid_surface: tuple[TrainingSurfaceSummary, ...] = ()
                 trend_surface: tuple[TrainingSurfaceSummary, ...] = ()
+                candidate_scores: tuple[TrainingCandidateScore, ...] = ()
+                selected_scores: dict[str, TrainingCandidateScore] = {}
+                screened_axes: dict[str, tuple[tuple[str, ...], ...]] = {}
             else:
                 segment_size = len(window.train_dates) // 4
                 grid_selection = _select_training_candidate(
@@ -259,6 +266,15 @@ def run_instrument_validation(
                 )
                 grid_surface = grid_selection.surface
                 trend_surface = trend_selection.surface
+                candidate_scores = grid_selection.candidate_scores + trend_selection.candidate_scores
+                selected_scores = {
+                    "grid_only": grid_selection.selected_score,
+                    "trend_only": trend_selection.selected_score,
+                }
+                screened_axes = {
+                    "grid_only": grid_selection.screened_axes,
+                    "trend_only": trend_selection.screened_axes,
+                }
             # Indicators see the training history, but the Task 1 engine
             # starts the accounting state at the validation boundary.
             runs = run_baselines(BacktestRequest(target.stock_code, initial_cash, window.train_dates[0], window.validation_end, window.validation_dates[0]), provider, config)
@@ -283,6 +299,9 @@ def run_instrument_validation(
                 grid_surface, trend_surface,
                 config.cost,
                 asdict(config),
+                candidate_scores=candidate_scores,
+                selected_scores=selected_scores,
+                screened_axes=screened_axes,
             ))
     except (ValueError, DataQualityError) as exc:
         return _data_rejected_result(target, as_of_date, str(exc), tuple(results))
@@ -337,6 +356,9 @@ class _TrainingPoint:
 class _TrainingSelection:
     candidate: ParameterCandidate
     surface: tuple[TrainingSurfaceSummary, ...]
+    candidate_scores: tuple[TrainingCandidateScore, ...]
+    selected_score: TrainingCandidateScore
+    screened_axes: tuple[tuple[str, ...], ...]
 
 
 def _select_training_candidate(
@@ -356,38 +378,80 @@ def _select_training_candidate(
     a cross-product of the newly approved axes.
     """
 
-    selected, summaries = _screen_training_candidates(
+    selected, summaries, scores = _screen_training_candidates(
         stock_code, provider, dates, initial_cash, candidates, axes, segment_size,
     )
     if selected is None:
         return None
     all_summaries = list(summaries)
+    all_scores = list(scores)
+    screened_axes = [tuple(axes)]
     for axis in expansion_axes:
         expanded = expand_candidate_axis(selected, axis=axis)
-        selected, summaries = _screen_training_candidates(
+        selected, summaries, scores = _screen_training_candidates(
             stock_code, provider, dates, initial_cash, expanded, (axis,), segment_size,
         )
         if selected is None:
             return None
         all_summaries.extend(summaries)
-    return _TrainingSelection(selected, tuple(all_summaries))
+        all_scores.extend(scores)
+        screened_axes.append((axis,))
+    selected_score = next(score for score in scores if score.config_hash == selected.config_hash)
+    return _TrainingSelection(
+        selected, tuple(all_summaries), tuple(all_scores), selected_score, tuple(screened_axes),
+    )
 
 
 def _screen_training_candidates(stock_code, provider, dates, initial_cash, candidates, axes, segment_size):
     segments = tuple(dates[index:index + segment_size] for index in range(0, len(dates), segment_size))
     points = {}
+    raw_scores = []
     candidate_kind = BaselineKind.GRID_ONLY if candidates[0].family == "grid_only" else BaselineKind.TREND_ONLY
     for candidate in candidates:
         excess = []
+        strategy_metrics = []
+        benchmark_metrics = []
+        starting_nav = 0.0
+        invested_sessions = 0
+        total_sessions = 0
         for segment in segments:
             request = BacktestRequest(stock_code, initial_cash, segment[0], segment[-1])
             strategy = run_baseline(candidate_kind, request, provider, candidate.config)
             benchmark = run_baseline(BaselineKind.BUY_AND_HOLD, request, provider, candidate.config)
             excess.append(_nav_return(strategy.result.nav) - _nav_return(benchmark.result.nav))
+            strategy_metrics.append(_recorded_performance(strategy.result.nav, strategy.result.events, candidate.config.cost))
+            benchmark_metrics.append(_recorded_performance(benchmark.result.nav, benchmark.result.events, candidate.config.cost))
+            starting_nav += float(strategy.result.nav[0].total)
+            invested_sessions += _recorded_exposure(strategy.result.nav)[0]
+            total_sessions += len(strategy.result.nav)
         points[candidate.config_hash] = _TrainingPoint(candidate, tuple(value >= 0 for value in excess), tuple(excess), dates[-1])
-    selected = stable_parameter_neighborhood(
+        paired_metrics = tuple(zip(strategy_metrics, benchmark_metrics))
+        raw_scores.append(TrainingCandidateScore(
+            config_hash=candidate.config_hash,
+            config=asdict(candidate.config),
+            positive_subperiod_share=points[candidate.config_hash].positive_window_share,
+            sortino_excess=sum(s.sortino - b.sortino for s, b in paired_metrics) / len(segments),
+            sharpe_excess=sum(s.sharpe - b.sharpe for s, b in paired_metrics) / len(segments),
+            drawdown_improvement=sum(abs(b.max_drawdown) - abs(s.max_drawdown) for s, b in paired_metrics) / len(segments),
+            cvar5_improvement=sum(s.cvar5 - b.cvar5 for s, b in paired_metrics) / len(segments),
+            cost_drag=sum(s.total_cost for s in strategy_metrics) / starting_nav,
+            exposure_ratio=invested_sessions / total_sessions,
+            stable=False,
+            rejection_reason="outside_stable_plateau",
+            family=candidate.family,
+            screened_axes=tuple(axes),
+        ))
+    plateau = stable_parameter_candidates(
         points, candidates=candidates, axes=axes, min_positive_window_share=.75,
     )
+    stable_hashes = {candidate.config_hash for candidate in plateau}
+    scores = tuple(
+        replace(score, stable=True, rejection_reason=None) if score.config_hash in stable_hashes else score
+        for score in sorted(raw_scores, key=lambda score: score.config_hash)
+    )
+    selected_score = select_stable_representative(scores)
+    selected = next((candidate for candidate in plateau if selected_score is not None
+                     and candidate.config_hash == selected_score.config_hash), None)
     summaries = tuple(
         TrainingSurfaceSummary(
             config_hash=point.config_hash,
@@ -397,7 +461,7 @@ def _screen_training_candidates(stock_code, provider, dates, initial_cash, candi
         )
         for point in points.values()
     )
-    return (selected[0] if selected else None), summaries
+    return selected, summaries, scores
 
 
 def _recorded_trades(

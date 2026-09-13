@@ -2,19 +2,18 @@
 
 The approved parameter spaces below are the only values that may be screened.
 Adding or removing a value requires updating the implementation plan and the
-specification. ``stable_parameter_neighborhood`` enforces the adjacency rule
-the spec mandates: a candidate is part of the plateau only when every tuned
-numeric axis sits at a non-edge canonical position, the candidate's own OOS
-subperiods clear ``min_positive_window_share``, and every adjacent candidate
-that is actually present in the screened surface also clears the threshold.
-When a plateau has even cardinality the more conservative (lower-risk)
-candidate wins.
+specification. ``stable_parameter_candidates`` enforces the adjacency rule:
+every tuned numeric axis requires a non-edge canonical position and passing
+exact neighbors on both sides. The candidate's evaluated subperiods must
+also clear ``min_positive_window_share``. Training selection ranks all such
+members; ``stable_parameter_neighborhood`` retains its legacy midpoint API.
 """
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, replace
-from typing import Mapping, Protocol, Sequence
+import json
+from typing import Mapping, Protocol, Sequence, cast
 
 from ..config import AdaptiveConfig, GridConfig, TrendConfig
 
@@ -138,6 +137,22 @@ class ParameterCandidate:
     @property
     def config_hash(self) -> str:
         return self.config.config_hash()
+
+
+def conservative_config_key(config: Mapping[str, object]) -> tuple[object, ...]:
+    """Prefer smaller risk/position budgets, then canonical configuration JSON.
+
+    Exit distances and filters have context-dependent risk effects, so only
+    the unambiguous size controls precede the deterministic canonical fallback.
+    """
+    grid = cast(Mapping[str, float | None], config["grid"])
+    trend = cast(Mapping[str, float], config["trend"])
+    fixed_initial = grid["fixed_initial_pct"]
+    return (
+        trend["risk_per_unit"], trend["max_units"], grid["unit_pct"],
+        fixed_initial if fixed_initial is not None else float("inf"),
+        json.dumps(config, sort_keys=True, separators=(",", ":")),
+    )
 
 
 class SurfacePointLike(Protocol):
@@ -350,30 +365,30 @@ def _candidate_key(
     return tuple(_axis_key(axis, candidate) for axis in axes)
 
 
-def stable_parameter_neighborhood(
+def stable_parameter_candidates(
     results: Mapping[str, SurfacePointLike],
     *,
     candidates: Sequence[ParameterCandidate] | Mapping[str, ParameterCandidate] | None = None,
     axes: Sequence[str],
     min_positive_window_share: float,
 ) -> tuple[ParameterCandidate, ...]:
-    """Return the middle candidate(s) of the stable neighborhood.
+    """Return every candidate that satisfies the exact-neighbor stability rule.
 
     A candidate is part of the plateau when:
 
     * it sits at a non-edge position on every canonical tuned axis;
-    * the candidate's own OOS subperiods clear ``min_positive_window_share``;
+    * the candidate's own evaluated subperiods clear ``min_positive_window_share``;
     * every numeric axis has a passing lower and upper immediate neighbor
       with every other axis unchanged; and
     * categorical MACD stability has both observed values passing with every
       other axis unchanged.
 
-    When the plateau has even cardinality the more conservative
-    (lower-risk) candidate wins.
+    Ranking is separate from membership: no high score can create a missing
+    neighbor or rescue an edge candidate.
     """
 
     if not axes:
-        raise ValueError("stable_parameter_neighborhood requires at least one axis")
+        raise ValueError("stable_parameter_candidates requires at least one axis")
     if not 0.0 <= min_positive_window_share <= 1.0:
         raise ValueError("min_positive_window_share must be between 0 and 1")
 
@@ -411,10 +426,23 @@ def stable_parameter_neighborhood(
             continue
         plateau.append(candidate)
 
+    return tuple(sorted(plateau, key=lambda item: _candidate_key(item, axes)))
+
+
+def stable_parameter_neighborhood(
+    results: Mapping[str, SurfacePointLike],
+    *,
+    candidates: Sequence[ParameterCandidate] | Mapping[str, ParameterCandidate] | None = None,
+    axes: Sequence[str],
+    min_positive_window_share: float,
+) -> tuple[ParameterCandidate, ...]:
+    """Retain the legacy midpoint representative for existing surface consumers."""
+    plateau = stable_parameter_candidates(
+        results, candidates=candidates, axes=axes,
+        min_positive_window_share=min_positive_window_share,
+    )
     if not plateau:
         return ()
-
-    plateau.sort(key=lambda item: _candidate_key(item, axes))
     if len(plateau) % 2 == 0:
         middle_a = plateau[len(plateau) // 2 - 1]
         middle_b = plateau[len(plateau) // 2]

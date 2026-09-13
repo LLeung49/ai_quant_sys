@@ -1,13 +1,15 @@
 """Contracts for independent fixed-ETF strategy validation."""
 
+from dataclasses import asdict, replace
 from datetime import date, timedelta
 from decimal import Decimal
+from math import sqrt
 
 import pytest
 
 from asset_allocation.etf_adaptive.contracts import DualPriceBar, ExecutionAvailability
 from asset_allocation.etf_adaptive.contracts import DataQualityError
-from asset_allocation.etf_adaptive.config import AdaptiveConfig, CostConfig
+from asset_allocation.etf_adaptive.config import AdaptiveConfig, CostConfig, GridConfig
 from asset_allocation.etf_adaptive.research.instrument_validation import (
     CachedValidationProvider,
     FIXED_VALIDATION_TARGETS,
@@ -171,6 +173,7 @@ def test_recorded_metrics_and_exposure_use_only_persisted_nav_and_events() -> No
 
 def test_staged_training_expands_each_exit_axis_without_cartesian_candidates(monkeypatch: pytest.MonkeyPatch) -> None:
     from asset_allocation.etf_adaptive.research import instrument_validation as module
+    from asset_allocation.etf_adaptive.research.candidate_scoring import TrainingCandidateScore
 
     base = ParameterCandidate(AdaptiveConfig.default(), family="grid_only")
     observed_sizes: list[int] = []
@@ -178,7 +181,12 @@ def test_staged_training_expands_each_exit_axis_without_cartesian_candidates(mon
     def screen(*args):
         candidates = args[4]
         observed_sizes.append(len(candidates))
-        return candidates[len(candidates) // 2], ()
+        selected = candidates[len(candidates) // 2]
+        score = TrainingCandidateScore(
+            selected.config_hash, asdict(selected.config), 1.0, 0.2, 0.1,
+            0.01, 0.001, 0.002, 0.5, True, None,
+        )
+        return selected, (), (score,)
 
     monkeypatch.setattr(module, "_screen_training_candidates", screen)
     selection = module._select_training_candidate(
@@ -190,10 +198,11 @@ def test_staged_training_expands_each_exit_axis_without_cartesian_candidates(mon
     assert observed_sizes == [1, 3, 4]
 
 
-def test_oos_only_prices_do_not_change_training_hashes_or_activate_nonpassing_decision(
+@pytest.fixture
+def oos_validation_pair(
     monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Training replays never read validation prices, and decision remains the activation gate."""
+):
+    """Replay recorded training paths and price-sensitive OOS paths separately."""
     from asset_allocation.etf_adaptive.research import instrument_validation as module
     from asset_allocation.etf_adaptive.research.baselines import BaselineKind, BaselineRun
     from asset_allocation.etf_adaptive.research.decision import DecisionSummary
@@ -215,7 +224,9 @@ def test_oos_only_prices_do_not_change_training_hashes_or_activate_nonpassing_de
 
     def run_baseline(kind, request, provider, config):
         training_requests.append((request.start_date, request.end_date))
+        training_bars = provider.load_bars(request.stock_code, request.start_date, request.end_date)
         terminal = Decimal("101") if kind is not BaselineKind.BUY_AND_HOLD else Decimal("100")
+        terminal *= Decimal(str(sum(bar.raw_close for bar in training_bars) / (100 * len(training_bars))))
         return BaselineRun(kind, config, BacktestResult(request, (), (
             DailyNav(request.start_date, Decimal("100"), Decimal("0")),
             DailyNav(request.end_date, terminal, Decimal("0")),
@@ -238,11 +249,12 @@ def test_oos_only_prices_do_not_change_training_hashes_or_activate_nonpassing_de
 
     def validate(oos_multiplier: float):
         oos_dates = {day for window in windows for day in window.validation_dates}
+        oos_ends = {window.validation_dates[-1] for window in windows}
         bars = tuple(DualPriceBar(
             stock_code="515450.SH", trade_date=day,
             signal_open=100.0, signal_high=100.0, signal_low=100.0, signal_close=100.0,
             raw_open=100.0, raw_high=100.0, raw_low=100.0,
-            raw_close=100.0 * (oos_multiplier if day in oos_dates else 1.0),
+            raw_close=100.0 * (oos_multiplier ** (2 if day in oos_ends else 1) if day in oos_dates else 1.0),
             amount=20_000_000.0, suspended=False, adjustment_ratio=1.0,
             execution_availability=ExecutionAvailability(False, False, "test"),
         ) for day in dates)
@@ -257,6 +269,14 @@ def test_oos_only_prices_do_not_change_training_hashes_or_activate_nonpassing_de
 
     baseline = validate(1.0)
     changed_oos = validate(10.0)
+    return baseline, changed_oos, training_requests, windows
+
+
+def test_oos_only_prices_do_not_change_training_hashes_or_activate_nonpassing_decision(
+    oos_validation_pair,
+) -> None:
+    """Training replays never read validation prices, and decision remains the activation gate."""
+    baseline, changed_oos, training_requests, windows = oos_validation_pair
 
     assert tuple(window.config_hash for window in baseline.windows) == tuple(window.config_hash for window in changed_oos.windows)
     assert baseline.decision is not None
@@ -271,3 +291,133 @@ def test_oos_only_prices_do_not_change_training_hashes_or_activate_nonpassing_de
     assert baseline.run_manifest["data_fingerprint"] != changed_oos.run_manifest["data_fingerprint"]
     assert baseline.run_manifest["selected_configs"] == changed_oos.run_manifest["selected_configs"]
     assert all(window.selected_config is not None for window in baseline.windows)
+
+
+def test_oos_mutation_cannot_change_recorded_training_scores(oos_validation_pair) -> None:
+    baseline, changed_oos, _, _ = oos_validation_pair
+
+    assert len(baseline.windows) == len(changed_oos.windows) == 3
+    assert baseline.windows[0].strategy_return != changed_oos.windows[0].strategy_return
+    for before, after in zip(baseline.windows, changed_oos.windows):
+        assert before.candidate_scores
+        assert before.candidate_scores == after.candidate_scores
+        assert before.selected_scores == after.selected_scores
+        assert before.screened_axes == after.screened_axes == {
+            "grid_only": (("step_pct", "unit_pct", "fixed_initial_pct"),
+                          ("atr_stop_multiple",), ("cooldown_sessions",)),
+            "trend_only": (("risk_per_unit", "add_n", "max_units", "amount_ratio_min"),
+                           ("stop_n",), ("require_macd_bullish",)),
+        }
+        assert len(before.candidate_scores) == 220 + 3 + 4 + 144 + 4 + 2
+        for family, selected in before.selected_scores.items():
+            assert selected in before.candidate_scores
+            assert selected.stable is True
+            assert selected.rejection_reason is None
+            section = "grid" if family == "grid_only" else "trend"
+            assert selected.config[section] == before.selected_config[section]
+
+
+@pytest.mark.parametrize("lower_neighbor", ("present", "missing", "unrelated_axis"))
+def test_training_ranks_all_plateau_members_and_rejects_inexact_neighbors(
+    monkeypatch: pytest.MonkeyPatch, lower_neighbor: str,
+) -> None:
+    from asset_allocation.etf_adaptive.research import instrument_validation as module
+    from asset_allocation.etf_adaptive.research.baselines import BaselineKind, BaselineRun
+
+    dates = tuple(date(2026, 1, 1) + timedelta(days=index) for index in range(10))
+    candidates = tuple(ParameterCandidate(
+        AdaptiveConfig(grid=GridConfig(step_pct=step)), family="grid_only",
+    ) for step in (0.01, 0.015, 0.02, 0.025, 0.03))
+    if lower_neighbor == "missing":
+        candidates = candidates[1:]
+    elif lower_neighbor == "unrelated_axis":
+        candidates = (replace(candidates[0], config=replace(
+            candidates[0].config, grid=replace(candidates[0].config.grid, unit_pct=0.15),
+        )), *candidates[1:])
+
+    def replay(kind, request, provider, config):
+        if kind is BaselineKind.BUY_AND_HOLD:
+            totals = (100, 98, 101, 100, 102)
+        elif config.grid.step_pct == 0.01:
+            totals = (100, 99, 150, 149.5, 200)
+        elif config.grid.step_pct == 0.015:
+            totals = (100, 99, 102, 101.5, 103)
+        else:
+            totals = (100, 90, 105, 97, 103)
+        segment = tuple(day for day in dates if request.start_date <= day <= request.end_date)
+        assert len(segment) == 5
+        nav = tuple(DailyNav(day, Decimal("0"), Decimal(str(total))) for day, total in zip(segment, totals))
+        return BaselineRun(kind, config, BacktestResult(request, (), nav))
+
+    monkeypatch.setattr(module, "run_baseline", replay)
+    selection = module._select_training_candidate(
+        "510300.SH", object(), dates, Decimal("100"), candidates, ("step_pct",), 5,
+    )
+
+    assert selection is not None
+    expected_step = 0.015 if lower_neighbor == "present" else 0.02
+    assert selection.candidate.config.grid.step_pct == expected_step
+    scores = {row.config["grid"]["step_pct"]: row for row in selection.candidate_scores}
+    assert len(scores) == len(candidates)
+    assert scores[0.015].stable is (lower_neighbor == "present")
+    assert scores[0.015].rejection_reason == (None if lower_neighbor == "present" else "outside_stable_plateau")
+    assert scores[0.03].rejection_reason == "outside_stable_plateau"
+    if lower_neighbor == "present":
+        assert scores[0.01].sortino_excess > scores[0.015].sortino_excess
+        assert scores[0.01].rejection_reason == "outside_stable_plateau"
+    assert selection.selected_score == scores[expected_step]
+    assert all(row.family == "grid_only" and row.screened_axes == ("step_pct",)
+               for row in selection.candidate_scores)
+
+
+def test_training_scores_aggregate_recorded_subperiod_risk_cost_and_exposure(monkeypatch) -> None:
+    from asset_allocation.etf_adaptive.research import instrument_validation as module
+    from asset_allocation.etf_adaptive.research.baselines import BaselineKind, BaselineRun
+
+    dates = tuple(date(2026, 1, 1) + timedelta(days=index) for index in range(20))
+    candidates = tuple(ParameterCandidate(AdaptiveConfig(
+        grid=GridConfig(step_pct=step),
+        cost=CostConfig(commission_rate=0.01, minimum_commission=5, slippage_bps=100),
+    ), family="grid_only") for step in (0.01, 0.015, 0.02))
+
+    def replay(kind, request, provider, config):
+        final_segment = request.start_date == dates[15]
+        strategy = kind is BaselineKind.GRID_ONLY
+        # Returns: good = (+10%, -10%, +10%, -5%);
+        # bad = (+5%, -15%, +5%, -10%). Swap in the fourth segment.
+        good = (100, 110, 99, 108.9, 103.455)
+        bad = (100, 105, 89.25, 93.7125, 84.34125)
+        totals = good if strategy != final_segment else bad
+        segment = tuple(day for day in dates if request.start_date <= day <= request.end_date)
+        invested_indexes = {1, 2, 3, 4} if final_segment else {1, 2}
+        nav = tuple(DailyNav(
+            day,
+            Decimal("0") if index in invested_indexes else Decimal(str(total)),
+            Decimal(str(total)) if index in invested_indexes else Decimal("0"),
+        ) for index, (day, total) in enumerate(zip(segment, totals)))
+        shares = "2" if final_segment else "1"
+        fee = ("10" if final_segment else "5") if strategy else "100"
+        events = (BacktestEvent(segment[1], "fill", (
+            ("side", "buy"), ("shares", shares), ("raw_price", "101"), ("commission", fee),
+        )),)
+        return BaselineRun(kind, config, BacktestResult(request, events, nav))
+
+    monkeypatch.setattr(module, "run_baseline", replay)
+    selection = module._select_training_candidate(
+        "510300.SH", object(), dates, Decimal("100"), candidates, ("step_pct",), 5,
+    )
+
+    assert selection is not None
+    score = selection.selected_score
+    # Hand-derived: equal subperiod weights give half the good-minus-bad
+    # excess; both return paths have population variance 0.00796875 and
+    # downside deviation 0.025. NAVs already include costs.
+    annual_excess = 1.03455 ** 63 - 0.8434125 ** 63
+    assert score.positive_subperiod_share == 0.75
+    assert score.sortino_excess == pytest.approx(annual_excess / (0.05 * sqrt(252)))
+    assert score.sharpe_excess == pytest.approx(annual_excess / (2 * sqrt(0.00796875 * 252)))
+    assert score.drawdown_improvement == pytest.approx(0.048375)
+    assert score.cvar5_improvement == pytest.approx(0.025)
+    assert score.cost_drag == pytest.approx(0.075)  # (6 + 6 + 6 + 12) / 400
+    assert score.exposure_ratio == 0.5  # (2 + 2 + 2 + 4) / 20
+    assert score.stable is True
