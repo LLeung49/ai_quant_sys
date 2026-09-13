@@ -220,6 +220,79 @@ def test_daily_engine_marks_nav_with_raw_close() -> None:
     assert result.nav[-1].market_value == Decimal("0")
 
 
+def test_daily_engine_records_one_post_session_state_observation(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Break caught: recording observations before fills/close decisions leaves
+    # attribution with stale state rather than the completed session state.
+    days = (date(2026, 9, 1), date(2026, 9, 2))
+    bars = tuple(
+        DualPriceBar(
+            "510300.SH", day, 1.0, 1.1, 0.9, 1.0,
+            4.0, 4.4, 3.6, 4.0, 20_000_000.0, False, 0.25,
+            4.0, ExecutionAvailability(False, False, "test"),
+        )
+        for day in days
+    )
+    decisions = iter((
+        Decision(StrategyState(regime=Regime.GRID, cash=Decimal("1000")), ()),
+        Decision(StrategyState(regime=Regime.TREND, cash=Decimal("1000")), ()),
+    ))
+    monkeypatch.setattr(
+        "asset_allocation.etf_adaptive.indicators.compute_indicators",
+        lambda values: (object(),) * len(values),
+    )
+    config = AdaptiveConfig.default()
+
+    result = AdaptiveBacktestEngine(
+        config, ExecutionSimulator(config.cost, config.trend), policy=_ScriptedPolicy(decisions),
+    ).run_with_data(
+        BacktestRequest("510300.SH", Decimal("1000"), days[0], days[-1]),
+        bars,
+        {day: ETFEligibility(True, (), "broad", 252, 20_000_000.0) for day in days},
+    )
+
+    assert len(result.observations) == len(result.nav) == 2
+    assert [item.nav_date for item in result.observations] == list(days)
+    assert result.observations[-1].regime is Regime.TREND
+    assert result.observations[-1].actual_exposure == pytest.approx(0.0)
+    assert result.observations[-1].state_reason == "trend"
+
+
+def test_daily_engine_observation_records_that_sessions_executed_fill_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Break caught: a post-fill observation labelled only with the regime
+    # cannot explain the causal state change that produced its NAV.
+    days = (date(2026, 9, 1), date(2026, 9, 2))
+    bars = tuple(
+        DualPriceBar(
+            "510300.SH", day, 1.0, 1.1, 0.9, 1.0,
+            4.0, 4.4, 3.6, 4.0, 20_000_000.0, False, 0.25,
+            4.0, ExecutionAvailability(False, False, "test"),
+        )
+        for day in days
+    )
+    entry = OrderIntent(days[0], Side.BUY, OrderReason.GRID_BUY, None, (), 0.5, 0.0, "entry")
+    decisions = iter((
+        Decision(StrategyState(regime=Regime.GRID, cash=Decimal("1000")), (entry,)),
+        Decision(StrategyState(regime=Regime.GRID, cash=Decimal("1000")), ()),
+    ))
+    monkeypatch.setattr(
+        "asset_allocation.etf_adaptive.indicators.compute_indicators",
+        lambda values: (object(),) * len(values),
+    )
+    config = AdaptiveConfig.default()
+
+    result = AdaptiveBacktestEngine(
+        config, ExecutionSimulator(config.cost, config.trend), policy=_ScriptedPolicy(decisions),
+    ).run_with_data(
+        BacktestRequest("510300.SH", Decimal("1000"), days[0], days[-1]),
+        bars,
+        {day: ETFEligibility(True, (), "broad", 252, 20_000_000.0) for day in days},
+    )
+
+    assert result.observations[-1].state_reason == "grid_buy"
+
+
 def test_warmup_sessions_do_not_change_validation_account_or_emit_events(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

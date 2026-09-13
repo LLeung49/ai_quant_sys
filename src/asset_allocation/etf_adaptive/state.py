@@ -130,7 +130,21 @@ class DailyNav:
 
 
 @dataclass(frozen=True)
+class DailyStrategyObservation:
+    """Post-session state captured alongside one recorded strategy NAV."""
+
+    nav_date: date
+    regime: Regime | None
+    target_exposure: float
+    actual_exposure: float
+    cooldown_remaining: int
+    pending_order_count: int
+    state_reason: str
+
+
+@dataclass(frozen=True)
 class BacktestResult:
     request: BacktestRequest
     events: tuple[BacktestEvent, ...]
     nav: tuple[DailyNav, ...]
+    observations: tuple[DailyStrategyObservation, ...] = ()

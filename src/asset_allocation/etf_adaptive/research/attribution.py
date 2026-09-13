@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 from types import MappingProxyType
-from typing import Mapping
+from typing import Mapping, Sequence
 
-from ..state import BacktestResult
+from ..state import BacktestEvent, BacktestResult, DailyNav, DailyStrategyObservation, Regime
 
 
 @dataclass(frozen=True)
@@ -35,6 +35,16 @@ class ResultAttribution:
     invested_sessions: int
     cash_sessions: int
     rejected_order_count: int
+
+
+@dataclass(frozen=True)
+class ExcessAttribution:
+    grid_return: float
+    trend_return: float
+    transition_return: float
+    cash_opportunity_cost: float
+    execution_cost: float
+    reconciliation_error: float
 
 
 def build_result_attribution(window_id: str, result: BacktestResult) -> ResultAttribution:
@@ -70,3 +80,102 @@ def build_result_attribution(window_id: str, result: BacktestResult) -> ResultAt
         len(result.nav) - invested, rejected,
     )
 
+
+def build_excess_attribution(
+    strategy_nav: Sequence[DailyNav],
+    benchmark_nav: Sequence[DailyNav],
+    observations: Sequence[DailyStrategyObservation],
+    strategy_events: Sequence[BacktestEvent] = (),
+    *,
+    execution_cost: float | None = None,
+) -> ExcessAttribution:
+    """Reconcile recorded net strategy excess without replaying strategy logic.
+
+    All return contributions are simple daily strategy-minus-benchmark returns.
+    Costs are already embedded in the recorded strategy NAV, so the optional
+    execution-cost diagnostic is intentionally excluded from reconciliation.
+    """
+
+    _require_aligned_nav(strategy_nav, benchmark_nav)
+    ordered_observations = _require_observations_for_nav(strategy_nav, observations)
+
+    grid = 0.0
+    trend = 0.0
+    transition = 0.0
+    cash = 0.0
+    total_excess = 0.0
+    previous_regime = ordered_observations[0].regime
+    transition_pending = False
+    for previous_strategy, current_strategy, previous_benchmark, current_benchmark, observation in zip(
+        strategy_nav,
+        strategy_nav[1:],
+        benchmark_nav,
+        benchmark_nav[1:],
+        ordered_observations[1:],
+    ):
+        strategy_return = _daily_return(previous_strategy, current_strategy, "strategy")
+        benchmark_return = _daily_return(previous_benchmark, current_benchmark, "benchmark")
+        excess = strategy_return - benchmark_return
+        total_excess += excess
+        transition_pending = transition_pending or (
+            previous_regime is not None and observation.regime is not previous_regime
+        )
+        if observation.actual_exposure <= 0.0:
+            cash -= benchmark_return
+        elif transition_pending:
+            transition += excess
+            transition_pending = False
+        elif observation.regime is Regime.GRID:
+            grid += excess
+        elif observation.regime is Regime.TREND:
+            trend += excess
+        else:
+            raise ValueError("invested observation requires a regime")
+        previous_regime = observation.regime
+
+    components = grid + trend + transition + cash
+    reconciliation_error = components - total_excess
+    if abs(reconciliation_error) > 1e-9:
+        raise ValueError("excess attribution does not reconcile to recorded NAV")
+    diagnostic_cost = (
+        _recorded_execution_cost(strategy_events)
+        if execution_cost is None
+        else float(execution_cost)
+    )
+    return ExcessAttribution(grid, trend, transition, cash, diagnostic_cost, reconciliation_error)
+
+
+def _require_aligned_nav(strategy_nav: Sequence[DailyNav], benchmark_nav: Sequence[DailyNav]) -> None:
+    strategy_dates = tuple(point.nav_date for point in strategy_nav)
+    benchmark_dates = tuple(point.nav_date for point in benchmark_nav)
+    if not strategy_nav or strategy_dates != benchmark_dates:
+        raise ValueError("strategy and benchmark NAV dates must align")
+    if len(set(strategy_dates)) != len(strategy_dates):
+        raise ValueError("recorded NAV dates must be unique")
+
+
+def _require_observations_for_nav(
+    nav: Sequence[DailyNav], observations: Sequence[DailyStrategyObservation],
+) -> tuple[DailyStrategyObservation, ...]:
+    by_date = {item.nav_date: item for item in observations}
+    nav_dates = tuple(point.nav_date for point in nav)
+    if len(by_date) != len(observations) or set(by_date) != set(nav_dates):
+        raise ValueError("observation date must align with recorded NAV")
+    return tuple(by_date[nav_date] for nav_date in nav_dates)
+
+
+def _daily_return(previous: DailyNav, current: DailyNav, series_name: str) -> float:
+    if previous.total <= 0:
+        raise ValueError(f"{series_name} NAV must be positive")
+    return float(current.total / previous.total - 1)
+
+
+def _recorded_execution_cost(events: Sequence[BacktestEvent]) -> float:
+    total = Decimal("0")
+    for event in events:
+        if event.kind != "fill":
+            continue
+        payload = dict(event.payload)
+        total += Decimal(payload.get("commission", "0"))
+        total += Decimal(payload.get("slippage_cost", "0"))
+    return float(total)

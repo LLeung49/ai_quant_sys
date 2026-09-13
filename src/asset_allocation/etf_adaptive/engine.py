@@ -10,7 +10,15 @@ from .config import AdaptiveConfig
 from .contracts import CorporateAction, DualPriceBar, ETFEligibility
 from .indicators import IndicatorSnapshot
 from .state import Decision, StrategyState
-from .state import BacktestEvent, BacktestRequest, BacktestResult, DailyNav, OrderIntent
+from .state import (
+    BacktestEvent,
+    BacktestRequest,
+    BacktestResult,
+    DailyNav,
+    DailyStrategyObservation,
+    Fill,
+    OrderIntent,
+)
 from .execution import ExecutionSimulator
 from .execution import apply_corporate_actions, is_protective_exit, rebase_signal_state
 from .strategy_policy import FULL_ADAPTIVE_POLICY, StrategyPolicy, apply_exit_fill
@@ -90,6 +98,7 @@ class AdaptiveBacktestEngine:
         pending: tuple[OrderIntent, ...] = ()
         events: list[BacktestEvent] = []
         nav: list[DailyNav] = []
+        observations: list[DailyStrategyObservation] = []
         snapshots = compute_indicators(bars)
         previous_ratio: float | None = None
         previous_offset: float | None = None
@@ -123,9 +132,11 @@ class AdaptiveBacktestEngine:
                         )
                     )
                     recorded_action_ids.add(action.event_id)
+            session_fills = ()
             if pending:
                 outcome = self._execution.execute(pending, bar, state)
                 state = outcome.state
+                session_fills = outcome.fills
                 retried: list[OrderIntent] = []
                 for rejected_order in outcome.rejected_orders:
                     events.append(
@@ -169,10 +180,47 @@ class AdaptiveBacktestEngine:
                 state = decision.state
                 if not pending:
                     pending = decision.orders
-            nav.append(DailyNav(bar.trade_date, state.cash, Decimal(str(bar.raw_close)) * state.position_shares))
+            daily_nav = DailyNav(
+                bar.trade_date, state.cash, Decimal(str(bar.raw_close)) * state.position_shares,
+            )
+            nav.append(daily_nav)
+            observations.append(_daily_observation(state, pending, session_fills, daily_nav))
             previous_ratio = bar.adjustment_ratio
             previous_offset = bar.adjustment_offset
-        return BacktestResult(request, tuple(events), tuple(nav))
+        return BacktestResult(request, tuple(events), tuple(nav), tuple(observations))
+
+
+def _daily_observation(
+    state: StrategyState,
+    pending: tuple[OrderIntent, ...],
+    fills: tuple[Fill, ...],
+    nav: DailyNav,
+) -> DailyStrategyObservation:
+    """Capture only state that exists after the completed session's NAV mark."""
+
+    actual_exposure = float(nav.market_value / nav.total) if nav.total > 0 else 0.0
+    return DailyStrategyObservation(
+        nav_date=nav.nav_date,
+        regime=state.regime,
+        # The immutable accounting state does not retain an unfilled order's
+        # sizing target.  After a completed session the executable target is
+        # therefore the NAV-marked exposure actually held in that state.
+        target_exposure=actual_exposure,
+        actual_exposure=actual_exposure,
+        cooldown_remaining=state.cooldown_remaining,
+        pending_order_count=len(pending),
+        state_reason=_state_reason(state, pending, fills),
+    )
+
+
+def _state_reason(
+    state: StrategyState, pending: tuple[OrderIntent, ...], fills: tuple[Fill, ...],
+) -> str:
+    if fills:
+        return fills[-1].reason.value
+    if pending:
+        return pending[0].reason.value
+    return state.regime.value if state.regime is not None else "cash"
 
 
 def _request_range(request: BacktestRequest) -> tuple[date, date]:

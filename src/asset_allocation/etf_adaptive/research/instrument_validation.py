@@ -13,7 +13,8 @@ from ..contracts import DataQualityError, DualPriceBar, SubLayer
 from ..execution import commission, execution_fee
 from ..indicators import IndicatorSnapshot, compute_indicators
 from ..state import BacktestRequest
-from ..state import BacktestEvent, DailyNav, Side
+from ..state import BacktestEvent, DailyNav, DailyStrategyObservation, Side
+from .attribution import ExcessAttribution, build_excess_attribution
 from .baselines import BaselineKind, run_baseline, run_baselines
 from .candidate_scoring import TrainingCandidateScore, select_stable_representative
 from .decision import DecisionSummary, ResearchConclusion, ResearchEvidence, evaluate_research_decision
@@ -126,6 +127,8 @@ class ValidationWindowResult:
     candidate_scores: tuple[TrainingCandidateScore, ...] = ()
     selected_scores: Mapping[str, TrainingCandidateScore] | None = None
     screened_axes: Mapping[str, tuple[tuple[str, ...], ...]] | None = None
+    strategy_observations: tuple[DailyStrategyObservation, ...] = ()
+    excess_attribution: ExcessAttribution | None = None
 
 
 class _Provider(Protocol):
@@ -287,6 +290,17 @@ def run_instrument_validation(
             benchmark_result = runs[BaselineKind.BUY_AND_HOLD].result
             strategy_metrics = _recorded_performance(strategy_result.nav, strategy_result.events, config.cost)
             benchmark_metrics = _recorded_performance(benchmark_result.nav, benchmark_result.events, config.cost)
+            excess_attribution = (
+                build_excess_attribution(
+                    strategy_result.nav,
+                    benchmark_result.nav,
+                    strategy_result.observations,
+                    strategy_result.events,
+                    execution_cost=strategy_metrics.total_cost,
+                )
+                if strategy_result.observations
+                else None
+            )
             strategy_invested, strategy_cash = _recorded_exposure(strategy_result.nav)
             benchmark_invested, benchmark_cash = _recorded_exposure(benchmark_result.nav)
             results.append(ValidationWindowResult(
@@ -303,6 +317,8 @@ def run_instrument_validation(
                 candidate_scores=candidate_scores,
                 selected_scores=selected_scores,
                 screened_axes=screened_axes,
+                strategy_observations=strategy_result.observations,
+                excess_attribution=excess_attribution,
             ))
     except (ValueError, DataQualityError) as exc:
         return _data_rejected_result(target, as_of_date, str(exc), tuple(results))
