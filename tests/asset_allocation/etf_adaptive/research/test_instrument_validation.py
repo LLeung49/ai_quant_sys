@@ -208,10 +208,10 @@ def oos_validation_pair(
     from asset_allocation.etf_adaptive.research.decision import DecisionSummary
     from asset_allocation.etf_adaptive.research.walk_forward import WalkForwardWindow
 
-    dates = tuple(date(2026, 1, 1) + timedelta(days=index) for index in range(18))
+    dates = tuple(date(2026, 1, 1) + timedelta(days=index) for index in range(66))
     windows = tuple(
         WalkForwardWindow(
-            f"wf_{index:03d}", dates[index * 6:index * 6 + 4], dates[index * 6 + 4:index * 6 + 6],
+            f"wf_{index:03d}", dates[index * 22:index * 22 + 20], dates[index * 22 + 20:index * 22 + 22],
         )
         for index in range(3)
     )
@@ -225,12 +225,14 @@ def oos_validation_pair(
     def run_baseline(kind, request, provider, config):
         training_requests.append((request.start_date, request.end_date))
         training_bars = provider.load_bars(request.stock_code, request.start_date, request.end_date)
-        terminal = Decimal("101") if kind is not BaselineKind.BUY_AND_HOLD else Decimal("100")
+        totals = (100, 99, 103, 102.5, 104) if kind is not BaselineKind.BUY_AND_HOLD else (100, 98, 101, 100, 102)
+        terminal = Decimal(str(totals[-1]))
         terminal *= Decimal(str(sum(bar.raw_close for bar in training_bars) / (100 * len(training_bars))))
-        return BaselineRun(kind, config, BacktestResult(request, (), (
-            DailyNav(request.start_date, Decimal("100"), Decimal("0")),
-            DailyNav(request.end_date, terminal, Decimal("0")),
-        )))
+        assert len(training_bars) == 5
+        nav = tuple(DailyNav(
+            bar.trade_date, Decimal(str(total)) if index < 4 else terminal, Decimal("0"),
+        ) for index, (bar, total) in enumerate(zip(training_bars, totals)))
+        return BaselineRun(kind, config, BacktestResult(request, (), nav))
 
     def run_baselines(request, provider, config):
         bars = provider.load_bars(request.stock_code, request.trade_start_date, request.end_date)
@@ -387,7 +389,7 @@ def test_training_scores_aggregate_recorded_subperiod_risk_cost_and_exposure(mon
         # bad = (+5%, -15%, +5%, -10%). Swap in the fourth segment.
         good = (100, 110, 99, 108.9, 103.455)
         bad = (100, 105, 89.25, 93.7125, 84.34125)
-        totals = good if strategy != final_segment else bad
+        totals = tuple(value * 100 for value in (good if strategy != final_segment else bad))
         segment = tuple(day for day in dates if request.start_date <= day <= request.end_date)
         invested_indexes = {1, 2, 3, 4} if final_segment else {1, 2}
         nav = tuple(DailyNav(
@@ -404,7 +406,7 @@ def test_training_scores_aggregate_recorded_subperiod_risk_cost_and_exposure(mon
 
     monkeypatch.setattr(module, "run_baseline", replay)
     selection = module._select_training_candidate(
-        "510300.SH", object(), dates, Decimal("100"), candidates, ("step_pct",), 5,
+        "510300.SH", object(), dates, Decimal("10000"), candidates, ("step_pct",), 5,
     )
 
     assert selection is not None
@@ -418,6 +420,81 @@ def test_training_scores_aggregate_recorded_subperiod_risk_cost_and_exposure(mon
     assert score.sharpe_excess == pytest.approx(annual_excess / (2 * sqrt(0.00796875 * 252)))
     assert score.drawdown_improvement == pytest.approx(0.048375)
     assert score.cvar5_improvement == pytest.approx(0.025)
-    assert score.cost_drag == pytest.approx(0.075)  # (6 + 6 + 6 + 12) / 400
+    assert score.cost_drag == pytest.approx(0.00075)  # (6 + 6 + 6 + 12) / 40000
     assert score.exposure_ratio == 0.5  # (2 + 2 + 2 + 4) / 20
     assert score.stable is True
+
+
+@pytest.mark.parametrize("unavailable_kind,totals,only_final_segment", (
+    ("grid_only", (100, 100, 100, 100, 100), False),
+    ("grid_only", (100, 101, 103, 105, 110), False),
+    ("grid_only", (100, 105, 104, 108, 110), False),
+    ("grid_only", (100, 50, 100, 50, 110), False),
+    ("buy_and_hold", (100, 100, 100, 100, 100), False),
+    ("buy_and_hold", (100, 101, 103, 105, 109), False),
+    ("grid_only", (100, 100, 100, 100, 100), True),
+))
+def test_undefined_training_ratios_reject_the_score_without_changing_legacy_metrics(
+    monkeypatch, unavailable_kind, totals, only_final_segment,
+) -> None:
+    from asset_allocation.etf_adaptive.research import instrument_validation as module
+    from asset_allocation.etf_adaptive.research.baselines import BaselineKind, BaselineRun
+
+    dates = tuple(date(2026, 1, 1) + timedelta(days=index) for index in range(20))
+    candidates = tuple(ParameterCandidate(
+        AdaptiveConfig(grid=GridConfig(step_pct=step)), family="grid_only",
+    ) for step in (0.01, 0.015, 0.02))
+    legacy_fallbacks = []
+
+    def replay(kind, request, provider, config):
+        values = (100, 99, 103, 102.5, 110) if kind is BaselineKind.GRID_ONLY else (100, 99, 101, 100.5, 98)
+        unavailable = kind.value == unavailable_kind and (not only_final_segment or request.start_date == dates[15])
+        if unavailable:
+            values = totals
+        segment = tuple(day for day in dates if request.start_date <= day <= request.end_date)
+        nav = tuple(DailyNav(day, Decimal(str(total)), Decimal("0")) for day, total in zip(segment, values))
+        if unavailable:
+            legacy_fallbacks.append(module._recorded_performance(nav, (), config.cost).sortino)
+        return BaselineRun(kind, config, BacktestResult(request, (), nav))
+
+    monkeypatch.setattr(module, "run_baseline", replay)
+    selected, _, scores = module._screen_training_candidates(
+        "510300.SH", object(), dates, Decimal("100"), candidates, ("step_pct",), 5,
+    )
+
+    assert legacy_fallbacks and all(value == 0.0 for value in legacy_fallbacks)
+    assert selected is None
+    assert len(scores) == 3
+    for score in scores:
+        assert score.stable is False
+        assert score.sortino_excess is None
+        assert "unavailable_training_metrics" in score.rejection_reason
+        if len(set(totals)) == 1:
+            assert score.sharpe_excess is None
+
+
+def test_recorded_training_cost_above_two_percent_cannot_be_promoted_by_stability(monkeypatch) -> None:
+    from asset_allocation.etf_adaptive.research import instrument_validation as module
+    from asset_allocation.etf_adaptive.research.baselines import BaselineKind, BaselineRun
+
+    dates = tuple(date(2026, 1, 1) + timedelta(days=index) for index in range(5))
+    candidates = tuple(ParameterCandidate(AdaptiveConfig(
+        grid=GridConfig(step_pct=step), cost=CostConfig(slippage_bps=0),
+    ), family="grid_only") for step in (0.01, 0.015, 0.02))
+
+    def replay(kind, request, provider, config):
+        values = (100, 99, 103, 102.5, 110) if kind is BaselineKind.GRID_ONLY else (100, 99, 101, 100.5, 98)
+        nav = tuple(DailyNav(day, Decimal(str(total)), Decimal("0")) for day, total in zip(dates, values))
+        events = (BacktestEvent(dates[1], "fill", (
+            ("side", "buy"), ("shares", "1"), ("raw_price", "100"), ("commission", "5"),
+        )),)
+        return BaselineRun(kind, config, BacktestResult(request, events, nav))
+
+    monkeypatch.setattr(module, "run_baseline", replay)
+    selected, _, scores = module._screen_training_candidates(
+        "510300.SH", object(), dates, Decimal("100"), candidates, ("step_pct",), 5,
+    )
+
+    assert selected is None
+    assert all(score.cost_drag == 0.05 for score in scores)
+    assert all(score.stable is False and score.rejection_reason == "cost_drag_out_of_bounds" for score in scores)

@@ -151,7 +151,8 @@ def conservative_config_key(config: Mapping[str, object]) -> tuple[object, ...]:
     return (
         trend["risk_per_unit"], trend["max_units"], grid["unit_pct"],
         fixed_initial if fixed_initial is not None else float("inf"),
-        json.dumps(config, sort_keys=True, separators=(",", ":")),
+        json.dumps({section: dict(values) for section, values in config.items()},
+                   sort_keys=True, separators=(",", ":")),
     )
 
 

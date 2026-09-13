@@ -5,6 +5,7 @@ from datetime import date
 from decimal import Decimal
 from enum import Enum
 from hashlib import sha256
+from math import isfinite
 from typing import Mapping, Protocol, Sequence
 
 from ..config import AdaptiveConfig, CostConfig
@@ -16,7 +17,7 @@ from ..state import BacktestEvent, DailyNav, Side
 from .baselines import BaselineKind, run_baseline, run_baselines
 from .candidate_scoring import TrainingCandidateScore, select_stable_representative
 from .decision import DecisionSummary, ResearchConclusion, ResearchEvidence, evaluate_research_decision
-from .metrics import PerformanceMetrics, Trade, calculate_performance
+from .metrics import PerformanceMetrics, Trade, calculate_performance, session_returns
 from .parameters import (
     ParameterCandidate,
     expand_candidate_axis,
@@ -411,6 +412,8 @@ def _screen_training_candidates(stock_code, provider, dates, initial_cash, candi
         excess = []
         strategy_metrics = []
         benchmark_metrics = []
+        sortino_pairs = []
+        sharpe_pairs = []
         starting_nav = 0.0
         invested_sessions = 0
         total_sessions = 0
@@ -421,20 +424,27 @@ def _screen_training_candidates(stock_code, provider, dates, initial_cash, candi
             excess.append(_nav_return(strategy.result.nav) - _nav_return(benchmark.result.nav))
             strategy_metrics.append(_recorded_performance(strategy.result.nav, strategy.result.events, candidate.config.cost))
             benchmark_metrics.append(_recorded_performance(benchmark.result.nav, benchmark.result.events, candidate.config.cost))
+            strategy_sortino, strategy_sharpe = _available_training_ratios(strategy.result.nav, strategy_metrics[-1])
+            benchmark_sortino, benchmark_sharpe = _available_training_ratios(benchmark.result.nav, benchmark_metrics[-1])
+            sortino_pairs.append((strategy_sortino, benchmark_sortino))
+            sharpe_pairs.append((strategy_sharpe, benchmark_sharpe))
             starting_nav += float(strategy.result.nav[0].total)
             invested_sessions += _recorded_exposure(strategy.result.nav)[0]
             total_sessions += len(strategy.result.nav)
         points[candidate.config_hash] = _TrainingPoint(candidate, tuple(value >= 0 for value in excess), tuple(excess), dates[-1])
         paired_metrics = tuple(zip(strategy_metrics, benchmark_metrics))
+        costs = tuple(s.total_cost for s in strategy_metrics)
         raw_scores.append(TrainingCandidateScore(
             config_hash=candidate.config_hash,
             config=asdict(candidate.config),
             positive_subperiod_share=points[candidate.config_hash].positive_window_share,
-            sortino_excess=sum(s.sortino - b.sortino for s, b in paired_metrics) / len(segments),
-            sharpe_excess=sum(s.sharpe - b.sharpe for s, b in paired_metrics) / len(segments),
-            drawdown_improvement=sum(abs(b.max_drawdown) - abs(s.max_drawdown) for s, b in paired_metrics) / len(segments),
-            cvar5_improvement=sum(s.cvar5 - b.cvar5 for s, b in paired_metrics) / len(segments),
-            cost_drag=sum(s.total_cost for s in strategy_metrics) / starting_nav,
+            sortino_excess=_mean_training_difference(sortino_pairs),
+            sharpe_excess=_mean_training_difference(sharpe_pairs),
+            drawdown_improvement=_mean_training_difference(
+                tuple((b.max_drawdown, s.max_drawdown) for s, b in paired_metrics), absolute=True,
+            ),
+            cvar5_improvement=_mean_training_difference(tuple((s.cvar5, b.cvar5) for s, b in paired_metrics)),
+            cost_drag=sum(costs) / starting_nav if all(_finite_training_value(value) for value in costs) else None,
             exposure_ratio=invested_sessions / total_sessions,
             stable=False,
             rejection_reason="outside_stable_plateau",
@@ -446,7 +456,8 @@ def _screen_training_candidates(stock_code, provider, dates, initial_cash, candi
     )
     stable_hashes = {candidate.config_hash for candidate in plateau}
     scores = tuple(
-        replace(score, stable=True, rejection_reason=None) if score.config_hash in stable_hashes else score
+        replace(score, stable=True, rejection_reason=None)
+        if score.config_hash in stable_hashes and score.rejection_reason == "outside_stable_plateau" else score
         for score in sorted(raw_scores, key=lambda score: score.config_hash)
     )
     selected_score = select_stable_representative(scores)
@@ -462,6 +473,36 @@ def _screen_training_candidates(stock_code, provider, dates, initial_cash, candi
         for point in points.values()
     )
     return selected, summaries, scores
+
+
+def _finite_training_value(value: object) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and isfinite(value)
+
+
+def _available_training_ratios(
+    nav: Sequence[DailyNav], metrics: PerformanceMetrics,
+) -> tuple[float | None, float | None]:
+    """Keep undefined denominator fallbacks out of candidate scoring only.
+
+    Legacy Sortino uses the population deviation of negative daily returns,
+    which requires at least two distinct negative returns. A finite zero
+    ratio with a nonzero denominator remains valid evidence.
+    """
+    returns = session_returns(tuple(float(point.total) for point in nav))
+    downside_returns = {value for value in returns if value < 0.0}
+    sortino = metrics.sortino if len(downside_returns) > 1 else None
+    sharpe = metrics.sharpe if (
+        _finite_training_value(metrics.annual_volatility) and metrics.annual_volatility > 0.0
+    ) else None
+    return sortino, sharpe
+
+
+def _mean_training_difference(
+    pairs: Sequence[tuple[float | None, float | None]], *, absolute: bool = False,
+) -> float | None:
+    if not pairs or any(not _finite_training_value(value) for pair in pairs for value in pair):
+        return None
+    return sum(abs(left) - abs(right) if absolute else left - right for left, right in pairs) / len(pairs)
 
 
 def _recorded_trades(
