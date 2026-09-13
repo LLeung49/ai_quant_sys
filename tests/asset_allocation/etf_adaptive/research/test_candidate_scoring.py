@@ -1,5 +1,6 @@
 """Training evidence ranks candidates only after the stability gate."""
 
+from copy import copy, deepcopy, replace as copy_replace
 from dataclasses import asdict, replace
 from hashlib import sha256
 from itertools import permutations
@@ -96,7 +97,7 @@ def test_invalid_or_unavailable_metrics_are_recorded_as_rejected(field, value) -
         assert select_stable_representative(ordering) == valid
     assert select_stable_representative((rejected,)) is None
     # Rejected evidence must remain serializable without non-standard NaN/Inf.
-    json.dumps(asdict(rejected), allow_nan=False)
+    json.dumps(rejected.to_dict(), allow_nan=False)
 
 
 @pytest.mark.parametrize("field,value,reason", (
@@ -200,8 +201,8 @@ def test_config_is_an_independent_deeply_immutable_serializable_snapshot() -> No
         score.config["grid"]["unit_pct"] = 0.8
     with pytest.raises(TypeError):
         score.config["trend"] = {}
-    # Existing dataclass/JSON evidence consumers get an independent payload.
-    serialized = json.loads(json.dumps(asdict(score), allow_nan=False))
+    # Explicit serialization produces a separate ordinary dict/JSON payload.
+    serialized = json.loads(json.dumps(score.to_dict(), allow_nan=False))
     assert serialized["config"] == asdict(AdaptiveConfig())
     serialized["config"]["grid"]["unit_pct"] = 0.7
     assert score.config_hash == AdaptiveConfig().config_hash()
@@ -223,3 +224,50 @@ def test_selector_rejects_a_config_hash_changed_after_construction() -> None:
 
     for ordering in permutations((corrupted, valid)):
         assert select_stable_representative(ordering) == valid
+
+
+@pytest.mark.parametrize("copier", (copy, deepcopy, copy_replace, replace))
+@pytest.mark.parametrize("section,field,value", (
+    ("grid", "unit_pct", 0.2),
+    ("trend", "risk_per_unit", 0.01),
+    ("cost", "slippage_bps", 10.0),
+))
+def test_copied_score_stays_immutable_after_selection(copier, section, field, value) -> None:
+    original = _score()
+    copied = copier(original)
+    selected = select_stable_representative((copied,))
+
+    assert selected is not None
+    with pytest.raises(TypeError):
+        selected.config[section][field] = value
+    assert selected.config == asdict(AdaptiveConfig())
+    canonical_json = json.dumps(
+        {name: dict(values) for name, values in selected.config.items()},
+        sort_keys=True, separators=(",", ":"),
+    )
+    assert sha256(canonical_json.encode()).hexdigest() == selected.config_hash == original.config_hash
+    assert select_stable_representative((selected,)) == selected
+
+
+@pytest.mark.parametrize("copier", (copy, deepcopy))
+def test_config_copy_protocols_preserve_nested_immutability(copier) -> None:
+    score = _score()
+    copied = copier(score.config)
+
+    with pytest.raises(TypeError):
+        copied["grid"]["unit_pct"] = 0.9
+    assert copied == asdict(AdaptiveConfig())
+
+
+def test_explicit_serialization_is_a_writable_copy_without_affecting_score_identity() -> None:
+    score = deepcopy(_score())
+    payload = score.to_dict()
+
+    assert type(payload) is dict
+    assert type(payload["config"]) is dict
+    assert all(type(section) is dict for section in payload["config"].values())
+    assert json.loads(json.dumps(payload, allow_nan=False))["config"] == asdict(AdaptiveConfig())
+    payload["config"]["grid"]["unit_pct"] = 0.9
+    assert score.config["grid"]["unit_pct"] == 0.10
+    assert score.config_hash == AdaptiveConfig().config_hash()
+    assert select_stable_representative((score,)) == score

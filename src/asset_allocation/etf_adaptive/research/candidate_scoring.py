@@ -1,6 +1,5 @@
 """Deterministic ranking of training evidence inside an approved plateau."""
 
-from copy import deepcopy
 from dataclasses import asdict, dataclass, fields
 from math import isfinite
 from types import MappingProxyType
@@ -12,7 +11,7 @@ from .parameters import conservative_config_key
 
 
 class _ImmutableMapping(Mapping[str, object]):
-    """Deep read-only snapshot that dataclass serializers can copy to dicts."""
+    """Deep read-only snapshot preserved by ordinary copy protocols."""
 
     __slots__ = ("_data",)
 
@@ -39,8 +38,12 @@ class _ImmutableMapping(Mapping[str, object]):
     def __delattr__(self, name) -> None:
         raise TypeError("configuration snapshot is immutable")
 
+    def __copy__(self):
+        return self
+
     def __deepcopy__(self, memo):
-        return {key: deepcopy(value, memo) for key, value in self.items()}
+        memo[id(self)] = self
+        return self
 
 
 def _finite_number(value: object) -> bool:
@@ -138,6 +141,16 @@ class TrainingCandidateScore:
             reason = self.rejection_reason or (None if self.stable else "outside_stable_plateau")
         object.__setattr__(self, "stable", self.stable is True and reason is None)
         object.__setattr__(self, "rejection_reason", reason)
+
+    def to_dict(self) -> dict[str, object]:
+        """Return an independent JSON-ready payload, distinct from copying.
+
+        Ordinary copies must retain the immutable config/hash relationship.
+        Only this explicit serialization boundary emits writable dictionaries.
+        """
+        payload = asdict(self)
+        payload["config"] = _validated_config(self.config, self.config_hash)
+        return payload
 
 
 def select_stable_representative(
