@@ -14,8 +14,8 @@ from asset_allocation.etf_adaptive.contracts import (
     ExecutionAvailability,
 )
 from asset_allocation.etf_adaptive.engine import AdaptiveBacktestEngine
-from asset_allocation.etf_adaptive import engine as engine_module
 from asset_allocation.etf_adaptive.execution import ExecutionSimulator
+from asset_allocation.etf_adaptive.strategy_policy import FULL_ADAPTIVE_POLICY
 from asset_allocation.etf_adaptive.state import (
     BacktestRequest,
     Decision,
@@ -177,9 +177,19 @@ def test_provider_action_is_applied_to_inventory_before_pending_fill(
         "asset_allocation.etf_adaptive.indicators.compute_indicators",
         lambda values: (object(),) * len(values),
     )
-    monkeypatch.setattr(engine_module, "process_close", decide)
+    class DecidingPolicy:
+        policy_id = "test-deciding-policy"
 
-    result = _engine(provider).run(_request())
+        @staticmethod
+        def process_close(state, *_):
+            return decide(state)
+
+        apply_fill = FULL_ADAPTIVE_POLICY.apply_fill
+
+    config = AdaptiveConfig.default()
+    result = AdaptiveBacktestEngine(
+        config, ExecutionSimulator(config.cost, config.trend), provider, DecidingPolicy(),
+    ).run(_request())
 
     fills = [event for event in result.events if event.kind == "fill"]
     assert fills[-1].payload == (
