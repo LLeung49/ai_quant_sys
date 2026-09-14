@@ -19,7 +19,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Optional, Sequence
 
-from .config import AdaptiveConfig
+from .config import AdaptiveConfig, CostConfig, GridConfig, TrendConfig
 from .shadow_store import (
     AdviceRecord,
     ConfigConflictError,
@@ -137,11 +137,27 @@ def _serialize_adaptive_config(config: AdaptiveConfig) -> str:
                 "commission_rate": config.cost.commission_rate,
                 "minimum_commission": config.cost.minimum_commission,
                 "slippage_bps": config.cost.slippage_bps,
+                "sell_tax_rate": config.cost.sell_tax_rate,
+                "transfer_fee_rate": config.cost.transfer_fee_rate,
             },
         },
         ensure_ascii=False,
         sort_keys=True,
     )
+
+
+def _deserialize_adaptive_config(payload: str) -> AdaptiveConfig:
+    """Restore the immutable approval snapshot and reject a mismatched identity."""
+    try:
+        data = json.loads(payload)
+        config = AdaptiveConfig(
+            grid=GridConfig(**data["grid"]),
+            trend=TrendConfig(**data["trend"]),
+            cost=CostConfig(**data["cost"]),
+        )
+    except (TypeError, KeyError, ValueError, json.JSONDecodeError) as exc:
+        raise ValueError("invalid frozen adaptive configuration") from exc
+    return config
 
 
 def _serialize_mapping(mapping: Mapping[str, Any]) -> str:
@@ -241,7 +257,9 @@ class MySQLShadowStore:
                 row = cursor.fetchone()
                 if not row:
                     return None
-                config = AdaptiveConfig.default()
+                config = _deserialize_adaptive_config(row[1])
+                if config.config_hash() != row[0]:
+                    raise ValueError("frozen config hash does not match config_json")
                 return FrozenConfigRecord(
                     config_hash=row[0],
                     config=config,
@@ -276,9 +294,12 @@ class MySQLShadowStore:
                 row = cursor.fetchone()
                 if not row:
                     return None
+                config = _deserialize_adaptive_config(row[1])
+                if config.config_hash() != row[0]:
+                    raise ValueError("frozen config hash does not match config_json")
                 return FrozenConfigRecord(
                     config_hash=row[0],
-                    config=AdaptiveConfig.default(),
+                    config=config,
                     selection_payload=json.loads(row[2]) if row[2] else {},
                     data_cutoff=row[3],
                     activation_date=row[4],
@@ -575,6 +596,7 @@ def _split_sql_statements(text: str) -> list[str]:
 __all__ = [
     "MySQLShadowStore",
     "SCHEMA_SQL_PATH",
+    "_deserialize_adaptive_config",
     "_deserialize_strategy_state",
     "_serialize_adaptive_config",
     "_serialize_strategy_state",

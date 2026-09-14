@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from asset_allocation.etf_adaptive.config import AdaptiveConfig
+from asset_allocation.etf_adaptive.config import AdaptiveConfig, CostConfig, GridConfig, TrendConfig
 from asset_allocation.etf_adaptive.mysql_shadow_store import (
     MySQLShadowStore,
     _deserialize_strategy_state,
@@ -359,7 +359,9 @@ def test_load_frozen_config_returns_none_when_missing() -> None:
 def test_load_active_frozen_config_filters_by_window() -> None:
     conn = _RecordingConnection()
     conn.cursor_obj.set_results(
-        [("cfg-x", None, "{}", date(2026, 6, 1), date(2026, 6, 1),
+        [(AdaptiveConfig.default().config_hash(),
+          """{"cost":{"commission_rate":0.0001,"minimum_commission":5.0,"slippage_bps":3.0},"grid":{"atr_stop_multiple":3.0,"cooldown_sessions":5,"fixed_initial_pct":0.5,"initial_model":"fixed","max_grid_per_day":1,"step_pct":0.02,"unit_pct":0.1},"trend":{"add_n":0.5,"amount_ratio_min":null,"max_units":4,"require_macd_bullish":true,"risk_per_unit":0.005,"stop_n":2.0}}""",
+          "{}", date(2026, 6, 1), date(2026, 6, 1),
           date(2026, 12, 1), datetime(2026, 6, 1, 17, 0))],
     )
     store = MySQLShadowStore(connection_factory=_connection_factory(conn))
@@ -367,9 +369,31 @@ def test_load_active_frozen_config_filters_by_window() -> None:
     record = store.load_active_frozen_config(date(2026, 8, 1))
 
     assert record is not None
-    assert record.config_hash == "cfg-x"
+    assert record.config_hash == AdaptiveConfig.default().config_hash()
     selects = [sql for sql in conn.executed_statements() if sql.startswith("SELECT")]
     assert any("activation_date" in sql and "review_date" in sql for sql in selects)
+
+
+def test_load_active_frozen_config_restores_the_approved_nondefault_parameters() -> None:
+    """Break caught: loading the default config silently changes approved shadow behavior."""
+    config = AdaptiveConfig(
+        grid=GridConfig(step_pct=0.035, unit_pct=0.15, atr_stop_multiple=2.0, cooldown_sessions=3),
+        trend=TrendConfig(stop_n=2.5, risk_per_unit=0.0075, add_n=0.75, max_units=3,
+                          require_macd_bullish=False, amount_ratio_min=1.2),
+        cost=CostConfig(commission_rate=0.0002, minimum_commission=8.0, slippage_bps=4.0),
+    )
+    config_json = """{"cost":{"commission_rate":0.0002,"minimum_commission":8.0,"slippage_bps":4.0},"grid":{"atr_stop_multiple":2.0,"cooldown_sessions":3,"fixed_initial_pct":0.5,"initial_model":"fixed","max_grid_per_day":1,"step_pct":0.035,"unit_pct":0.15},"trend":{"add_n":0.75,"amount_ratio_min":1.2,"max_units":3,"require_macd_bullish":false,"risk_per_unit":0.0075,"stop_n":2.5}}"""
+    conn = _RecordingConnection()
+    conn.cursor_obj.set_results(
+        [(config.config_hash(), config_json, "{}", date(2026, 6, 1), date(2026, 6, 1),
+          date(2026, 12, 1), datetime(2026, 6, 1, 17, 0))],
+    )
+    store = MySQLShadowStore(connection_factory=_connection_factory(conn))
+
+    record = store.load_active_frozen_config(date(2026, 8, 1))
+
+    assert record is not None
+    assert record.config == config
 
 
 def test_iter_runs_yields_shadow_run_records_for_each_row() -> None:
