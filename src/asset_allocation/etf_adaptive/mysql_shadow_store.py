@@ -529,10 +529,12 @@ class MySQLShadowStore:
             try:
                 cursor.execute(
                     """
-                    SELECT run_id, as_of_date, stock_code, model_version,
-                           config_hash, execution_eligible_date
-                    FROM asset_allocation_etf_adaptive_run
-                    ORDER BY as_of_date, stock_code
+                    SELECT r.run_id, r.as_of_date, r.stock_code, r.model_version,
+                           r.config_hash, r.execution_eligible_date,
+                           s.state_json, s.cash, s.position_shares, s.regime
+                    FROM asset_allocation_etf_adaptive_run r
+                    JOIN asset_allocation_etf_adaptive_state s ON s.run_id = r.run_id
+                    ORDER BY r.as_of_date, r.stock_code
                     """
                 )
                 rows = cursor.fetchall()
@@ -541,7 +543,9 @@ class MySQLShadowStore:
         finally:
             self._close_connection(conn)
         for row in rows:
-            run_id, as_of_date, stock_code, model_version, config_hash, execution_eligible_date = row
+            (run_id, as_of_date, stock_code, model_version, config_hash, execution_eligible_date,
+             state_json, cash, position_shares, regime) = row
+            state = _deserialize_strategy_state(state_json)
             yield ShadowRunRecord(
                 run_id=run_id,
                 identity=ShadowRunIdentity(
@@ -556,10 +560,10 @@ class MySQLShadowStore:
                     as_of_date=as_of_date,
                     stock_code=stock_code,
                     config_hash=config_hash,
-                    state=StrategyState(),
-                    cash=Decimal("0"),
-                    position_shares=0,
-                    regime=None,
+                    state=state,
+                    cash=cash,
+                    position_shares=position_shares,
+                    regime=regime,
                 ),
                 advices=(),
             )

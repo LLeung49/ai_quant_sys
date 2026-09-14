@@ -398,10 +398,13 @@ def test_load_active_frozen_config_restores_the_approved_nondefault_parameters()
 
 def test_iter_runs_yields_shadow_run_records_for_each_row() -> None:
     conn = _RecordingConnection()
+    state_json = _serialize_strategy_state(_run_record().state.state)
     conn.cursor_obj.set_results(
         [
-            ("run-1", date(2026, 9, 1), "510300.SH", "shadow-v1", "cfg-x", date(2026, 9, 2)),
-            ("run-2", date(2026, 9, 1), "510500.SH", "shadow-v1", "cfg-x", date(2026, 9, 2)),
+            ("run-1", date(2026, 9, 1), "510300.SH", "shadow-v1", "cfg-x", date(2026, 9, 2),
+             state_json, Decimal("99000"), 100, "grid"),
+            ("run-2", date(2026, 9, 1), "510500.SH", "shadow-v1", "cfg-x", date(2026, 9, 2),
+             state_json, Decimal("99000"), 100, "grid"),
         ],
     )
     store = MySQLShadowStore(connection_factory=_connection_factory(conn))
@@ -410,6 +413,8 @@ def test_iter_runs_yields_shadow_run_records_for_each_row() -> None:
 
     assert [run.identity.stock_code for run in runs] == ["510300.SH", "510500.SH"]
     assert runs[0].run_id == "run-1"
+    assert runs[0].state.state.position_shares == 100
+    assert runs[0].state.cash == Decimal("99000")
 
 
 
