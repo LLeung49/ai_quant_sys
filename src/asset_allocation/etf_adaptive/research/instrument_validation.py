@@ -266,7 +266,18 @@ def run_instrument_validation(
                     target.stock_code, provider, window.train_dates, initial_cash,
                     trend_plan[0], trend_plan[1], segment_size, trend_plan[2],
                 )
-                if grid_selection is None or trend_selection is None:
+                if grid_selection.candidate is None or trend_selection.candidate is None:
+                    results.append(ValidationWindowResult(
+                        window.window_id, window.train_end, window.validation_dates[0], "",
+                        0.0, 0.0, (), (),
+                        grid_training_surface=grid_selection.surface,
+                        trend_training_surface=trend_selection.surface,
+                        candidate_scores=grid_selection.candidate_scores + trend_selection.candidate_scores,
+                        screened_axes={
+                            "grid_only": grid_selection.screened_axes,
+                            "trend_only": trend_selection.screened_axes,
+                        },
+                    ))
                     return _no_trade_result(
                         target, ValidationStatus.FAILED, as_of_date,
                         "no_stable_training_parameters", tuple(results),
@@ -380,10 +391,10 @@ class _TrainingPoint:
 
 @dataclass(frozen=True)
 class _TrainingSelection:
-    candidate: ParameterCandidate
+    candidate: ParameterCandidate | None
     surface: tuple[TrainingSurfaceSummary, ...]
     candidate_scores: tuple[TrainingCandidateScore, ...]
-    selected_score: TrainingCandidateScore
+    selected_score: TrainingCandidateScore | None
     screened_axes: tuple[tuple[str, ...], ...]
 
 
@@ -396,7 +407,7 @@ def _select_training_candidate(
     axes: Sequence[str],
     segment_size: int,
     expansion_axes: Sequence[str] = (),
-) -> _TrainingSelection | None:
+) -> _TrainingSelection:
     """Select a baseline, then screen each approved new axis in sequence.
 
     Every replay below is bounded to a training segment.  In particular, an
@@ -408,7 +419,7 @@ def _select_training_candidate(
         stock_code, provider, dates, initial_cash, candidates, axes, segment_size,
     )
     if selected is None:
-        return None
+        return _TrainingSelection(None, tuple(summaries), tuple(scores), None, (tuple(axes),))
     all_summaries = list(summaries)
     all_scores = list(scores)
     screened_axes = [tuple(axes)]
@@ -418,7 +429,10 @@ def _select_training_candidate(
             stock_code, provider, dates, initial_cash, expanded, (axis,), segment_size,
         )
         if selected is None:
-            return None
+            all_summaries.extend(summaries)
+            all_scores.extend(scores)
+            screened_axes.append((axis,))
+            return _TrainingSelection(None, tuple(all_summaries), tuple(all_scores), None, tuple(screened_axes))
         all_summaries.extend(summaries)
         all_scores.extend(scores)
         screened_axes.append((axis,))
