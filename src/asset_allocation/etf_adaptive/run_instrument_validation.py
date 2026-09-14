@@ -7,7 +7,8 @@ import json
 from pathlib import Path
 
 from .research.instrument_validation import FIXED_VALIDATION_TARGETS, run_instrument_validation
-from .research.experiment import APPROVED_EXPERIMENT_AXES, ExperimentSpec, bind_experiment
+from .research.experiment import (APPROVED_EXPERIMENT_AXES, ExperimentSpec, bind_experiment,
+                                  targeted_study, study_training_plan, star50_diagnostic)
 from .research.strategy_specs import FULL_ADAPTIVE_SPEC, BUY_AND_HOLD_SPEC
 from .research.validation_provider import default_validation_provider
 from .research.validation_report import validation_publication_decision, write_atomic_text, write_validation_artifacts
@@ -20,15 +21,29 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output-dir", required=True)
     parser.add_argument("--initial-cash", default="100000")
     parser.add_argument("--stock-code")
+    parser.add_argument("--experiment", choices=("hk_internet", "chinext_reentry", "star50_extreme_window"))
     args = parser.parse_args(argv)
     start, cutoff = date.fromisoformat(args.start_date), date.fromisoformat(args.as_of_date)
     if start > cutoff:
         raise ValueError("start date must not be after as-of date")
     output = Path(args.output_dir)
+    study = targeted_study(args.experiment, start_date=start, as_of_date=cutoff,
+                           target_codes=(args.stock_code.upper(),) if args.stock_code else None) if args.experiment else None
     output.mkdir(parents=True, exist_ok=True)
+    if study:
+        write_atomic_text(output / "experiment.json", json.dumps(
+            {"experiment": study.to_dict(), "experiment_hash": study.experiment_hash(),
+             "research_only": True, "trading_authorized": False}, indent=2))
+    if args.experiment == "star50_extreme_window":
+        diagnostic = star50_diagnostic(study, Path("reports/etf_validation_risk_adjusted_2026-09-11-evidence-gated/588000.SH"))
+        write_atomic_text(output / "diagnostic.json", json.dumps(diagnostic, indent=2))
+        if not diagnostic["parameter_execution_allowed"]:
+            print("STAR50 diagnostic blocked: missing largest contributor evidence", flush=True)
+            return 4
     targets = tuple(
         target for target in FIXED_VALIDATION_TARGETS
         if args.stock_code is None or target.stock_code == args.stock_code.upper()
+        if study is None or target.stock_code in study.target_codes
     )
     if not targets:
         raise ValueError("stock-code is not part of the fixed validation manifest")
@@ -37,8 +52,9 @@ def main(argv: list[str] | None = None) -> int:
     for target in targets:
         effective_start = max(start, target.available_from) if target.available_from else start
         print(f"validating {target.stock_code} from {effective_start}", flush=True)
-        result = run_instrument_validation(target, provider, effective_start, cutoff, Decimal(args.initial_cash))
-        experiment = ExperimentSpec(
+        options = {"training_plan": study_training_plan(study)} if study else {}
+        result = run_instrument_validation(target, provider, effective_start, cutoff, Decimal(args.initial_cash), **options)
+        experiment = study or ExperimentSpec(
             "fixed-etf-adaptive-validation-v1", (target.stock_code,), FULL_ADAPTIVE_SPEC,
             (BUY_AND_HOLD_SPEC,), APPROVED_EXPERIMENT_AXES, effective_start, cutoff,
         )

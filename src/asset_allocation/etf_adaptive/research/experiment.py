@@ -3,14 +3,17 @@
 from dataclasses import asdict, dataclass, replace
 from datetime import date
 from hashlib import sha256
+from itertools import product
 import json
+from math import isfinite
+from pathlib import Path
 from types import MappingProxyType
 from typing import Mapping
 
 from ..config import AdaptiveConfig, CostConfig, GridConfig, TrendConfig
 from . import parameters
 from .instrument_validation import FIXED_VALIDATION_TARGETS, InstrumentValidationResult
-from .strategy_specs import BenchmarkSpec, StrategySpec, benchmark_provenance_hash
+from .strategy_specs import BenchmarkSpec, StrategySpec, benchmark_provenance_hash, FULL_ADAPTIVE_SPEC, BUY_AND_HOLD_SPEC
 
 
 APPROVED_EXPERIMENT_AXES = MappingProxyType({
@@ -93,6 +96,100 @@ class ExperimentSpec:
                    tuple(BenchmarkSpec(**item) for item in payload["benchmarks"]),
                    payload["allowed_axes"], date.fromisoformat(payload["start_date"]),
                    date.fromisoformat(payload["as_of_date"]))
+
+
+_TARGETED_STUDIES = MappingProxyType({
+    "hk_internet": ("513330.SH", ("step_pct", "unit_pct", "atr_stop_multiple", "cooldown_sessions", "stop_n", "require_macd_bullish")),
+    "chinext_reentry": ("159915.SZ", ("cooldown_sessions", "atr_stop_multiple", "stop_n", "require_macd_bullish", "amount_ratio_min")),
+    "star50_extreme_window": ("588000.SH", ("atr_stop_multiple", "cooldown_sessions", "stop_n")),
+})
+
+
+def targeted_study(name: str, *, target_codes=None, start_date=date(2021, 1, 1),
+                   as_of_date=date(2026, 9, 11)) -> ExperimentSpec:
+    """Construct one immutable, single-ETF study without universe overrides."""
+    if name not in _TARGETED_STUDIES:
+        raise ValueError("unknown targeted study")
+    code, axes = _TARGETED_STUDIES[name]
+    if target_codes is not None and tuple(target_codes) != (code,):
+        raise ValueError("target code does not match the targeted study")
+    return ExperimentSpec(name, (code,), FULL_ADAPTIVE_SPEC, (BUY_AND_HOLD_SPEC,),
+                          {axis: APPROVED_EXPERIMENT_AXES[axis] for axis in axes},
+                          start_date, as_of_date)
+
+
+def study_training_plan(spec: ExperimentSpec) -> dict:
+    """Screen each family's bounded Cartesian surface; freeze every other field."""
+    canonical = targeted_study(spec.experiment_id, target_codes=spec.target_codes,
+                               start_date=spec.start_date, as_of_date=spec.as_of_date)
+    if spec != canonical:
+        raise ValueError("targeted study configuration differs from its declaration")
+    plans = {}
+    for family, section in (("grid_only", "grid"), ("trend_only", "trend")):
+        baseline = getattr(spec.strategy.config, section)
+        axes = tuple(axis for axis in spec.allowed_axes if axis in asdict(baseline))
+        candidates = tuple(parameters.ParameterCandidate(
+            replace(spec.strategy.config, **{section: replace(baseline, **dict(zip(axes, values)))}), family,
+        ) for values in product(*(spec.allowed_axes[axis] for axis in axes)))
+        plans[family] = (candidates, axes, ())
+    return plans
+
+
+def star50_diagnostic(spec: ExperimentSpec, source: Path) -> dict:
+    """Identify an extreme-window contributor only from persisted excess evidence."""
+    diagnostic = {
+        "experiment_hash": spec.experiment_hash(), "stock_code": "588000.SH",
+        "source": str(source), "source_hashes": {}, "window_id": None,
+        "largest_contributor": None, "parameter_execution_allowed": False,
+        "research_only": True, "activation_eligible": False,
+        "decision": "do_not_trade", "blocker": "missing_largest_contributor_evidence",
+    }
+    try:
+        summary_path = source / "summary.json"
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+        diagnostic["source_hashes"]["summary.json"] = sha256(summary_path.read_bytes()).hexdigest()
+        manifest = summary["data_provenance"]["run_manifest"]
+        source_cutoff = date.fromisoformat(manifest["data_cutoff"])
+        if summary["stock_code"] != "588000.SH" or not spec.start_date <= source_cutoff <= spec.as_of_date:
+            raise ValueError("diagnostic source identity mismatch")
+        diagnostic["source_data_cutoff"] = source_cutoff.isoformat()
+        windows = summary["windows"]
+        if not windows or any(not isfinite(float(row["excess_return"])) for row in windows):
+            raise ValueError("invalid diagnostic window evidence")
+        worst = min(windows, key=lambda row: float(row["excess_return"]))
+        diagnostic.update(window_id=worst["window_id"], excess_return=float(worst["excess_return"]),
+                          validation_start=worst["validation_start"])
+        if float(worst["excess_return"]) >= 0:
+            raise ValueError("no lagging diagnostic window")
+        excess_path = source / "excess_attribution.json"
+        rows = json.loads(excess_path.read_text(encoding="utf-8"))
+        matching = [row for row in rows if row["window_id"] == worst["window_id"]]
+        recorded = [row["excess_attribution"] for row in manifest["experiment_windows"]
+                    if row["window_id"] == worst["window_id"]]
+        if len(matching) != 1 or len(recorded) != 1:
+            raise ValueError("missing or ambiguous persisted attribution")
+        row = matching[0]
+        values = {name: row[name] for name in ("grid_return", "trend_return", "transition_return", "cash_opportunity_cost")}
+        if any(type(value) not in (int, float) or not isfinite(value) for value in values.values()):
+            raise ValueError("nonfinite contributor")
+        if {key: value for key, value in row.items() if key != "window_id"} != recorded[0]:
+            raise ValueError("persisted attribution differs from experiment manifest")
+        if not isfinite(row["reconciliation_error"]) or abs(row["reconciliation_error"]) > 1e-9:
+            raise ValueError("unreconciled contributor")
+        if not any(abs(value) > 0 for value in values.values()):
+            raise ValueError("no nonzero contributor")
+        # Both files are required: legacy trade counts cannot fill missing daily-state evidence.
+        for filename in ("excess_attribution.json", "daily_state.csv", "daily_nav.csv"):
+            content = (source / filename).read_bytes()
+            if len(content.splitlines()) < 2:
+                raise ValueError("empty daily evidence")
+            diagnostic["source_hashes"][filename] = sha256(content).hexdigest()
+        largest = max(values, key=lambda name: abs(values[name]))
+        diagnostic.update(largest_contributor=largest, contribution=values[largest],
+                          parameter_execution_allowed=True, blocker=None)
+    except (OSError, ValueError, KeyError, TypeError, IndexError) as exc:
+        diagnostic["detail"] = str(exc)
+    return diagnostic
 
 
 def experiment_evidence(result: InstrumentValidationResult, spec: ExperimentSpec) -> dict[str, object]:

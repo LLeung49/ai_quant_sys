@@ -210,6 +210,8 @@ def run_instrument_validation(
     start_date: date,
     as_of_date: date,
     initial_cash: Decimal,
+    *,
+    training_plan: Mapping | None = None,
 ) -> InstrumentValidationResult:
     """Fail closed before any parameter screening when history is absent."""
 
@@ -248,15 +250,21 @@ def run_instrument_validation(
                 screened_axes: dict[str, tuple[tuple[str, ...], ...]] = {}
             else:
                 segment_size = len(window.train_dates) // 4
+                grid_plan = training_plan["grid_only"] if training_plan is not None else (
+                    grid_candidates(), ("step_pct", "unit_pct", "fixed_initial_pct"),
+                    ("atr_stop_multiple", "cooldown_sessions"),
+                )
+                trend_plan = training_plan["trend_only"] if training_plan is not None else (
+                    trend_candidates(), ("risk_per_unit", "add_n", "max_units", "amount_ratio_min"),
+                    ("stop_n", "require_macd_bullish"),
+                )
                 grid_selection = _select_training_candidate(
                     target.stock_code, provider, window.train_dates, initial_cash,
-                    grid_candidates(), ("step_pct", "unit_pct", "fixed_initial_pct"),
-                    segment_size, ("atr_stop_multiple", "cooldown_sessions"),
+                    grid_plan[0], grid_plan[1], segment_size, grid_plan[2],
                 )
                 trend_selection = _select_training_candidate(
                     target.stock_code, provider, window.train_dates, initial_cash,
-                    trend_candidates(), ("risk_per_unit", "add_n", "max_units", "amount_ratio_min"),
-                    segment_size, ("stop_n", "require_macd_bullish"),
+                    trend_plan[0], trend_plan[1], segment_size, trend_plan[2],
                 )
                 if grid_selection is None or trend_selection is None:
                     return _no_trade_result(
@@ -647,8 +655,10 @@ def _run_manifest(
             for row in windows
         ],
         "screened_axes": {
-            "grid": ["step_pct", "unit_pct", "fixed_initial_pct", "atr_stop_multiple", "cooldown_sessions"],
-            "trend": ["risk_per_unit", "add_n", "max_units", "amount_ratio_min", "stop_n", "require_macd_bullish"],
+            section: list(dict.fromkeys(axis for row in windows
+                                       for stage in (row.screened_axes or {}).get(family, ())
+                                       for axis in stage))
+            for section, family in (("grid", "grid_only"), ("trend", "trend_only"))
         },
     }
 
