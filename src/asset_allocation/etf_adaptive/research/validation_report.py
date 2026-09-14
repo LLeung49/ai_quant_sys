@@ -255,7 +255,7 @@ def _validate_execution_boundaries(window, manifest_axes, spec) -> None:
         if section is None:
             raise ValueError("unrun candidate family")
         axes = axes_set(score.screened_axes, section)
-        check_config(score.config, {section: approved[section]})
+        check_config(score.config, {section: axes})
         for axis in axes:
             if not any(type(score.config[section][axis]) is type(item) and score.config[section][axis] == item
                        for item in spec.allowed_axes[axis]):

@@ -352,6 +352,43 @@ def test_formal_gate_rejects_rebound_cost_and_axis_bypasses(change):
     assert decision["blockers"]
 
 
+def test_formal_gate_binds_candidate_deviations_to_its_own_screened_axes():
+    # Break caught: an axis declared by a different screening stage cannot approve
+    # an undeclared deviation in this candidate after its evidence is rebound.
+    from asset_allocation.etf_adaptive.research.validation_report import validation_publication_decision
+    result = _recorded_result()
+    spec = ExperimentSpec.from_dict(result.run_manifest["experiment"])
+    default = AdaptiveConfig.default()
+    altered = replace(default, grid=replace(default.grid, unit_pct=0.15))
+    windows = []
+    for index, existing in enumerate(result.windows):
+        config = altered if index == 0 else default
+        grid_score, trend_score = existing.candidate_scores
+        candidate_with_hidden_deviation = replace(
+            grid_score, config=asdict(config), config_hash=config.config_hash(), screened_axes=("step_pct",),
+        )
+        unit_screened_candidate = replace(
+            grid_score, config=asdict(config), config_hash=config.config_hash(), screened_axes=("unit_pct",),
+        )
+        windows.append(replace(
+            existing,
+            selected_config=asdict(config), config_hash=config.config_hash(),
+            screened_axes={"grid_only": (("step_pct",), ("unit_pct",)), "trend_only": (("stop_n",),)},
+            candidate_scores=(candidate_with_hidden_deviation, unit_screened_candidate, trend_score),
+            selected_scores={"grid_only": candidate_with_hidden_deviation, "trend_only": trend_score},
+        ))
+    result = replace(result, windows=tuple(windows))
+    result.run_manifest["screened_axes"] = {"grid": ["step_pct", "unit_pct"], "trend": ["stop_n"]}
+    result.run_manifest["selected_configs"] = [
+        {"window_id": item.window_id, "config_hash": item.config_hash, "config": item.selected_config}
+        for item in result.windows
+    ]
+
+    rebound = bind_experiment(result, spec)
+
+    assert validation_publication_decision(rebound)["conclusion"] == "do_not_trade"
+
+
 def test_final_rename_failure_preserves_complete_previous_report(tmp_path, monkeypatch):
     import os
     import asset_allocation.etf_adaptive.research.validation_report as module
