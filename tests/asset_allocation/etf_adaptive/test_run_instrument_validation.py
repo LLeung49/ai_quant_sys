@@ -16,6 +16,9 @@ def test_cli_writes_one_status_per_fixed_target(tmp_path, monkeypatch) -> None:
     payload = json.loads((tmp_path / "instrument_validation.json").read_text(encoding="utf-8"))
     assert len(payload["results"]) == len(FIXED_VALIDATION_TARGETS)
     assert {row["status"] for row in payload["results"]} == {"passed"}
+    assert all(row["decision"]["conclusion"] == "do_not_trade" for row in payload["results"])
+    assert all(row["activation_eligible"] is False for row in payload["results"])
+    assert "\n- " not in (tmp_path / "instrument_validation.md").read_text(encoding="utf-8")
 
 
 def test_cli_publishes_per_instrument_validation_manifest(tmp_path, monkeypatch) -> None:
@@ -29,3 +32,20 @@ def test_cli_publishes_per_instrument_validation_manifest(tmp_path, monkeypatch)
 
     assert module.main(["--stock-code", target.stock_code, "--start-date", "2020-01-01", "--as-of-date", "2026-09-08", "--output-dir", str(tmp_path)]) == 0
     assert (tmp_path / target.stock_code).exists()
+
+
+def test_cli_binds_declared_experiment_before_publication(tmp_path, monkeypatch):
+    import asset_allocation.etf_adaptive.run_instrument_validation as module
+    target = FIXED_VALIDATION_TARGETS[0]
+    result = InstrumentValidationResult(target, ValidationStatus.FAILED, date(2026, 9, 8))
+    captured = []
+    monkeypatch.setattr(module, "default_validation_provider", lambda: object())
+    monkeypatch.setattr(module, "run_instrument_validation", lambda *args: result)
+    monkeypatch.setattr(module, "write_validation_artifacts", lambda value, destination: captured.append(value))
+    module.main(["--stock-code", target.stock_code, "--start-date", "2020-01-01",
+                 "--as-of-date", "2026-09-08", "--output-dir", str(tmp_path)])
+    metadata = captured[0].run_manifest
+    assert metadata["experiment"]["target_codes"] == [target.stock_code]
+    assert metadata["experiment"]["as_of_date"] == "2026-09-08"
+    assert metadata["experiment_hash"]
+    assert metadata["strategy_spec"]["policy_id"] == "full_adaptive"

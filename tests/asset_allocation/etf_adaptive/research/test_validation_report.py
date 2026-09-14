@@ -1,5 +1,5 @@
 import json
-from dataclasses import replace
+from dataclasses import asdict, replace
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -7,6 +7,11 @@ from pathlib import Path
 import pytest
 
 from asset_allocation.etf_adaptive.contracts import DualPriceBar, SubLayer
+from asset_allocation.etf_adaptive.config import AdaptiveConfig
+from asset_allocation.etf_adaptive.research.attribution import build_excess_attribution
+from asset_allocation.etf_adaptive.research.candidate_scoring import TrainingCandidateScore
+from asset_allocation.etf_adaptive.research.experiment import ExperimentSpec, bind_experiment, APPROVED_EXPERIMENT_AXES
+from asset_allocation.etf_adaptive.research.strategy_specs import FULL_ADAPTIVE_SPEC, BUY_AND_HOLD_SPEC
 from asset_allocation.etf_adaptive.research.decision import DecisionSummary, ResearchConclusion, ResearchEvidence
 from asset_allocation.etf_adaptive.research.instrument_validation import (
     InstrumentValidationResult, TrainingSurfaceSummary, ValidationScope,
@@ -14,7 +19,7 @@ from asset_allocation.etf_adaptive.research.instrument_validation import (
 )
 from asset_allocation.etf_adaptive.research.metrics import PerformanceMetrics
 from asset_allocation.etf_adaptive.research.validation_report import write_validation_artifacts
-from asset_allocation.etf_adaptive.state import BacktestEvent, DailyNav
+from asset_allocation.etf_adaptive.state import BacktestEvent, DailyNav, DailyStrategyObservation, Regime
 
 
 def _metrics(*, annual_return: float, sortino: float, total_cost: float) -> PerformanceMetrics:
@@ -66,7 +71,20 @@ def _recorded_result() -> InstrumentValidationResult:
         cvar5_improvement=0.01, exposure_ratio=2 / 3, turnover=0.90,
         total_cost=1.0, initial_oos_nav=100.0, cost_drag=0.01,
     )
-    return InstrumentValidationResult(
+    config = AdaptiveConfig.default()
+    observations = tuple(DailyStrategyObservation(day, Regime.TREND, 1.0,
+                         float(point.market_value / point.total), 0, 0, "hold")
+                         for day, point in zip(days, strategy_nav))
+    scores = tuple(TrainingCandidateScore(config.config_hash(), asdict(config),
+                   1.0, 0.3, 0.2, 0.04, 0.01, 0.01, 0.7, True, None,
+                   family=family, screened_axes=axes)
+                   for family, axes in (("grid_only", ("step_pct",)), ("trend_only", ("stop_n",))))
+    window = replace(window, config_hash=config.config_hash(), selected_config=asdict(config),
+                     candidate_scores=scores, selected_scores={score.family: score for score in scores},
+                     strategy_observations=observations,
+                     excess_attribution=build_excess_attribution(strategy_nav, benchmark_nav, observations,
+                                                                window.strategy_events, execution_cost=1.0))
+    result = InstrumentValidationResult(
         target=target, status=ValidationStatus.PASSED, as_of_date=date(2026, 9, 8),
         windows=(window, replace(window, window_id="wf_001"), replace(window, window_id="wf_002")),
         strategy_annual_return=0.10, benchmark_annual_return=0.08,
@@ -87,6 +105,10 @@ def _recorded_result() -> InstrumentValidationResult:
             "screened_axes": {"grid": ["step_pct"], "trend": ["stop_n"]},
         },
     )
+    spec = ExperimentSpec("recorded-test", ("159915.SZ",), FULL_ADAPTIVE_SPEC,
+                          (BUY_AND_HOLD_SPEC,), APPROVED_EXPERIMENT_AXES,
+                          date(2025, 1, 2), result.as_of_date)
+    return bind_experiment(result, spec)
 
 
 def test_write_validation_artifacts_publishes_recorded_risk_adjusted_decision_report(tmp_path: Path) -> None:
@@ -159,3 +181,118 @@ def test_report_without_reproducibility_evidence_cannot_approve(tmp_path: Path) 
     assert summary["decision"]["conclusion"] == "do_not_trade"
     assert summary["activation_eligible"] is False
     assert "run_manifest" in summary["decision"]["blockers"]
+
+
+def test_report_exports_candidate_scores_and_reconciled_attribution(tmp_path):
+    manifest = write_validation_artifacts(_recorded_result(), tmp_path / "report")
+    assert manifest.candidate_scores_csv.exists()
+    assert manifest.excess_attribution_json.exists()
+    assert manifest.daily_state_csv.exists()
+    import csv
+    scores = list(csv.DictReader(manifest.candidate_scores_csv.open(encoding="utf-8")))
+    assert len(scores) == 6
+    assert json.loads(scores[0]["config"])["cost"]["slippage_bps"] == 3.0
+    assert {row["family"] for row in scores} == {"grid_only", "trend_only"}
+    attribution = json.loads(manifest.excess_attribution_json.read_text(encoding="utf-8"))
+    assert len(attribution) == 3
+    assert attribution[0]["reconciliation_error"] == pytest.approx(0.0)
+    report = manifest.report_markdown.read_text(encoding="utf-8")
+    assert "Largest absolute contributor: trend_return" in report
+    assert "trend entry/exit" in report
+    states = list(csv.DictReader(manifest.daily_state_csv.open(encoding="utf-8")))
+    assert len(states) == 9
+    assert states[0]["actual_exposure"] == "0.0"
+    persisted = json.loads(manifest.summary_json.read_text(encoding="utf-8"))["data_provenance"]["run_manifest"]
+    assert persisted["experiment_hash"] == _recorded_result().run_manifest["experiment_hash"]
+    assert persisted["experiment_windows"][0]["selected_scores"]["grid_only"]["config"] == json.loads(scores[0]["config"])
+
+
+@pytest.mark.parametrize("missing", ["experiment_hash", "strategy_spec", "benchmark_specs", "experiment_windows"])
+def test_report_rejects_missing_experiment_fields(tmp_path, monkeypatch, missing):
+    monkeypatch.setattr("asset_allocation.etf_adaptive.research.validation_report._plot", lambda *args: None)
+    result = _recorded_result()
+    metadata = dict(result.run_manifest)
+    metadata.pop(missing)
+    manifest = write_validation_artifacts(replace(result, run_manifest=metadata), tmp_path / "report")
+    summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
+    assert summary["decision"]["conclusion"] == "do_not_trade"
+    assert summary["activation_eligible"] is False
+
+
+@pytest.mark.parametrize("missing", ["candidate_scores", "selected_scores", "strategy_observations", "excess_attribution"])
+def test_report_rejects_missing_window_diagnostics(tmp_path, monkeypatch, missing):
+    monkeypatch.setattr("asset_allocation.etf_adaptive.research.validation_report._plot", lambda *args: None)
+    result = _recorded_result()
+    window = replace(result.windows[0], **{missing: None if missing in {"selected_scores", "excess_attribution"} else ()})
+    manifest = write_validation_artifacts(replace(result, windows=(window, *result.windows[1:])), tmp_path / "report")
+    summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
+    assert summary["decision"]["conclusion"] == "do_not_trade"
+    assert summary["activation_eligible"] is False
+
+
+def test_diagnostic_write_failure_preserves_previous_published_report(tmp_path, monkeypatch):
+    import asset_allocation.etf_adaptive.research.validation_report as module
+    destination = tmp_path / "report"
+    destination.mkdir()
+    (destination / "summary.json").write_text("previous", encoding="utf-8")
+    original = module._write_csv
+    def fail_diagnostics(path, rows, fields):
+        if path.name == "daily_state.csv":
+            raise OSError("diagnostic write failed")
+        return original(path, rows, fields)
+    monkeypatch.setattr(module, "_write_csv", fail_diagnostics)
+    with pytest.raises(OSError, match="diagnostic write failed"):
+        write_validation_artifacts(_recorded_result(), destination)
+    assert (destination / "summary.json").read_text(encoding="utf-8") == "previous"
+
+
+def test_formal_report_without_experiment_metadata_is_do_not_trade(tmp_path):
+    result = _recorded_result()
+    metadata = dict(result.run_manifest)
+    metadata.pop("experiment", None)
+    result = replace(result, run_manifest=metadata)
+    manifest = write_validation_artifacts(result, tmp_path / "report")
+    summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
+    assert summary["decision"]["conclusion"] == "do_not_trade"
+    assert "experiment_metadata" in summary["decision"]["blockers"]
+    assert summary["activation_eligible"] is False
+
+
+@pytest.mark.parametrize("change", ["window_hash", "attribution", "target", "selected_config", "unrun_policy", "unrun_benchmark", "undeclared_cost"])
+def test_report_rejects_inconsistent_recorded_provenance(tmp_path, monkeypatch, change):
+    monkeypatch.setattr("asset_allocation.etf_adaptive.research.validation_report._plot", lambda *args: None)
+    result = _recorded_result()
+    spec = ExperimentSpec.from_dict(result.run_manifest["experiment"])
+    if change == "window_hash":
+        result = replace(result, windows=(replace(result.windows[0], config_hash="forged"), *result.windows[1:]))
+    elif change == "attribution":
+        attribution = replace(result.windows[0].excess_attribution, trend_return=0.9)
+        result = replace(result, windows=(replace(result.windows[0], excess_attribution=attribution), *result.windows[1:]))
+    elif change == "target":
+        result.run_manifest["target"]["stock_code"] = "513330.SH"
+    elif change == "selected_config":
+        result.run_manifest["selected_configs"][0]["config_hash"] = "forged"
+    elif change == "unrun_policy":
+        from asset_allocation.etf_adaptive.research.strategy_specs import GRID_ONLY_SPEC
+        spec = replace(spec, strategy=GRID_ONLY_SPEC)
+    elif change == "unrun_benchmark":
+        from asset_allocation.etf_adaptive.research.strategy_specs import FIXED_HALF_SPEC
+        spec = replace(spec, benchmarks=(FIXED_HALF_SPEC,))
+    elif change == "undeclared_cost":
+        config = replace(spec.strategy.config, cost=replace(spec.strategy.config.cost, slippage_bps=9.0))
+        spec = replace(spec, strategy=replace(spec.strategy, config=config))
+    result = bind_experiment(result, spec)
+    manifest = write_validation_artifacts(result, tmp_path / "report")
+    summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
+    assert summary["decision"]["conclusion"] == "do_not_trade"
+    assert summary["activation_eligible"] is False
+
+
+def test_experiment_allows_provider_to_advance_to_first_aligned_session(tmp_path, monkeypatch):
+    monkeypatch.setattr("asset_allocation.etf_adaptive.research.validation_report._plot", lambda *args: None)
+    result = _recorded_result()
+    spec = replace(ExperimentSpec.from_dict(result.run_manifest["experiment"]), start_date=date(2025, 1, 1))
+    result = bind_experiment(result, spec)
+    manifest = write_validation_artifacts(result, tmp_path / "report")
+    summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
+    assert summary["decision"]["conclusion"] == "passed"

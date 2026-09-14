@@ -9,16 +9,19 @@ from __future__ import annotations
 
 import csv
 import json
-from dataclasses import dataclass, fields, replace
+from dataclasses import asdict, dataclass, fields, replace
+from datetime import date
 from math import isclose, isfinite
 from pathlib import Path
 from typing import Iterable
 
-from .attribution import build_result_attribution
+from .attribution import build_excess_attribution, build_result_attribution
 from .decision import ResearchConclusion
+from .experiment import ExperimentSpec, experiment_evidence
 from .instrument_validation import InstrumentValidationResult, ValidationWindowResult
 from .metrics import PerformanceMetrics
 from .report import publish_directory
+from .strategy_specs import BUY_AND_HOLD_SPEC, FULL_ADAPTIVE_SPEC
 
 
 @dataclass(frozen=True)
@@ -29,6 +32,9 @@ class ValidationArtifactManifest:
     daily_nav_csv: Path
     report_markdown: Path
     chart_png: Path
+    candidate_scores_csv: Path
+    excess_attribution_json: Path
+    daily_state_csv: Path
 
 
 _METRIC_NAMES = tuple(field.name for field in fields(PerformanceMetrics))
@@ -118,7 +124,84 @@ def _evidence_blockers(result: InstrumentValidationResult) -> list[str]:
         blockers.append("run_manifest")
     if any(not isinstance(window.selected_config, dict) for window in result.windows):
         blockers.append("selected_config")
+    blockers.extend(_experiment_blockers(result))
     return list(dict.fromkeys(blockers))
+
+
+def _experiment_blockers(result: InstrumentValidationResult) -> list[str]:
+    """Bind declared experiments to stored train-only scores and daily evidence."""
+    manifest = result.run_manifest
+    try:
+        spec = ExperimentSpec.from_dict(manifest["experiment"])
+        if (result.target.stock_code not in spec.target_codes
+                or result.as_of_date != spec.as_of_date
+                or not spec.start_date <= date.fromisoformat(manifest["requested_start"]) <= spec.as_of_date
+                or manifest["target"]["stock_code"] != result.target.stock_code
+                or manifest["selected_configs"] != [
+                    {"window_id": window.window_id, "config_hash": window.config_hash,
+                     "config": window.selected_config} for window in result.windows
+                ]):
+            return ["experiment_metadata"]
+        # This recorded-result interface currently runs FULL_ADAPTIVE against B&H.
+        # A declaration cannot relabel those runs as another policy/benchmark.
+        if (spec.strategy != FULL_ADAPTIVE_SPEC
+                or spec.benchmarks != (BUY_AND_HOLD_SPEC,)):
+            return ["experiment_metadata"]
+        expected = experiment_evidence(result, spec)
+        if any(manifest.get(key) != value for key, value in expected.items()):
+            return ["experiment_metadata"]
+        for window, recorded in zip(result.windows, expected["experiment_windows"]):
+            strategy = recorded["strategy_spec"]
+            if (strategy is None or strategy["config"] != window.selected_config
+                    or strategy["config_hash"] != window.config_hash):
+                return ["experiment_metadata"]
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return ["experiment_metadata"]
+    blockers = []
+    for window in result.windows:
+        if not window.candidate_scores or not window.selected_scores:
+            blockers.append("candidate_scores")
+        else:
+            candidates = [item.to_dict() for item in window.candidate_scores]
+            if set(window.selected_scores) != {"grid_only", "trend_only"}:
+                blockers.append("selected_scores")
+            for family, score in window.selected_scores.items():
+                section = {"grid_only": "grid", "trend_only": "trend"}.get(family)
+                if (section is None or score.family != family or not score.stable
+                        or score.rejection_reason is not None or score.to_dict() not in candidates
+                        or dict(score.config[section]) != window.selected_config[section]
+                        or dict(score.config["cost"]) != window.selected_config["cost"]):
+                    blockers.append("selected_scores")
+            for score in window.candidate_scores:
+                for axis in score.screened_axes:
+                    section = "grid" if axis in score.config["grid"] else "trend"
+                    if (axis not in spec.allowed_axes
+                            or score.config[section].get(axis) not in spec.allowed_axes[axis]):
+                        blockers.append("allowed_axes")
+        if (not window.strategy_observations or window.excess_attribution is None
+                or window.training_end >= window.validation_start):
+            blockers.append("daily_state_attribution")
+            continue
+        try:
+            if any(point.nav_date > spec.as_of_date or point.nav_date < spec.start_date
+                   for point in window.strategy_daily_nav):
+                raise ValueError("daily evidence outside experiment dates")
+            actual = build_excess_attribution(
+                window.strategy_daily_nav, window.benchmark_daily_nav,
+                window.strategy_observations, window.strategy_events,
+                execution_cost=window.strategy_metrics.total_cost,
+            )
+            if any(not _finite(value) or not isclose(value, asdict(actual)[name], abs_tol=1e-9)
+                   for name, value in asdict(window.excess_attribution).items()):
+                raise ValueError("recorded attribution does not reconcile")
+        except (TypeError, ValueError, AttributeError, ArithmeticError):
+            blockers.append("daily_state_attribution")
+    return blockers
+
+
+def validation_publication_decision(result: InstrumentValidationResult) -> dict[str, object]:
+    """Use the same fail-closed decision in detailed and CLI summary artifacts."""
+    return _decision_payload(result, _evidence_blockers(result))
 
 
 def _decision_payload(result: InstrumentValidationResult, blockers: list[str]) -> dict[str, object]:
@@ -257,6 +340,52 @@ def _daily_nav_rows(result: InstrumentValidationResult) -> list[dict[str, object
     return rows
 
 
+def _candidate_score_rows(result: InstrumentValidationResult) -> list[dict[str, object]]:
+    rows = []
+    for window in result.windows:
+        selected = [score.to_dict() for score in (window.selected_scores or {}).values()]
+        for score in window.candidate_scores:
+            payload = score.to_dict()
+            rows.append({"window_id": window.window_id, "training_end": window.training_end.isoformat(),
+                         "selected": payload in selected, **payload,
+                         "config": json.dumps(payload["config"], sort_keys=True, allow_nan=False),
+                         "screened_axes": json.dumps(payload["screened_axes"])})
+    return rows
+
+
+def _daily_state_rows(result: InstrumentValidationResult) -> list[dict[str, object]]:
+    return [{"window_id": window.window_id, **asdict(item),
+             "nav_date": item.nav_date.isoformat(),
+             "regime": item.regime.value if item.regime is not None else None}
+            for window in result.windows for item in window.strategy_observations]
+
+
+def _excess_payload(result: InstrumentValidationResult) -> list[dict[str, object]]:
+    return [{"window_id": window.window_id, **asdict(window.excess_attribution)}
+            for window in result.windows if window.excess_attribution is not None]
+
+
+_NEXT_RESEARCH_ACTION = {
+    "grid_return": "Study grid spacing, sizing and stop/cooldown behavior on training windows.",
+    "trend_return": "Study trend entry/exit filters and stop distances on training windows.",
+    "transition_return": "Study recorded regime transitions and handoff timing on training windows.",
+    "cash_opportunity_cost": "Study cash exposure and re-entry timing on training windows.",
+}
+
+
+def _excess_markdown(rows: list[dict[str, object]], valid: bool) -> list[str]:
+    lines = ["## Excess return diagnostics", "",
+             "Contributions sum daily net excess returns; execution_cost is a separate currency diagnostic already embedded in NAV.", ""]
+    if not valid or not rows:
+        return lines + ["Missing or invalid experiment evidence; no research action can be inferred.", ""]
+    for row in rows:
+        largest = max(_NEXT_RESEARCH_ACTION, key=lambda name: abs(row[name]))
+        lines += [f"### {row['window_id']}", "",
+                  f"Largest absolute contributor: {largest} ({row[largest]:.8f}).",
+                  f"Next research action: {_NEXT_RESEARCH_ACTION[largest]}", ""]
+    return lines + ["Research evidence only; no broker action is authorized.", ""]
+
+
 def _attribution_payload(window: ValidationWindowResult) -> dict[str, object]:
     attribution = build_result_attribution(
         window.window_id,
@@ -390,6 +519,7 @@ def write_validation_artifacts(result: InstrumentValidationResult, output_dir: P
     blockers = _evidence_blockers(result)
     window_rows = [_window_row(window) for window in result.windows]
     attribution = [_attribution_payload(window) for window in result.windows]
+    excess_attribution = _excess_payload(result)
     summary = {
         "stock_code": result.target.stock_code,
         "exposure_id": result.target.exposure_id,
@@ -422,12 +552,28 @@ def write_validation_artifacts(result: InstrumentValidationResult, output_dir: P
     _write_csv(staging / "trades.csv", trades, ["window_id", "role", "trade_date", "kind", "side", "shares", "raw_price", "reason", "commission", "config_hash"])
     daily_nav = _daily_nav_rows(result)
     _write_csv(staging / "daily_nav.csv", daily_nav, ["window_id", "role", "nav_date", "cash", "market_value", "total_nav", "exposure"])
+    scores = _candidate_score_rows(result)
+    _write_csv(staging / "candidate_scores.csv", scores, list(scores[0]) if scores else [
+        "window_id", "training_end", "selected", "config_hash", "config", "family", "screened_axes",
+        "positive_subperiod_share", "sortino_excess", "sharpe_excess", "drawdown_improvement",
+        "cvar5_improvement", "cost_drag", "exposure_ratio", "stable", "rejection_reason",
+    ])
+    _write_csv(staging / "daily_state.csv", _daily_state_rows(result), [
+        "window_id", "nav_date", "regime", "target_exposure", "actual_exposure",
+        "cooldown_remaining", "pending_order_count", "state_reason",
+    ])
+    (staging / "excess_attribution.json").write_text(
+        json.dumps(excess_attribution, ensure_ascii=False, indent=2), encoding="utf-8",
+    )
     (staging / "attribution.json").write_text(json.dumps(attribution, ensure_ascii=False, indent=2), encoding="utf-8")
-    (staging / "report.md").write_text(_markdown(summary, attribution), encoding="utf-8")
+    (staging / "report.md").write_text(
+        _markdown(summary, attribution) + "\n".join(_excess_markdown(excess_attribution, not blockers)),
+        encoding="utf-8",
+    )
     _plot(result, staging / "validation_chart.png")
     charts_dir = staging / "charts"
     charts_dir.mkdir()
     for window in result.windows:
         _plot(replace(result, windows=(window,)), charts_dir / f"{window.window_id}.png")
     publish_directory(staging, output_dir)
-    return ValidationArtifactManifest(output_dir / "summary.json", output_dir / "windows.csv", output_dir / "trades.csv", output_dir / "daily_nav.csv", output_dir / "report.md", output_dir / "validation_chart.png")
+    return ValidationArtifactManifest(output_dir / "summary.json", output_dir / "windows.csv", output_dir / "trades.csv", output_dir / "daily_nav.csv", output_dir / "report.md", output_dir / "validation_chart.png", output_dir / "candidate_scores.csv", output_dir / "excess_attribution.json", output_dir / "daily_state.csv")
