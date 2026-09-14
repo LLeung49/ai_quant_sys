@@ -1,7 +1,7 @@
 """Fixed-universe contracts for independent ETF strategy validation."""
 
 from dataclasses import asdict, dataclass, replace
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal
 from enum import Enum
 from hashlib import sha256
@@ -39,6 +39,11 @@ class ValidationStatus(str, Enum):
 class ValidationScope(str, Enum):
     FORMAL = "formal"
     REFERENCE_ONLY = "reference_only"
+
+
+# 252 market sessions need more than a calendar year once holidays are included.
+# This is input-only warm-up: accounting still begins at the requested session.
+ELIGIBILITY_WARMUP_CALENDAR_DAYS = 400
 
 
 @dataclass(frozen=True)
@@ -184,6 +189,32 @@ class CachedValidationProvider:
         return getattr(self._provider, name)
 
 
+class _TrainingReplayProvider:
+    """Expose pre-validation warm-up and one train segment, never prior OOS sessions."""
+
+    def __init__(self, provider: object, evaluation_start: date, trade_start: date) -> None:
+        self._provider = provider
+        self._evaluation_start = evaluation_start
+        self._trade_start = trade_start
+
+    def load_bars(self, stock_code: str, start_date: date, end_date: date):
+        bars = self._provider.load_bars(stock_code, start_date, end_date)
+        return tuple(
+            bar for bar in bars
+            if bar.trade_date < self._evaluation_start or bar.trade_date >= self._trade_start
+        )
+
+    def load_actions(self, stock_code: str, start_date: date, end_date: date):
+        actions = self._provider.load_actions(stock_code, start_date, end_date)
+        return tuple(
+            action for action in actions
+            if action.effective_date < self._evaluation_start or action.effective_date >= self._trade_start
+        )
+
+    def load_eligibility(self, stock_code: str, bars):
+        return self._provider.load_eligibility(stock_code, bars)
+
+
 FIXED_VALIDATION_TARGETS = (
     ValidationTarget("sp_china_low_vol_dividend", "515450.SH", SubLayer.DEFENSIVE_DIVIDEND_ETF),
     ValidationTarget("csi_dividend", "515080.SH", SubLayer.DEFENSIVE_DIVIDEND_ETF),
@@ -224,13 +255,16 @@ def run_instrument_validation(
     try:
         start_date = resolve_validation_start(provider, target.stock_code, start_date, as_of_date)
         provider = CachedValidationProvider(provider)
-        bars = tuple(provider.load_bars(target.stock_code, start_date, as_of_date))
+        bars = tuple(provider.load_bars(
+            target.stock_code, start_date - timedelta(days=ELIGIBILITY_WARMUP_CALENDAR_DAYS), as_of_date,
+        ))
     except DataQualityError as exc:
         return _data_rejected_result(target, as_of_date, str(exc))
     if not bars:
         return _data_rejected_result(target, as_of_date, "no market bars in requested range")
+    evaluation_dates = tuple(bar.trade_date for bar in bars if bar.trade_date >= start_date)
     try:
-        windows = build_windows(tuple(bar.trade_date for bar in bars), train_sessions=target.minimum_train_sessions)
+        windows = build_windows(evaluation_dates, train_sessions=target.minimum_train_sessions)
     except ValueError:
         return _data_rejected_result(target, as_of_date, "insufficient history for walk-forward validation")
     results: list[ValidationWindowResult] = []
@@ -261,10 +295,12 @@ def run_instrument_validation(
                 grid_selection = _select_training_candidate(
                     target.stock_code, provider, window.train_dates, initial_cash,
                     grid_plan[0], grid_plan[1], segment_size, grid_plan[2],
+                    history_start=bars[0].trade_date, evaluation_start=start_date,
                 )
                 trend_selection = _select_training_candidate(
                     target.stock_code, provider, window.train_dates, initial_cash,
                     trend_plan[0], trend_plan[1], segment_size, trend_plan[2],
+                    history_start=bars[0].trade_date, evaluation_start=start_date,
                 )
                 if grid_selection.candidate is None or trend_selection.candidate is None:
                     results.append(ValidationWindowResult(
@@ -300,7 +336,7 @@ def run_instrument_validation(
                 }
             # Indicators see the training history, but the Task 1 engine
             # starts the accounting state at the validation boundary.
-            runs = run_baselines(BacktestRequest(target.stock_code, initial_cash, window.train_dates[0], window.validation_end, window.validation_dates[0]), provider, config)
+            runs = run_baselines(BacktestRequest(target.stock_code, initial_cash, bars[0].trade_date, window.validation_end, window.validation_dates[0]), provider, config)
             strategy_nav = _validation_nav(runs[BaselineKind.FULL_ADAPTIVE].result.nav, window.validation_dates)
             benchmark_nav = _validation_nav(runs[BaselineKind.BUY_AND_HOLD].result.nav, window.validation_dates)
             strategy = strategy_nav[-1] / strategy_nav[0] - 1
@@ -407,6 +443,9 @@ def _select_training_candidate(
     axes: Sequence[str],
     segment_size: int,
     expansion_axes: Sequence[str] = (),
+    *,
+    history_start: date | None = None,
+    evaluation_start: date | None = None,
 ) -> _TrainingSelection:
     """Select a baseline, then screen each approved new axis in sequence.
 
@@ -415,8 +454,13 @@ def _select_training_candidate(
     a cross-product of the newly approved axes.
     """
 
+    screen_kwargs = {}
+    if history_start is not None:
+        screen_kwargs["history_start"] = history_start
+    if evaluation_start is not None:
+        screen_kwargs["evaluation_start"] = evaluation_start
     selected, summaries, scores = _screen_training_candidates(
-        stock_code, provider, dates, initial_cash, candidates, axes, segment_size,
+        stock_code, provider, dates, initial_cash, candidates, axes, segment_size, **screen_kwargs,
     )
     if selected is None:
         return _TrainingSelection(None, tuple(summaries), tuple(scores), None, (tuple(axes),))
@@ -426,7 +470,7 @@ def _select_training_candidate(
     for axis in expansion_axes:
         expanded = expand_candidate_axis(selected, axis=axis)
         selected, summaries, scores = _screen_training_candidates(
-            stock_code, provider, dates, initial_cash, expanded, (axis,), segment_size,
+            stock_code, provider, dates, initial_cash, expanded, (axis,), segment_size, **screen_kwargs,
         )
         if selected is None:
             all_summaries.extend(summaries)
@@ -442,8 +486,13 @@ def _select_training_candidate(
     )
 
 
-def _screen_training_candidates(stock_code, provider, dates, initial_cash, candidates, axes, segment_size):
+def _screen_training_candidates(
+    stock_code, provider, dates, initial_cash, candidates, axes, segment_size, *, history_start: date | None = None,
+    evaluation_start: date | None = None,
+):
     segments = tuple(dates[index:index + segment_size] for index in range(0, len(dates), segment_size))
+    history_start = history_start or dates[0]
+    evaluation_start = evaluation_start or dates[0]
     points = {}
     raw_scores = []
     candidate_kind = BaselineKind.GRID_ONLY if candidates[0].family == "grid_only" else BaselineKind.TREND_ONLY
@@ -457,9 +506,10 @@ def _screen_training_candidates(stock_code, provider, dates, initial_cash, candi
         invested_sessions = 0
         total_sessions = 0
         for segment in segments:
-            request = BacktestRequest(stock_code, initial_cash, segment[0], segment[-1])
-            strategy = run_baseline(candidate_kind, request, provider, candidate.config)
-            benchmark = run_baseline(BaselineKind.BUY_AND_HOLD, request, provider, candidate.config)
+            request = BacktestRequest(stock_code, initial_cash, history_start, segment[-1], segment[0])
+            replay_provider = _TrainingReplayProvider(provider, evaluation_start, segment[0])
+            strategy = run_baseline(candidate_kind, request, replay_provider, candidate.config)
+            benchmark = run_baseline(BaselineKind.BUY_AND_HOLD, request, replay_provider, candidate.config)
             excess.append(_nav_return(strategy.result.nav) - _nav_return(benchmark.result.nav))
             strategy_metrics.append(_recorded_performance(strategy.result.nav, strategy.result.events, candidate.config.cost))
             benchmark_metrics.append(_recorded_performance(benchmark.result.nav, benchmark.result.events, candidate.config.cost))

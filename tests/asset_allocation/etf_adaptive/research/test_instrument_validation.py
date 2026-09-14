@@ -226,18 +226,19 @@ def oos_validation_pair(
     monkeypatch.setattr(module, "evaluate_research_decision", lambda evidence: DecisionSummary(
         ResearchConclusion.CONTINUE_PARAMETER_OPTIMIZATION, ("annual_excess",),
     ))
-    training_requests: list[tuple[date, date]] = []
+    training_requests = []
 
     def run_baseline(kind, request, provider, config):
-        training_requests.append((request.start_date, request.end_date))
+        training_requests.append(request)
         training_bars = provider.load_bars(request.stock_code, request.start_date, request.end_date)
         totals = (100, 99, 103, 102.5, 104) if kind is not BaselineKind.BUY_AND_HOLD else (100, 98, 101, 100, 102)
         terminal = Decimal(str(totals[-1]))
         terminal *= Decimal(str(sum(bar.raw_close for bar in training_bars) / (100 * len(training_bars))))
-        assert len(training_bars) == 5
+        segment = tuple(bar for bar in training_bars if bar.trade_date >= request.trade_start_date)
+        assert len(segment) == 5
         nav = tuple(DailyNav(
             bar.trade_date, Decimal(str(total)) if index < 4 else terminal, Decimal("0"),
-        ) for index, (bar, total) in enumerate(zip(training_bars, totals)))
+        ) for index, (bar, total) in enumerate(zip(segment, totals)))
         return BaselineRun(kind, config, BacktestResult(request, (), nav))
 
     def run_baselines(request, provider, config):
@@ -295,7 +296,10 @@ def test_oos_only_prices_do_not_change_training_hashes_or_activate_nonpassing_de
     assert baseline.activation_eligible is False
     assert baseline.strategy_metrics is not None
     assert baseline.strategy_metrics.turnover == 3.0
-    assert all(end in {day for window in windows for day in window.train_dates} for _, end in training_requests)
+    training_dates = {day for window in windows for day in window.train_dates}
+    assert all(request.end_date in training_dates for request in training_requests)
+    assert all(request.trade_start_date in training_dates for request in training_requests)
+    assert all(request.start_date <= request.trade_start_date for request in training_requests)
     # Reproducibility evidence records actual selected parameters and the exact
     # data snapshot; changing only OOS bars must change the latter, not the former.
     assert baseline.run_manifest is not None and changed_oos.run_manifest is not None
@@ -391,7 +395,7 @@ def test_training_ranks_all_plateau_members_and_rejects_inexact_neighbors(
             totals = (100, 99, 102, 101.5, 103)
         else:
             totals = (100, 90, 105, 97, 103)
-        segment = tuple(day for day in dates if request.start_date <= day <= request.end_date)
+        segment = tuple(day for day in dates if request.trade_start_date <= day <= request.end_date)
         assert len(segment) == 5
         nav = tuple(DailyNav(day, Decimal("0"), Decimal(str(total))) for day, total in zip(segment, totals))
         return BaselineRun(kind, config, BacktestResult(request, (), nav))
@@ -428,14 +432,14 @@ def test_training_scores_aggregate_recorded_subperiod_risk_cost_and_exposure(mon
     ), family="grid_only") for step in (0.01, 0.015, 0.02))
 
     def replay(kind, request, provider, config):
-        final_segment = request.start_date == dates[15]
+        final_segment = request.trade_start_date == dates[15]
         strategy = kind is BaselineKind.GRID_ONLY
         # Returns: good = (+10%, -10%, +10%, -5%);
         # bad = (+5%, -15%, +5%, -10%). Swap in the fourth segment.
         good = (100, 110, 99, 108.9, 103.455)
         bad = (100, 105, 89.25, 93.7125, 84.34125)
         totals = tuple(value * 100 for value in (good if strategy != final_segment else bad))
-        segment = tuple(day for day in dates if request.start_date <= day <= request.end_date)
+        segment = tuple(day for day in dates if request.trade_start_date <= day <= request.end_date)
         invested_indexes = {1, 2, 3, 4} if final_segment else {1, 2}
         nav = tuple(DailyNav(
             day,
@@ -493,10 +497,10 @@ def test_undefined_training_ratios_reject_the_score_without_changing_legacy_metr
 
     def replay(kind, request, provider, config):
         values = (100, 99, 103, 102.5, 110) if kind is BaselineKind.GRID_ONLY else (100, 99, 101, 100.5, 98)
-        unavailable = kind.value == unavailable_kind and (not only_final_segment or request.start_date == dates[15])
+        unavailable = kind.value == unavailable_kind and (not only_final_segment or request.trade_start_date == dates[15])
         if unavailable:
             values = totals
-        segment = tuple(day for day in dates if request.start_date <= day <= request.end_date)
+        segment = tuple(day for day in dates if request.trade_start_date <= day <= request.end_date)
         nav = tuple(DailyNav(day, Decimal(str(total)), Decimal("0")) for day, total in zip(segment, values))
         if unavailable:
             legacy_fallbacks.append(module._recorded_performance(nav, (), config.cost).sortino)
@@ -543,3 +547,35 @@ def test_recorded_training_cost_above_two_percent_cannot_be_promoted_by_stabilit
     assert selected is None
     assert all(score.cost_drag == 0.05 for score in scores)
     assert all(score.stable is False and score.rejection_reason == "cost_drag_out_of_bounds" for score in scores)
+
+
+def test_training_segments_keep_prior_history_for_eligibility_without_booking_warmup(monkeypatch) -> None:
+    """Each train replay warms eligibility from prior data but books only its own segment."""
+    from asset_allocation.etf_adaptive.research import instrument_validation as module
+    from asset_allocation.etf_adaptive.research.baselines import BaselineKind, BaselineRun
+
+    history_start = date(2025, 1, 1)
+    dates = tuple(date(2026, 1, 1) + timedelta(days=index) for index in range(20))
+    candidates = tuple(ParameterCandidate(
+        AdaptiveConfig(grid=GridConfig(step_pct=step)), family="grid_only",
+    ) for step in (0.01, 0.015, 0.02))
+    requests = []
+
+    def replay(kind, request, provider, config):
+        requests.append(request)
+        segment = tuple(day for day in dates if request.trade_start_date <= day <= request.end_date)
+        values = (100, 99, 103, 100, 110) if kind is BaselineKind.GRID_ONLY else (100, 98, 101, 99, 102)
+        nav = tuple(DailyNav(day, Decimal(str(total)), Decimal("0")) for day, total in zip(segment, values))
+        return BaselineRun(kind, config, BacktestResult(request, (), nav))
+
+    monkeypatch.setattr(module, "run_baseline", replay)
+    module._screen_training_candidates(
+        "510300.SH", object(), dates, Decimal("100"), candidates, ("step_pct",), 5,
+        history_start=history_start,
+    )
+
+    assert requests
+    assert {request.start_date for request in requests} == {history_start}
+    assert {request.trade_start_date for request in requests} == {dates[index] for index in range(0, len(dates), 5)}
+    assert all(request.end_date in dates and request.end_date < dates[-1] or request.end_date == dates[-1]
+               for request in requests)
