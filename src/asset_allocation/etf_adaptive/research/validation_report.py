@@ -9,18 +9,22 @@ from __future__ import annotations
 
 import csv
 import json
+import os
+import shutil
+import tempfile
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass, fields, replace
 from datetime import date
 from math import isclose, isfinite
 from pathlib import Path
 from typing import Iterable
+from uuid import uuid4
 
 from .attribution import build_excess_attribution, build_result_attribution
 from .decision import ResearchConclusion
 from .experiment import ExperimentSpec, experiment_evidence
 from .instrument_validation import InstrumentValidationResult, ValidationWindowResult
 from .metrics import PerformanceMetrics
-from .report import publish_directory
 from .strategy_specs import BUY_AND_HOLD_SPEC, FULL_ADAPTIVE_SPEC
 
 
@@ -155,6 +159,7 @@ def _experiment_blockers(result: InstrumentValidationResult) -> list[str]:
             if (strategy is None or strategy["config"] != window.selected_config
                     or strategy["config_hash"] != window.config_hash):
                 return ["experiment_metadata"]
+            _validate_execution_boundaries(window, manifest["screened_axes"], spec)
     except (KeyError, TypeError, ValueError, AttributeError):
         return ["experiment_metadata"]
     blockers = []
@@ -197,6 +202,64 @@ def _experiment_blockers(result: InstrumentValidationResult) -> list[str]:
         except (TypeError, ValueError, AttributeError, ArithmeticError):
             blockers.append("daily_state_attribution")
     return blockers
+
+
+def _validate_execution_boundaries(window, manifest_axes, spec) -> None:
+    """Check all configuration fields, including those omitted from score axes."""
+    base = asdict(spec.strategy.config)
+    if window.cost_config is None or asdict(window.cost_config) != base["cost"]:
+        raise ValueError("recorded execution cost differs from declaration")
+    if not isinstance(manifest_axes, Mapping) or set(manifest_axes) != {"grid", "trend"}:
+        raise ValueError("missing screening metadata")
+    if not isinstance(window.screened_axes, Mapping) or set(window.screened_axes) != {"grid_only", "trend_only"}:
+        raise ValueError("missing window screening metadata")
+
+    def axes_set(axes, section):
+        if not isinstance(axes, (tuple, list)) or not axes or any(not isinstance(axis, str) for axis in axes):
+            raise ValueError("missing screened axes")
+        if len(set(axes)) != len(axes) or any(axis not in base[section] or axis not in spec.allowed_axes for axis in axes):
+            raise ValueError("undeclared or wrong-family screened axis")
+        return set(axes)
+
+    approved = {section: axes_set(manifest_axes[section], section) for section in ("grid", "trend")}
+    for family, section in (("grid_only", "grid"), ("trend_only", "trend")):
+        stages = window.screened_axes[family]
+        if not isinstance(stages, (tuple, list)) or not stages:
+            raise ValueError("missing screening stages")
+        stage_axes = [axes_set(stage, section) for stage in stages]
+        if set().union(*stage_axes) != approved[section]:
+            raise ValueError("window and manifest screening differ")
+        recorded_stages = {tuple(stage) for stage in stages}
+        scores = [score for score in window.candidate_scores if score.family == family]
+        if {tuple(score.screened_axes) for score in scores} != recorded_stages:
+            raise ValueError("candidate and window screening differ")
+
+    def check_config(config, permitted):
+        if not isinstance(config, Mapping) or set(config) != set(base):
+            raise ValueError("incomplete configuration")
+        for section, defaults in base.items():
+            values = config[section]
+            if not isinstance(values, Mapping) or set(values) != set(defaults):
+                raise ValueError("incomplete configuration section")
+            for name, value in values.items():
+                unchanged = type(value) is type(defaults[name]) and value == defaults[name]
+                if unchanged:
+                    continue
+                if (name not in permitted.get(section, ())
+                        or not any(type(value) is type(item) and value == item for item in spec.allowed_axes[name])):
+                    raise ValueError("undeclared configuration deviation")
+
+    check_config(window.selected_config, approved)
+    for score in window.candidate_scores:
+        section = {"grid_only": "grid", "trend_only": "trend"}.get(score.family)
+        if section is None:
+            raise ValueError("unrun candidate family")
+        axes = axes_set(score.screened_axes, section)
+        check_config(score.config, {section: approved[section]})
+        for axis in axes:
+            if not any(type(score.config[section][axis]) is type(item) and score.config[section][axis] == item
+                       for item in spec.allowed_axes[axis]):
+                raise ValueError("unapproved screened value")
 
 
 def validation_publication_decision(result: InstrumentValidationResult) -> dict[str, object]:
@@ -508,14 +571,46 @@ def _markdown(summary: dict[str, object], attribution: list[dict[str, object]]) 
     return "\n".join(lines)
 
 
+def write_atomic_text(destination: Path, text: str) -> None:
+    """Replace one complete UTF-8 file without truncating a prior publication."""
+    destination = Path(destination)
+    descriptor, temporary = tempfile.mkstemp(prefix=f".{destination.name}.", suffix=".staging", dir=destination.parent)
+    try:
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, destination)
+    finally:
+        Path(temporary).unlink(missing_ok=True)
+
+
+def _publish_validation_directory(staging: Path, destination: Path) -> None:
+    """Publish a complete directory and restore the previous one on rename failure.
+
+    Existing nonempty directories cannot be atomically overwritten on Windows.
+    Retain the old generation until the staged rename succeeds. Readers may see
+    a brief missing path between renames, but never a partially written report.
+    """
+    backup = destination.with_name(f".{destination.name}.{uuid4().hex}.backup")
+    had_previous = destination.exists()
+    if had_previous:
+        os.replace(destination, backup)
+    try:
+        os.replace(staging, destination)
+    except BaseException:
+        if had_previous:
+            os.replace(backup, destination)
+        raise
+    if had_previous:
+        shutil.rmtree(backup)
+
+
 def write_validation_artifacts(result: InstrumentValidationResult, output_dir: Path) -> ValidationArtifactManifest:
-    """Atomically publish reports from Task 3's already-recorded result only."""
+    """Publish complete recorded reports with rollback if final replacement fails."""
     output_dir = Path(output_dir)
-    staging = output_dir.with_suffix(output_dir.suffix + ".staging")
-    if staging.exists():
-        import shutil
-        shutil.rmtree(staging)
-    staging.mkdir(parents=True, exist_ok=True)
+    output_dir.parent.mkdir(parents=True, exist_ok=True)
+    staging = Path(tempfile.mkdtemp(prefix=f".{output_dir.name}.", suffix=".staging", dir=output_dir.parent))
     blockers = _evidence_blockers(result)
     window_rows = [_window_row(window) for window in result.windows]
     attribution = [_attribution_payload(window) for window in result.windows]
@@ -575,5 +670,5 @@ def write_validation_artifacts(result: InstrumentValidationResult, output_dir: P
     charts_dir.mkdir()
     for window in result.windows:
         _plot(replace(result, windows=(window,)), charts_dir / f"{window.window_id}.png")
-    publish_directory(staging, output_dir)
+    _publish_validation_directory(staging, output_dir)
     return ValidationArtifactManifest(output_dir / "summary.json", output_dir / "windows.csv", output_dir / "trades.csv", output_dir / "daily_nav.csv", output_dir / "report.md", output_dir / "validation_chart.png", output_dir / "candidate_scores.csv", output_dir / "excess_attribution.json", output_dir / "daily_state.csv")

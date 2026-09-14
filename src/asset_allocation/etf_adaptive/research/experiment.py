@@ -103,6 +103,8 @@ def experiment_evidence(result: InstrumentValidationResult, spec: ExperimentSpec
         strategy = replace(spec.strategy, config=config) if config else None
         windows.append({
             "window_id": window.window_id,
+            "execution_cost_config": asdict(window.cost_config) if window.cost_config else None,
+            "screened_axes": window.screened_axes,
             "strategy_spec": {**asdict(strategy), "spec_hash": strategy.spec_hash(),
                               "config_hash": config.config_hash()} if strategy else None,
             "benchmark_specs": [

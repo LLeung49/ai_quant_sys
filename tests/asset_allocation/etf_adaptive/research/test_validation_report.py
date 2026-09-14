@@ -80,6 +80,8 @@ def _recorded_result() -> InstrumentValidationResult:
                    family=family, screened_axes=axes)
                    for family, axes in (("grid_only", ("step_pct",)), ("trend_only", ("stop_n",))))
     window = replace(window, config_hash=config.config_hash(), selected_config=asdict(config),
+                     cost_config=config.cost,
+                     screened_axes={"grid_only": (("step_pct",),), "trend_only": (("stop_n",),)},
                      candidate_scores=scores, selected_scores={score.family: score for score in scores},
                      strategy_observations=observations,
                      excess_attribution=build_excess_attribution(strategy_nav, benchmark_nav, observations,
@@ -296,3 +298,75 @@ def test_experiment_allows_provider_to_advance_to_first_aligned_session(tmp_path
     manifest = write_validation_artifacts(result, tmp_path / "report")
     summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
     assert summary["decision"]["conclusion"] == "passed"
+
+
+@pytest.mark.parametrize("change", [
+    "window_cost", "candidate_cost", "recorded_cost", "missing_cost",
+    "unapproved_cooldown", "undeclared_cooldown", "undeclared_field",
+    "empty_score_axes", "missing_window_axes", "empty_window_axes",
+    "missing_manifest_axes", "wrong_family_axes", "empty_allowed_axes",
+])
+def test_formal_gate_rejects_rebound_cost_and_axis_bypasses(change):
+    # Rebinding hashes must not turn altered execution settings into approved evidence.
+    from asset_allocation.etf_adaptive.research.validation_report import validation_publication_decision
+    result = _recorded_result()
+    spec = ExperimentSpec.from_dict(result.run_manifest["experiment"])
+    window = result.windows[0]
+    config = AdaptiveConfig.default()
+    if change in {"window_cost", "candidate_cost"}:
+        config = replace(config, cost=replace(config.cost, slippage_bps=9.0))
+    elif change in {"unapproved_cooldown", "undeclared_cooldown"}:
+        config = replace(config, grid=replace(config.grid, cooldown_sessions=99 if change == "unapproved_cooldown" else 10))
+        if change == "undeclared_cooldown":
+            spec = replace(spec, allowed_axes={"step_pct": (0.02,), "stop_n": (2.0,)})
+    elif change == "undeclared_field":
+        config = replace(config, grid=replace(config.grid, initial_model="atr"))
+    if config != AdaptiveConfig.default():
+        scores = tuple(replace(score, config=asdict(config), config_hash=config.config_hash())
+                       for score in window.candidate_scores)
+        if change == "candidate_cost":
+            window = replace(window, candidate_scores=(*window.candidate_scores, scores[0]))
+        else:
+            window = replace(window, selected_config=asdict(config), config_hash=config.config_hash(),
+                             candidate_scores=scores, selected_scores={score.family: score for score in scores})
+    elif change in {"recorded_cost", "missing_cost"}:
+        window = replace(window, cost_config=None if change == "missing_cost" else replace(config.cost, slippage_bps=9.0))
+    elif change in {"empty_score_axes", "wrong_family_axes", "empty_allowed_axes"}:
+        scores = tuple(replace(score, screened_axes=("stop_n",) if change == "wrong_family_axes" else ())
+                       for score in window.candidate_scores)
+        window = replace(window, candidate_scores=scores, selected_scores={score.family: score for score in scores})
+        if change == "empty_allowed_axes":
+            spec = replace(spec, allowed_axes={})
+    elif change in {"missing_window_axes", "empty_window_axes"}:
+        window = replace(window, screened_axes=None if change == "missing_window_axes" else {})
+    elif change == "missing_manifest_axes":
+        result.run_manifest["screened_axes"] = {}
+    result = replace(result, windows=(window, *result.windows[1:]))
+    result.run_manifest["selected_configs"] = [
+        {"window_id": item.window_id, "config_hash": item.config_hash, "config": item.selected_config}
+        for item in result.windows
+    ]
+    result = bind_experiment(result, spec)
+    decision = validation_publication_decision(result)
+    assert decision["conclusion"] == "do_not_trade"
+    assert decision["blockers"]
+
+
+def test_final_rename_failure_preserves_complete_previous_report(tmp_path, monkeypatch):
+    import os
+    import asset_allocation.etf_adaptive.research.validation_report as module
+    destination = tmp_path / "report"
+    destination.mkdir()
+    for name in ("summary.json", "candidate_scores.csv", "daily_state.csv", "report.md"):
+        (destination / name).write_text("previous " + name, encoding="utf-8")
+    original = os.replace
+    def fail_publication(source, target):
+        if Path(target) == destination and str(source).endswith(".staging"):
+            raise OSError("final rename failed")
+        return original(source, target)
+    monkeypatch.setattr(os, "replace", fail_publication)
+    monkeypatch.setattr(module, "_plot", lambda *args: None)
+    with pytest.raises(OSError, match="final rename failed"):
+        write_validation_artifacts(_recorded_result(), destination)
+    for name in ("summary.json", "candidate_scores.csv", "daily_state.csv", "report.md"):
+        assert (destination / name).read_text(encoding="utf-8") == "previous " + name

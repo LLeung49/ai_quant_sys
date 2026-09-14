@@ -10,7 +10,7 @@ from .research.instrument_validation import FIXED_VALIDATION_TARGETS, run_instru
 from .research.experiment import APPROVED_EXPERIMENT_AXES, ExperimentSpec, bind_experiment
 from .research.strategy_specs import FULL_ADAPTIVE_SPEC, BUY_AND_HOLD_SPEC
 from .research.validation_provider import default_validation_provider
-from .research.validation_report import validation_publication_decision, write_validation_artifacts
+from .research.validation_report import validation_publication_decision, write_atomic_text, write_validation_artifacts
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -46,12 +46,11 @@ def main(argv: list[str] | None = None) -> int:
         write_validation_artifacts(result, output / target.stock_code)
         print(f"completed {target.stock_code}: {result.status.value}", flush=True)
         results.append(result)
-        (output / f"instrument_validation_{target.stock_code.replace('.', '_')}.json").write_text(
+        write_atomic_text(output / f"instrument_validation_{target.stock_code.replace('.', '_')}.json",
             json.dumps({"as_of_date": cutoff.isoformat(), "stock_code": target.stock_code,
                         "status": result.status.value, "rejection_reason": result.rejection_reason,
                         "decision": validation_publication_decision(result),
                         "experiment_hash": result.run_manifest["experiment_hash"]}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
         )
     rows = [{"exposure_id": result.target.exposure_id, "stock_code": result.target.stock_code,
              "status": result.status.value, "rejection_reason": result.rejection_reason,
@@ -63,10 +62,10 @@ def main(argv: list[str] | None = None) -> int:
              "activation_eligible": bool(result.activation_eligible and validation_publication_decision(result)["conclusion"] == "passed"),
              "scope": result.target.scope.value,
              "available_from": result.target.available_from.isoformat() if result.target.available_from else None} for result in results]
-    (output / "instrument_validation.json").write_text(json.dumps({"as_of_date": cutoff.isoformat(), "results": rows}, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_atomic_text(output / "instrument_validation.json", json.dumps({"as_of_date": cutoff.isoformat(), "results": rows}, ensure_ascii=False, indent=2))
     passed = [row["stock_code"] for row in rows if row["activation_eligible"]]
     markdown = "# ETF 验证报告\n\n| 标的 | 状态 | 原因 |\n|---|---|---|\n" + "\n".join(f"| {row['stock_code']} | {row['status']} | {row['rejection_reason'] or ''} |" for row in rows) + "\n\n## 影子运行候选\n\n" + ("\n".join(f"- {code}" for code in passed) if passed else "无") + "\n"
-    (output / "instrument_validation.md").write_text(markdown, encoding="utf-8")
+    write_atomic_text(output / "instrument_validation.md", markdown)
     return 3 if all(row["status"] == "data_rejected" for row in rows) else 0
 
 
