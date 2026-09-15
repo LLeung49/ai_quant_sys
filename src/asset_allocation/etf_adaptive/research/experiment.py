@@ -1,19 +1,23 @@
 """Bounded experiment identity and recorded research evidence (no execution)."""
 
+from __future__ import annotations
+
 from dataclasses import asdict, dataclass, replace
 from datetime import date
 from hashlib import sha256
-from itertools import product
 import json
 from math import isfinite
 from pathlib import Path
 from types import MappingProxyType
-from typing import Mapping
+from typing import TYPE_CHECKING, Mapping
 
 from ..config import AdaptiveConfig, CostConfig, GridConfig, TrendConfig
 from . import parameters
 from .instrument_validation import FIXED_VALIDATION_TARGETS, InstrumentValidationResult
-from .strategy_specs import BenchmarkSpec, StrategySpec, benchmark_provenance_hash, FULL_ADAPTIVE_SPEC, BUY_AND_HOLD_SPEC
+from .strategy_specs import BenchmarkSpec, StrategySpec, benchmark_provenance_hash
+
+if TYPE_CHECKING:
+    from .strategy_profiles import StrategyProfileSpec
 
 
 APPROVED_EXPERIMENT_AXES = MappingProxyType({
@@ -41,17 +45,29 @@ def _config(payload: Mapping[str, object]) -> AdaptiveConfig:
                           cost=CostConfig(**payload["cost"]))
 
 
+def _profile_payload(profile) -> dict[str, object]:
+    return {
+        "profile_id": profile.profile_id,
+        "version": profile.version,
+        "strategy": asdict(profile.strategy) if profile.strategy is not None else None,
+        "benchmarks": [asdict(item) for item in profile.benchmarks],
+        "selection_families": list(profile.selection_families),
+        "required_evidence": sorted(profile.required_evidence),
+    }
+
+
 @dataclass(frozen=True)
 class ExperimentSpec:
     experiment_id: str
     target_codes: tuple[str, ...]
-    strategy: StrategySpec
-    benchmarks: tuple[BenchmarkSpec, ...]
+    profile: StrategyProfileSpec
     allowed_axes: Mapping[str, tuple[object, ...]]
     start_date: date
     as_of_date: date
 
     def __post_init__(self) -> None:
+        from .strategy_profiles import StrategyProfileSpec, profile_training_plan
+
         if not isinstance(self.experiment_id, str) or not self.experiment_id.strip():
             raise ValueError("experiment_id must be non-empty")
         targets = tuple(self.target_codes)
@@ -59,28 +75,31 @@ class ExperimentSpec:
             target.stock_code for target in FIXED_VALIDATION_TARGETS
         ):
             raise ValueError("experiment target must belong to fixed validation targets")
-        if not isinstance(self.strategy, StrategySpec):
-            raise ValueError("experiment requires a strategy spec")
-        if not self.benchmarks or any(not isinstance(item, BenchmarkSpec) for item in self.benchmarks):
-            raise ValueError("experiment requires benchmark specs")
+        if not isinstance(self.profile, StrategyProfileSpec):
+            raise ValueError("experiment requires a strategy profile")
         if self.start_date > self.as_of_date:
             raise ValueError("start date must not be after as-of date")
-        axes = {}
+        axes: dict[str, tuple[object, ...]] = {}
         for axis, values in self.allowed_axes.items():
-            approved = APPROVED_EXPERIMENT_AXES.get(axis, ())
             values = tuple(values)
-            if not values or any(not any(type(value) is type(item) and value == item
-                                         for item in approved) for value in values):
-                raise ValueError(f"invalid allowed axis: {axis}")
+            config = self.profile.strategy.config if self.profile.strategy is not None else AdaptiveConfig.default()
+            profile_training_plan(self.profile, config, {axis: values})
             axes[axis] = values
         object.__setattr__(self, "target_codes", targets)
-        object.__setattr__(self, "benchmarks", tuple(self.benchmarks))
         object.__setattr__(self, "allowed_axes", MappingProxyType(axes))
+
+    @property
+    def strategy(self) -> StrategySpec | None:
+        return self.profile.strategy
+
+    @property
+    def benchmarks(self) -> tuple[BenchmarkSpec, ...]:
+        return self.profile.benchmarks
 
     def to_dict(self) -> dict[str, object]:
         return {
             "experiment_id": self.experiment_id, "target_codes": list(self.target_codes),
-            "strategy": asdict(self.strategy), "benchmarks": [asdict(item) for item in self.benchmarks],
+            "profile": _profile_payload(self.profile), "profile_hash": self.profile.profile_hash(),
             "allowed_axes": {axis: list(values) for axis, values in self.allowed_axes.items()},
             "start_date": self.start_date.isoformat(), "as_of_date": self.as_of_date.isoformat(),
         }
@@ -90,49 +109,60 @@ class ExperimentSpec:
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, object]) -> "ExperimentSpec":
-        strategy = dict(payload["strategy"])
-        strategy["config"] = _config(strategy["config"])
-        return cls(payload["experiment_id"], tuple(payload["target_codes"]), StrategySpec(**strategy),
-                   tuple(BenchmarkSpec(**item) for item in payload["benchmarks"]),
+        from .strategy_profiles import StrategyProfileSpec, profile_for_id
+
+        if "profile" in payload:
+            declared = payload["profile"]
+            if not isinstance(declared, Mapping):
+                raise ValueError("experiment profile provenance must be a mapping")
+            profile = profile_for_id(declared.get("profile_id"))
+            if (dict(declared) != _profile_payload(profile)
+                    or payload.get("profile_hash") != profile.profile_hash()):
+                raise ValueError("experiment profile provenance differs from registry")
+        else:
+            strategy = dict(payload["strategy"])
+            strategy["config"] = _config(strategy["config"])
+            profile = StrategyProfileSpec(
+                "legacy_unprofiled", "0", StrategySpec(**strategy),
+                tuple(BenchmarkSpec(**item) for item in payload["benchmarks"]),
+                ("grid_only", "trend_only"), frozenset({"legacy_manifest"}),
+            )
+        return cls(payload["experiment_id"], tuple(payload["target_codes"]), profile,
                    payload["allowed_axes"], date.fromisoformat(payload["start_date"]),
                    date.fromisoformat(payload["as_of_date"]))
 
 
 _TARGETED_STUDIES = MappingProxyType({
-    "hk_internet": ("513330.SH", ("step_pct", "unit_pct", "atr_stop_multiple", "cooldown_sessions", "stop_n", "require_macd_bullish")),
-    "chinext_reentry": ("159915.SZ", ("cooldown_sessions", "atr_stop_multiple", "stop_n", "require_macd_bullish", "amount_ratio_min")),
-    "star50_extreme_window": ("588000.SH", ("atr_stop_multiple", "cooldown_sessions", "stop_n")),
+    "hk_internet": ("513330.SH", ("step_pct", "unit_pct", "atr_stop_multiple", "cooldown_sessions")),
+    "chinext_reentry": ("159915.SZ", ("cooldown_sessions", "atr_stop_multiple")),
+    "star50_extreme_window": ("588000.SH", ("atr_stop_multiple", "cooldown_sessions")),
 })
 
 
 def targeted_study(name: str, *, target_codes=None, start_date=date(2021, 1, 1),
                    as_of_date=date(2026, 9, 11)) -> ExperimentSpec:
     """Construct one immutable, single-ETF study without universe overrides."""
+    from .strategy_profiles import GRID_PLUS_OPTIONAL_TREND_PROFILE
+
     if name not in _TARGETED_STUDIES:
         raise ValueError("unknown targeted study")
     code, axes = _TARGETED_STUDIES[name]
     if target_codes is not None and tuple(target_codes) != (code,):
         raise ValueError("target code does not match the targeted study")
-    return ExperimentSpec(name, (code,), FULL_ADAPTIVE_SPEC, (BUY_AND_HOLD_SPEC,),
+    return ExperimentSpec(name, (code,), GRID_PLUS_OPTIONAL_TREND_PROFILE,
                           {axis: APPROVED_EXPERIMENT_AXES[axis] for axis in axes},
                           start_date, as_of_date)
 
 
 def study_training_plan(spec: ExperimentSpec) -> dict:
     """Screen each family's bounded Cartesian surface; freeze every other field."""
+    from .strategy_profiles import profile_training_plan
+
     canonical = targeted_study(spec.experiment_id, target_codes=spec.target_codes,
                                start_date=spec.start_date, as_of_date=spec.as_of_date)
     if spec != canonical:
         raise ValueError("targeted study configuration differs from its declaration")
-    plans = {}
-    for family, section in (("grid_only", "grid"), ("trend_only", "trend")):
-        baseline = getattr(spec.strategy.config, section)
-        axes = tuple(axis for axis in spec.allowed_axes if axis in asdict(baseline))
-        candidates = tuple(parameters.ParameterCandidate(
-            replace(spec.strategy.config, **{section: replace(baseline, **dict(zip(axes, values)))}), family,
-        ) for values in product(*(spec.allowed_axes[axis] for axis in axes)))
-        plans[family] = (candidates, axes, ())
-    return plans
+    return profile_training_plan(spec.profile, spec.strategy.config, spec.allowed_axes)
 
 
 def star50_diagnostic(spec: ExperimentSpec, source: Path) -> dict:

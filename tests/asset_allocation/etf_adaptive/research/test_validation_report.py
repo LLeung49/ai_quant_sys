@@ -2,6 +2,7 @@ import json
 from dataclasses import asdict, replace
 from datetime import date
 from decimal import Decimal
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
@@ -107,26 +108,39 @@ def _recorded_result() -> InstrumentValidationResult:
             "screened_axes": {"grid": ["step_pct"], "trend": ["stop_n"]},
         },
     )
-    spec = ExperimentSpec("recorded-test", ("159915.SZ",), FULL_ADAPTIVE_SPEC,
-                          (BUY_AND_HOLD_SPEC,), APPROVED_EXPERIMENT_AXES,
-                          date(2025, 1, 2), result.as_of_date)
-    return bind_experiment(result, spec)
+    legacy_payload = {
+        "experiment_id": "recorded-test",
+        "target_codes": ["159915.SZ"],
+        "strategy": asdict(FULL_ADAPTIVE_SPEC),
+        "benchmarks": [asdict(BUY_AND_HOLD_SPEC)],
+        "allowed_axes": {axis: list(values) for axis, values in APPROVED_EXPERIMENT_AXES.items()},
+        "start_date": "2025-01-02",
+        "as_of_date": result.as_of_date.isoformat(),
+    }
+    rebound = bind_experiment(result, ExperimentSpec.from_dict(legacy_payload))
+    manifest = dict(rebound.run_manifest)
+    legacy_hash = sha256(json.dumps(
+        legacy_payload, sort_keys=True, separators=(",", ":"), allow_nan=False,
+    ).encode("utf-8")).hexdigest()
+    manifest.update(experiment=legacy_payload, experiment_hash=legacy_hash)
+    return replace(rebound, run_manifest=manifest)
 
 
-def test_write_validation_artifacts_publishes_recorded_risk_adjusted_decision_report(tmp_path: Path) -> None:
-    # Break caught: omitting persisted decision/Sortino/exposure evidence makes a report look actionable without support.
+def test_legacy_validation_artifacts_preserve_provenance_but_fail_closed(tmp_path: Path) -> None:
+    # Break caught: historical strategy/baseline metadata must not authorize a new formal publication.
     manifest = write_validation_artifacts(_recorded_result(), tmp_path / "159915.SZ")
 
     summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
     report = manifest.report_markdown.read_text(encoding="utf-8")
 
-    assert summary["decision"] == {"conclusion": "passed", "blockers": []}
-    assert summary["comparison"]["strategy"]["sortino"] == 0.70
-    assert summary["comparison"]["differences"]["sortino"] == pytest.approx(0.30)
-    assert summary["execution"]["strategy"]["exposure_ratio"] == 2 / 3
+    assert summary["decision"] == {
+        "conclusion": "do_not_trade", "blockers": ["experiment_metadata"],
+    }
+    assert summary["comparison"] is None
+    assert summary["execution"] is None
     assert summary["data_provenance"]["data_cutoff"] == "2026-09-08"
     assert "风险调整后 ETF 样本外验证决策报告" in report
-    assert "Sortino" in report
+    assert "experiment evidence" in report
     assert "事件归因" in report
     assert manifest.chart_png.exists() and manifest.chart_png.stat().st_size > 1_000
     assert (tmp_path / "159915.SZ" / "charts" / "wf_000.png").exists()
@@ -199,8 +213,7 @@ def test_report_exports_candidate_scores_and_reconciled_attribution(tmp_path):
     assert len(attribution) == 3
     assert attribution[0]["reconciliation_error"] == pytest.approx(0.0)
     report = manifest.report_markdown.read_text(encoding="utf-8")
-    assert "Largest absolute contributor: trend_return" in report
-    assert "trend entry/exit" in report
+    assert "experiment evidence" in report
     states = list(csv.DictReader(manifest.daily_state_csv.open(encoding="utf-8")))
     assert len(states) == 9
     assert states[0]["actual_exposure"] == "0.0"
@@ -260,6 +273,20 @@ def test_formal_report_without_experiment_metadata_is_do_not_trade(tmp_path):
     assert summary["activation_eligible"] is False
 
 
+def test_legacy_experiment_manifest_deserializes_but_cannot_publish_formally(tmp_path):
+    result = _recorded_result()
+    legacy_payload = result.run_manifest["experiment"]
+
+    spec = ExperimentSpec.from_dict(legacy_payload)
+    manifest = write_validation_artifacts(result, tmp_path / "report")
+    summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
+
+    assert spec.profile.profile_id == "legacy_unprofiled"
+    assert summary["decision"]["conclusion"] == "do_not_trade"
+    assert "experiment_metadata" in summary["decision"]["blockers"]
+    assert summary["activation_eligible"] is False
+
+
 @pytest.mark.parametrize("change", ["window_hash", "attribution", "target", "selected_config", "unrun_policy", "unrun_benchmark", "undeclared_cost"])
 def test_report_rejects_inconsistent_recorded_provenance(tmp_path, monkeypatch, change):
     monkeypatch.setattr("asset_allocation.etf_adaptive.research.validation_report._plot", lambda *args: None)
@@ -276,13 +303,13 @@ def test_report_rejects_inconsistent_recorded_provenance(tmp_path, monkeypatch, 
         result.run_manifest["selected_configs"][0]["config_hash"] = "forged"
     elif change == "unrun_policy":
         from asset_allocation.etf_adaptive.research.strategy_specs import GRID_ONLY_SPEC
-        spec = replace(spec, strategy=GRID_ONLY_SPEC)
+        spec = replace(spec, profile=replace(spec.profile, strategy=GRID_ONLY_SPEC))
     elif change == "unrun_benchmark":
         from asset_allocation.etf_adaptive.research.strategy_specs import FIXED_HALF_SPEC
-        spec = replace(spec, benchmarks=(FIXED_HALF_SPEC,))
+        spec = replace(spec, profile=replace(spec.profile, benchmarks=(FIXED_HALF_SPEC,)))
     elif change == "undeclared_cost":
         config = replace(spec.strategy.config, cost=replace(spec.strategy.config.cost, slippage_bps=9.0))
-        spec = replace(spec, strategy=replace(spec.strategy, config=config))
+        spec = replace(spec, profile=replace(spec.profile, strategy=replace(spec.strategy, config=config)))
     result = bind_experiment(result, spec)
     manifest = write_validation_artifacts(result, tmp_path / "report")
     summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
@@ -297,7 +324,8 @@ def test_experiment_allows_provider_to_advance_to_first_aligned_session(tmp_path
     result = bind_experiment(result, spec)
     manifest = write_validation_artifacts(result, tmp_path / "report")
     summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
-    assert summary["decision"]["conclusion"] == "passed"
+    assert summary["decision"]["conclusion"] == "do_not_trade"
+    assert "experiment_metadata" in summary["decision"]["blockers"]
 
 
 @pytest.mark.parametrize("change", [

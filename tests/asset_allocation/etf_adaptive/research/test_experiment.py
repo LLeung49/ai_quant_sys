@@ -1,9 +1,31 @@
 from dataclasses import replace
 from datetime import date
+import json
 
 import pytest
 
-from asset_allocation.etf_adaptive.research.strategy_specs import FULL_ADAPTIVE_SPEC, BUY_AND_HOLD_SPEC
+from asset_allocation.etf_adaptive.research.experiment import ExperimentSpec, targeted_study
+from asset_allocation.etf_adaptive.research.strategy_profiles import (
+    GRID_CORE_PROFILE,
+    GRID_PLUS_OPTIONAL_TREND_PROFILE,
+)
+
+
+def test_experiment_serializes_the_declared_profile_and_hash() -> None:
+    spec = ExperimentSpec("industry-grid", ("515450.SH",), GRID_CORE_PROFILE,
+                          {"step_pct": (0.02,)}, date(2021, 1, 1), date(2026, 9, 11))
+
+    payload = json.loads(json.dumps(spec.to_dict()))
+
+    assert payload["profile"]["profile_id"] == "grid_core"
+    assert payload["profile_hash"] == GRID_CORE_PROFILE.profile_hash()
+    assert ExperimentSpec.from_dict(payload) == spec
+
+
+def test_experiment_rejects_axis_not_owned_by_its_profile() -> None:
+    with pytest.raises(ValueError, match="profile does not permit axis"):
+        ExperimentSpec("bad", ("515450.SH",), GRID_CORE_PROFILE,
+                       {"stop_n": (2.0,)}, date(2021, 1, 1), date(2026, 9, 11))
 
 
 def test_targeted_study_manifest_cannot_include_nonprioritized_code():
@@ -17,9 +39,9 @@ def test_targeted_study_manifest_cannot_include_nonprioritized_code():
 
 
 @pytest.mark.parametrize("name,code,axes", [
-    ("hk_internet", "513330.SH", {"step_pct", "unit_pct", "atr_stop_multiple", "cooldown_sessions", "stop_n", "require_macd_bullish"}),
-    ("chinext_reentry", "159915.SZ", {"cooldown_sessions", "atr_stop_multiple", "stop_n", "require_macd_bullish", "amount_ratio_min"}),
-    ("star50_extreme_window", "588000.SH", {"atr_stop_multiple", "cooldown_sessions", "stop_n"}),
+    ("hk_internet", "513330.SH", {"step_pct", "unit_pct", "atr_stop_multiple", "cooldown_sessions"}),
+    ("chinext_reentry", "159915.SZ", {"cooldown_sessions", "atr_stop_multiple"}),
+    ("star50_extreme_window", "588000.SH", {"atr_stop_multiple", "cooldown_sessions"}),
 ])
 def test_targeted_candidates_keep_undeclared_fields_frozen(name, code, axes):
     from dataclasses import asdict
@@ -82,8 +104,8 @@ def test_star50_diagnostic_records_extreme_window_but_cannot_infer_contributor(t
 def _spec(**changes):
     from asset_allocation.etf_adaptive.research import experiment
     values = dict(experiment_id="bounded", target_codes=("513330.SH",),
-                  strategy=FULL_ADAPTIVE_SPEC, benchmarks=(BUY_AND_HOLD_SPEC,),
-                  allowed_axes={"stop_n": (1.5, 2.0, 2.5)},
+                  profile=GRID_CORE_PROFILE,
+                  allowed_axes={"step_pct": (0.01, 0.02, 0.03)},
                   start_date=date(2020, 1, 1), as_of_date=date(2026, 9, 8))
     values.update(changes)
     return experiment.ExperimentSpec(**values)
@@ -92,11 +114,10 @@ def _spec(**changes):
 @pytest.mark.parametrize("changes,match", [
     ({"target_codes": ("UNKNOWN",)}, "target"),
     ({"allowed_axes": {"unknown": (1,)}}, "allowed axis"),
-    ({"allowed_axes": {"stop_n": (9.0,)}}, "allowed axis"),
-    ({"allowed_axes": {"require_macd_bullish": (1,)}}, "allowed axis"),
-    ({"allowed_axes": {"stop_n": ()}}, "allowed axis"),
+    ({"allowed_axes": {"step_pct": (9.0,)}}, "allowed axis"),
+    ({"allowed_axes": {"step_pct": (False,)}}, "allowed axis"),
+    ({"allowed_axes": {"step_pct": ()}}, "allowed axis"),
     ({"target_codes": ()}, "target"),
-    ({"benchmarks": ()}, "benchmark"),
     ({"start_date": date(2027, 1, 1)}, "date"),
 ])
 def test_experiment_rejects_unapproved_target_or_axis(changes, match):
@@ -105,14 +126,21 @@ def test_experiment_rejects_unapproved_target_or_axis(changes, match):
 
 
 def test_experiment_hash_is_canonical_and_immutable():
-    axes = {"stop_n": (1.5, 2.0), "require_macd_bullish": (False, True)}
+    axes = {"step_pct": (0.01, 0.02), "unit_pct": (0.05, 0.1)}
     spec = _spec(allowed_axes=axes)
     same = _spec(allowed_axes=dict(reversed(list(axes.items()))))
     assert spec.experiment_hash() == same.experiment_hash()
-    axes["stop_n"] = (3.0,)
+    axes["step_pct"] = (0.03,)
     assert spec.experiment_hash() == same.experiment_hash()
     with pytest.raises(TypeError):
-        spec.allowed_axes["stop_n"] = (3.0,)
+        spec.allowed_axes["step_pct"] = (0.03,)
     assert replace(spec, as_of_date=date(2026, 9, 9)).experiment_hash() != spec.experiment_hash()
-    assert replace(spec, strategy=replace(spec.strategy, version="2")).experiment_hash() != spec.experiment_hash()
-    assert replace(spec, benchmarks=(replace(BUY_AND_HOLD_SPEC, target_weight=0.5),)).experiment_hash() != spec.experiment_hash()
+    assert replace(spec, profile=replace(spec.profile, version="2")).experiment_hash() != spec.experiment_hash()
+
+
+def test_targeted_study_explicitly_selects_optional_trend_profile() -> None:
+    study = ExperimentSpec.from_dict(targeted_study("hk_internet").to_dict())
+
+    assert study.profile == GRID_PLUS_OPTIONAL_TREND_PROFILE
+    assert study.strategy == study.profile.strategy
+    assert study.benchmarks == study.profile.benchmarks
