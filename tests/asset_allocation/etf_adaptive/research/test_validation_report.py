@@ -1,4 +1,5 @@
 import json
+from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import asdict, replace
 from datetime import date
@@ -13,8 +14,16 @@ from asset_allocation.etf_adaptive.config import AdaptiveConfig
 from asset_allocation.etf_adaptive.research.attribution import build_excess_attribution
 from asset_allocation.etf_adaptive.research.candidate_scoring import TrainingCandidateScore
 from asset_allocation.etf_adaptive.research.experiment import ExperimentSpec, bind_experiment, APPROVED_EXPERIMENT_AXES
-from asset_allocation.etf_adaptive.research.strategy_profiles import GRID_PLUS_OPTIONAL_TREND_PROFILE
-from asset_allocation.etf_adaptive.research.strategy_specs import FULL_ADAPTIVE_SPEC, BUY_AND_HOLD_SPEC
+from asset_allocation.etf_adaptive.research.strategy_profiles import (
+    CORE_HOLD_REBALANCE_PROFILE,
+    GRID_CORE_PROFILE,
+    GRID_PLUS_OPTIONAL_TREND_PROFILE,
+)
+from asset_allocation.etf_adaptive.research.strategy_specs import (
+    BUY_AND_HOLD_SPEC,
+    FULL_ADAPTIVE_SPEC,
+    benchmark_provenance_hash,
+)
 from asset_allocation.etf_adaptive.research.decision import DecisionSummary, ResearchConclusion, ResearchEvidence
 from asset_allocation.etf_adaptive.research.instrument_validation import (
     InstrumentValidationResult, TrainingSurfaceSummary, ValidationScope,
@@ -25,7 +34,14 @@ from asset_allocation.etf_adaptive.research.validation_report import (
     validation_publication_decision,
     write_validation_artifacts,
 )
-from asset_allocation.etf_adaptive.state import BacktestEvent, DailyNav, DailyStrategyObservation, Regime
+from asset_allocation.etf_adaptive.state import (
+    BacktestEvent,
+    BacktestRequest,
+    BacktestResult,
+    DailyNav,
+    DailyStrategyObservation,
+    Regime,
+)
 
 
 def _metrics(*, annual_return: float, sortino: float, total_cost: float) -> PerformanceMetrics:
@@ -138,6 +154,274 @@ def _legacy_recorded_result() -> InstrumentValidationResult:
     ).encode("utf-8")).hexdigest()
     manifest.update(experiment=legacy_payload, experiment_hash=legacy_hash)
     return replace(rebound, run_manifest=manifest)
+
+
+def _optional_trend_manifest(result: InstrumentValidationResult) -> Mapping[str, object]:
+    spec = ExperimentSpec(
+        "optional-trend-report", (result.target.stock_code,),
+        GRID_PLUS_OPTIONAL_TREND_PROFILE, {"step_pct": (0.02,)},
+        date(2025, 1, 2), result.as_of_date,
+    )
+    return bind_experiment(result, spec).run_manifest
+
+
+def _profiled_recorded_result(profile=GRID_PLUS_OPTIONAL_TREND_PROFILE) -> InstrumentValidationResult:
+    from asset_allocation.etf_adaptive.research.instrument_validation import _run_manifest
+
+    result = _recorded_result()
+    config = AdaptiveConfig.default()
+    windows = []
+    for window in result.windows:
+        request = BacktestRequest(
+            result.target.stock_code,
+            window.strategy_daily_nav[0].total,
+            window.validation_start,
+            window.strategy_daily_nav[-1].nav_date,
+            window.validation_start,
+        )
+        benchmark_runs = {
+            "buy_and_hold": BacktestResult(
+                request, window.benchmark_events, window.benchmark_daily_nav,
+            ),
+            "fixed_half_hold": BacktestResult(
+                request, window.strategy_events, window.strategy_daily_nav,
+            ),
+        }
+        updates = {
+            "profile_id": profile.profile_id,
+            "benchmark_runs": benchmark_runs,
+            "execution_config": config,
+        }
+        if profile is CORE_HOLD_REBALANCE_PROFILE:
+            updates.update(
+                selected_config=None,
+                candidate_scores=(),
+                selected_scores={},
+                screened_axes={},
+                strategy_observations=(),
+                excess_attribution=None,
+                grid_training_surface=(),
+                trend_training_surface=(),
+            )
+        windows.append(replace(window, **updates))
+    result = replace(result, windows=tuple(windows))
+    manifest = _run_manifest(
+        result.target,
+        date(2025, 1, 2),
+        result.as_of_date,
+        object(),
+        result.windows[0].market_bars,
+        result.windows,
+        profile=profile,
+    )
+    result = replace(result, run_manifest=manifest)
+    spec = ExperimentSpec(
+        f"{profile.profile_id}-report", (result.target.stock_code,), profile,
+        {"step_pct": (0.02,)} if profile.selection_families else {},
+        date(2025, 1, 2), result.as_of_date,
+    )
+    if profile.strategy is None:
+        manifest = dict(result.run_manifest)
+        manifest.update(
+            experiment=spec.to_dict(),
+            experiment_hash=spec.experiment_hash(),
+            strategy_spec=None,
+            benchmark_specs=[asdict(item) for item in spec.benchmarks],
+            experiment_windows=[
+                {
+                    "window_id": window.window_id,
+                    "execution_cost_config": asdict(window.cost_config),
+                    "screened_axes": window.screened_axes,
+                    "strategy_spec": None,
+                    "benchmark_specs": [
+                        {
+                            **asdict(item),
+                            "spec_hash": item.spec_hash(),
+                            "config": asdict(window.execution_config),
+                            "provenance_hash": benchmark_provenance_hash(
+                                item, window.execution_config,
+                            ),
+                        }
+                        for item in spec.benchmarks
+                    ],
+                    "selected_scores": {},
+                    "candidate_scores": [],
+                    "excess_attribution": None,
+                }
+                for window in result.windows
+            ],
+        )
+        return replace(result, run_manifest=manifest)
+    return bind_experiment(result, spec)
+
+
+def test_optional_trend_report_publishes_required_integrated_diagnostics(tmp_path) -> None:
+    # Break caught: an optional-TREND report can omit its profile identity and observed mode diagnostics.
+    recorded = _profiled_recorded_result()
+    result = replace(recorded, run_manifest=_optional_trend_manifest(recorded))
+
+    summary = json.loads(
+        write_validation_artifacts(result, tmp_path / "report").summary_json.read_text()
+    )
+
+    assert summary["strategy_profile"]["profile_id"] == "grid_plus_optional_trend"
+    assert summary["trend_diagnostics"]["active_sessions"] >= 0
+    assert "incremental_execution_cost" in summary["trend_diagnostics"]
+
+
+def test_optional_trend_report_is_do_not_trade_when_attribution_is_missing(tmp_path) -> None:
+    # Break caught: missing optional-TREND attribution can fall through to a generic or publishable decision.
+    recorded = _profiled_recorded_result()
+    result = replace(recorded, run_manifest=_optional_trend_manifest(recorded))
+    result = replace(
+        result,
+        windows=(replace(result.windows[0], excess_attribution=None), *result.windows[1:]),
+    )
+
+    summary = json.loads(
+        write_validation_artifacts(result, tmp_path / "report").summary_json.read_text()
+    )
+
+    assert summary["decision"]["conclusion"] == "do_not_trade"
+    assert "profile_mode_attribution" in summary["decision"]["blockers"]
+
+
+def test_complete_recorded_profile_execution_removes_unexecuted_benchmark_blocker(tmp_path) -> None:
+    # Break caught: declarations alone or a legacy one-benchmark assumption can reject actual OOS ledgers.
+    result = _profiled_recorded_result()
+
+    summary = json.loads(
+        write_validation_artifacts(result, tmp_path / "report").summary_json.read_text()
+    )
+
+    assert "unexecuted_benchmark_evidence" not in summary["decision"]["blockers"]
+    assert summary["decision"]["conclusion"] == "passed"
+    assert summary["strategy_profile"] == {
+        "profile_id": "grid_plus_optional_trend",
+        "version": "1",
+        "profile_hash": "f4f9eb95055b94fd1694c9f43501573cd2e7eb3f2e5590104fa2a83fd6ebf8b1",
+        "executable_strategy_id": "full_adaptive",
+        "benchmark_hashes": {
+            "buy_and_hold": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+            "fixed_half_hold": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+        },
+    }
+    assert summary["trend_diagnostics"]["active_sessions"] == 6
+    assert summary["trend_diagnostics"]["execution_cost"] == pytest.approx(3.0)
+    assert summary["trend_diagnostics"]["incremental_execution_cost"] == pytest.approx(2.4)
+
+
+def test_missing_recorded_profile_benchmark_run_remains_fail_closed() -> None:
+    # Break caught: manifest declarations can be mistaken for proof that every benchmark executed.
+    result = _profiled_recorded_result()
+    window = result.windows[0]
+    result = replace(
+        result,
+        windows=(
+            replace(window, benchmark_runs={"buy_and_hold": window.benchmark_runs["buy_and_hold"]}),
+            *result.windows[1:],
+        ),
+    )
+
+    decision = validation_publication_decision(result)
+
+    assert decision["conclusion"] == "do_not_trade"
+    assert "unexecuted_benchmark_evidence" in decision["blockers"]
+
+
+@pytest.mark.parametrize("forgery", ("profile_hash", "benchmark_provenance"))
+def test_forged_recorded_profile_execution_remains_fail_closed(forgery) -> None:
+    # Break caught: self-declared profile or benchmark metadata can be accepted without ledger reconciliation.
+    result = _profiled_recorded_result()
+    manifest = deepcopy(result.run_manifest)
+    if forgery == "profile_hash":
+        manifest["profile_hash"] = "forged"
+    else:
+        manifest["execution_windows"][0]["benchmarks"][0]["provenance_hash"] = "forged"
+
+    decision = validation_publication_decision(replace(result, run_manifest=manifest))
+
+    assert decision["conclusion"] == "do_not_trade"
+    assert "unexecuted_benchmark_evidence" in decision["blockers"]
+
+
+def test_unreconciled_optional_trend_attribution_uses_profile_blocker() -> None:
+    # Break caught: finite but forged mode returns can bypass the optional-TREND evidence gate.
+    result = _profiled_recorded_result()
+    attribution = replace(
+        result.windows[0].excess_attribution,
+        trend_return=result.windows[0].excess_attribution.trend_return + 0.1,
+    )
+    result = replace(
+        result,
+        windows=(replace(result.windows[0], excess_attribution=attribution), *result.windows[1:]),
+    )
+
+    decision = validation_publication_decision(result)
+
+    assert decision["conclusion"] == "do_not_trade"
+    assert "profile_mode_attribution" in decision["blockers"]
+
+
+def test_low_optional_trend_activity_is_diagnostic_only(tmp_path) -> None:
+    # Break caught: a zero active-session diagnostic can be promoted into an unstated trading gate.
+    result = _profiled_recorded_result()
+    windows = []
+    for window in result.windows:
+        observations = tuple(replace(item, regime=Regime.GRID) for item in window.strategy_observations)
+        windows.append(replace(
+            window,
+            strategy_observations=observations,
+            excess_attribution=build_excess_attribution(
+                window.strategy_daily_nav,
+                window.benchmark_daily_nav,
+                observations,
+                window.strategy_events,
+                execution_cost=window.strategy_metrics.total_cost,
+            ),
+        ))
+    result = replace(result, windows=tuple(windows))
+    result = bind_experiment(result, ExperimentSpec.from_dict(result.run_manifest["experiment"]))
+
+    summary = json.loads(
+        write_validation_artifacts(result, tmp_path / "low-trend").summary_json.read_text()
+    )
+
+    assert summary["trend_diagnostics"]["active_sessions"] == 0
+    assert summary["decision"]["conclusion"] == "passed"
+    assert "profile_mode_attribution" not in summary["decision"]["blockers"]
+
+
+@pytest.mark.parametrize("profile", (GRID_CORE_PROFILE, CORE_HOLD_REBALANCE_PROFILE))
+def test_non_optional_profiles_publish_null_trend_diagnostics(tmp_path, profile) -> None:
+    result = _profiled_recorded_result(profile)
+
+    summary = json.loads(
+        write_validation_artifacts(result, tmp_path / profile.profile_id).summary_json.read_text()
+    )
+
+    assert summary["trend_diagnostics"] is None
+
+
+def test_core_hold_report_keeps_candidate_surface_empty(tmp_path) -> None:
+    import csv
+
+    result = _profiled_recorded_result(CORE_HOLD_REBALANCE_PROFILE)
+    forged_candidate = _recorded_result().windows[0].candidate_scores[0]
+    result = replace(
+        result,
+        windows=(
+            replace(result.windows[0], candidate_scores=(forged_candidate,)),
+            *result.windows[1:],
+        ),
+    )
+
+    artifacts = write_validation_artifacts(result, tmp_path / "core")
+
+    assert list(csv.DictReader(artifacts.candidate_scores_csv.open(encoding="utf-8"))) == []
+    summary = json.loads(artifacts.summary_json.read_text())
+    assert summary["strategy_profile"]["executable_strategy_id"] is None
+    assert summary["decision"]["conclusion"] == "do_not_trade"
 
 
 def test_validation_artifacts_fail_closed_without_all_profile_benchmarks(tmp_path: Path) -> None:

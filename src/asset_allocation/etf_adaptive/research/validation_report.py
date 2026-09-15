@@ -20,13 +20,22 @@ from pathlib import Path
 from typing import Iterable
 from uuid import uuid4
 
+from ..config import AdaptiveConfig
 from .attribution import build_excess_attribution, build_result_attribution
 from .decision import ResearchConclusion
 from .experiment import ExperimentSpec, experiment_evidence
-from .instrument_validation import InstrumentValidationResult, ValidationWindowResult
+from .instrument_validation import (
+    InstrumentValidationResult,
+    ValidationWindowResult,
+    _recorded_performance,
+)
 from .metrics import PerformanceMetrics
-from .strategy_profiles import GRID_PLUS_OPTIONAL_TREND_PROFILE
-from .strategy_specs import BUY_AND_HOLD_SPEC
+from .strategy_profiles import (
+    GRID_PLUS_OPTIONAL_TREND_PROFILE,
+    StrategyProfileSpec,
+    profile_for_id,
+)
+from .strategy_specs import BUY_AND_HOLD_SPEC, benchmark_provenance_hash
 
 
 @dataclass(frozen=True)
@@ -63,6 +72,137 @@ def _metrics_payload(metrics: PerformanceMetrics | None) -> dict[str, float] | N
     if metrics is None or any(not _finite(getattr(metrics, name)) for name in _METRIC_NAMES):
         return None
     return {name: getattr(metrics, name) for name in _METRIC_NAMES}
+
+
+def _profile_spec(result: InstrumentValidationResult) -> ExperimentSpec | None:
+    manifest = result.run_manifest
+    try:
+        if not isinstance(manifest, Mapping):
+            return None
+        return ExperimentSpec.from_dict(manifest["experiment"])
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return None
+
+
+def _manifest_profile(result: InstrumentValidationResult) -> StrategyProfileSpec | None:
+    manifest = result.run_manifest
+    try:
+        if not isinstance(manifest, Mapping):
+            return None
+        profile = profile_for_id(manifest["profile_id"])
+        if (
+            manifest["profile_hash"] != profile.profile_hash()
+            or any(window.profile_id != profile.profile_id for window in result.windows)
+        ):
+            return None
+        return profile
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return None
+
+
+def _strategy_profile_payload(result: InstrumentValidationResult) -> dict[str, object] | None:
+    spec = _profile_spec(result)
+    if spec is None or spec.profile.profile_id == "legacy_unprofiled":
+        return None
+    profile = _manifest_profile(result)
+    if profile is None or profile != spec.profile:
+        return None
+    strategy_id = profile.strategy.strategy_id if profile.strategy is not None else None
+    return {
+        "profile_id": profile.profile_id,
+        "version": profile.version,
+        "profile_hash": profile.profile_hash(),
+        "executable_strategy_id": strategy_id,
+        "benchmark_hashes": {
+            benchmark.benchmark_id: benchmark.spec_hash()
+            for benchmark in profile.benchmarks
+        },
+    }
+
+
+def _profile_mode_attribution_is_complete(
+    result: InstrumentValidationResult,
+    spec: ExperimentSpec,
+) -> bool:
+    if not result.windows:
+        return False
+    try:
+        for window in result.windows:
+            if (
+                not window.strategy_observations
+                or window.excess_attribution is None
+                or window.strategy_metrics is None
+                or window.training_end >= window.validation_start
+                or any(
+                    point.nav_date > spec.as_of_date or point.nav_date < spec.start_date
+                    for point in window.strategy_daily_nav
+                )
+            ):
+                return False
+            actual = build_excess_attribution(
+                window.strategy_daily_nav,
+                window.benchmark_daily_nav,
+                window.strategy_observations,
+                window.strategy_events,
+                execution_cost=window.strategy_metrics.total_cost,
+            )
+            if any(
+                not _finite(value)
+                or not isclose(value, asdict(actual)[name], abs_tol=1e-9)
+                for name, value in asdict(window.excess_attribution).items()
+            ):
+                return False
+    except (TypeError, ValueError, AttributeError, ArithmeticError):
+        return False
+    return True
+
+
+def _trend_diagnostics(result: InstrumentValidationResult) -> dict[str, object] | None:
+    spec = _profile_spec(result)
+    if (
+        spec is None
+        or spec.profile != GRID_PLUS_OPTIONAL_TREND_PROFILE
+        or _manifest_profile(result) != spec.profile
+        or not _profile_mode_attribution_is_complete(result, spec)
+    ):
+        return None
+    if (
+        not result.windows
+        or result.strategy_metrics is None
+        or result.benchmark_metrics is None
+        or any(
+            not window.strategy_observations
+            or window.excess_attribution is None
+            or _metrics_payload(window.strategy_metrics) is None
+            or _metrics_payload(window.benchmark_metrics) is None
+            for window in result.windows
+        )
+    ):
+        return None
+    return {
+        "active_sessions": sum(
+            observation.regime is not None
+            and observation.regime.value == "trend"
+            and observation.actual_exposure > 0.0
+            for window in result.windows
+            for observation in window.strategy_observations
+        ),
+        "trend_return": sum(window.excess_attribution.trend_return for window in result.windows),
+        "transition_return": sum(
+            window.excess_attribution.transition_return for window in result.windows
+        ),
+        "execution_cost": sum(
+            window.excess_attribution.execution_cost for window in result.windows
+        ),
+        "incremental_execution_cost": sum(
+            window.strategy_metrics.total_cost - window.benchmark_metrics.total_cost
+            for window in result.windows
+        ),
+        "max_drawdown_delta": (
+            result.strategy_metrics.max_drawdown - result.benchmark_metrics.max_drawdown
+        ),
+        "cvar5_delta": result.strategy_metrics.cvar5 - result.benchmark_metrics.cvar5,
+    }
 
 
 def _evidence_blockers(result: InstrumentValidationResult) -> list[str]:
@@ -127,10 +267,154 @@ def _evidence_blockers(result: InstrumentValidationResult) -> list[str]:
         or not isinstance(manifest["screened_axes"], dict)
     ):
         blockers.append("run_manifest")
-    if any(not isinstance(window.selected_config, dict) for window in result.windows):
+    spec = _profile_spec(result)
+    if spec is None or spec.profile.strategy is not None:
+        if any(not isinstance(window.selected_config, dict) for window in result.windows):
+            blockers.append("selected_config")
+    elif any(window.selected_config is not None for window in result.windows):
         blockers.append("selected_config")
+    if (
+        spec is not None
+        and spec.profile == GRID_PLUS_OPTIONAL_TREND_PROFILE
+        and not _profile_mode_attribution_is_complete(result, spec)
+    ):
+        blockers.append("profile_mode_attribution")
     blockers.extend(_experiment_blockers(result))
     return list(dict.fromkeys(blockers))
+
+
+def _profile_execution_is_complete(
+    result: InstrumentValidationResult,
+    profile: StrategyProfileSpec,
+) -> bool:
+    """Verify each declared benchmark against its recorded OOS ledger and manifest."""
+    manifest = result.run_manifest
+    try:
+        if not isinstance(manifest, Mapping) or _manifest_profile(result) != profile:
+            return False
+        recorded_windows = manifest["execution_windows"]
+        if not isinstance(recorded_windows, list) or len(recorded_windows) != len(result.windows):
+            return False
+        if [item.get("window_id") for item in recorded_windows] != [
+            window.window_id for window in result.windows
+        ]:
+            return False
+        declared = {benchmark.benchmark_id: benchmark for benchmark in profile.benchmarks}
+        if BUY_AND_HOLD_SPEC.benchmark_id not in declared:
+            return False
+        for window, recorded in zip(result.windows, recorded_windows):
+            config = window.execution_config
+            runs = window.benchmark_runs
+            if (
+                not isinstance(config, AdaptiveConfig)
+                or not isinstance(runs, Mapping)
+                or set(runs) != set(declared)
+                or window.cost_config != config.cost
+                or not isinstance(recorded, Mapping)
+                or recorded.get("window_id") != window.window_id
+                or recorded.get("profile_id") != profile.profile_id
+                or recorded.get("execution_config") != asdict(config)
+                or recorded.get("reference_benchmark_id") != BUY_AND_HOLD_SPEC.benchmark_id
+            ):
+                return False
+            if profile.strategy is None:
+                if window.selected_config is not None or recorded.get("strategy_spec") is not None:
+                    return False
+            else:
+                strategy = replace(profile.strategy, config=config)
+                expected_strategy = {**asdict(strategy), "spec_hash": strategy.spec_hash()}
+                if window.selected_config != asdict(config) or recorded.get("strategy_spec") != expected_strategy:
+                    return False
+            recorded_benchmarks = recorded.get("benchmarks")
+            if not isinstance(recorded_benchmarks, list) or len(recorded_benchmarks) != len(declared):
+                return False
+            by_id = {item.get("benchmark_id"): item for item in recorded_benchmarks
+                     if isinstance(item, Mapping)}
+            if set(by_id) != set(declared):
+                return False
+            for benchmark_id, benchmark in declared.items():
+                run = runs[benchmark_id]
+                nav = tuple(run.nav)
+                if (
+                    not nav
+                    or len(nav) < 2
+                    or nav[0].nav_date != window.validation_start
+                    or nav[-1].nav_date > result.as_of_date
+                    or len({point.nav_date for point in nav}) != len(nav)
+                    or tuple(sorted(point.nav_date for point in nav))
+                    != tuple(point.nav_date for point in nav)
+                    or run.request.stock_code != result.target.stock_code
+                    or run.request.trade_start_date != window.validation_start
+                ):
+                    return False
+                expected_benchmark = {
+                    **asdict(benchmark),
+                    "spec_hash": benchmark.spec_hash(),
+                    "provenance_hash": benchmark_provenance_hash(benchmark, config),
+                    "validation_start": nav[0].nav_date.isoformat(),
+                    "validation_end": nav[-1].nav_date.isoformat(),
+                    "nav_sessions": len(nav),
+                    "metrics": asdict(_recorded_performance(nav, run.events, config.cost)),
+                }
+                if dict(by_id[benchmark_id]) != expected_benchmark:
+                    return False
+            reference = runs[BUY_AND_HOLD_SPEC.benchmark_id]
+            if (
+                tuple(reference.nav) != window.benchmark_daily_nav
+                or tuple(reference.events) != window.benchmark_events
+            ):
+                return False
+            if profile.strategy is None:
+                strategy_benchmark_ids = set(runs) - {BUY_AND_HOLD_SPEC.benchmark_id}
+                if len(strategy_benchmark_ids) != 1:
+                    return False
+                deterministic = runs[strategy_benchmark_ids.pop()]
+                if (
+                    tuple(deterministic.nav) != window.strategy_daily_nav
+                    or tuple(deterministic.events) != window.strategy_events
+                ):
+                    return False
+    except (KeyError, TypeError, ValueError, AttributeError, ArithmeticError):
+        return False
+    return True
+
+
+def _core_experiment_evidence_matches(
+    result: InstrumentValidationResult,
+    spec: ExperimentSpec,
+) -> bool:
+    manifest = result.run_manifest
+    try:
+        expected_windows = []
+        for window in result.windows:
+            config = window.execution_config
+            expected_windows.append({
+                "window_id": window.window_id,
+                "execution_cost_config": asdict(window.cost_config),
+                "screened_axes": window.screened_axes,
+                "strategy_spec": None,
+                "benchmark_specs": [
+                    {
+                        **asdict(benchmark),
+                        "spec_hash": benchmark.spec_hash(),
+                        "config": asdict(config),
+                        "provenance_hash": benchmark_provenance_hash(benchmark, config),
+                    }
+                    for benchmark in spec.benchmarks
+                ],
+                "selected_scores": {},
+                "candidate_scores": [],
+                "excess_attribution": None,
+            })
+        return all((
+            manifest.get("experiment") == spec.to_dict(),
+            manifest.get("experiment_hash") == spec.experiment_hash(),
+            manifest.get("strategy_spec") is None,
+            manifest.get("benchmark_specs") == [asdict(item) for item in spec.benchmarks],
+            manifest.get("experiment_windows") == expected_windows,
+        ))
+    except (TypeError, ValueError, AttributeError):
+        return False
 
 
 def _experiment_blockers(result: InstrumentValidationResult) -> list[str]:
@@ -139,7 +423,10 @@ def _experiment_blockers(result: InstrumentValidationResult) -> list[str]:
     profile_blockers: list[str] = []
     try:
         spec = ExperimentSpec.from_dict(manifest["experiment"])
-        if spec.benchmarks != (BUY_AND_HOLD_SPEC,):
+        if (
+            spec.profile.profile_id != "legacy_unprofiled"
+            and not _profile_execution_is_complete(result, spec.profile)
+        ):
             profile_blockers.append("unexecuted_benchmark_evidence")
         if (result.target.stock_code not in spec.target_codes
                 or result.as_of_date != spec.as_of_date
@@ -150,23 +437,33 @@ def _experiment_blockers(result: InstrumentValidationResult) -> list[str]:
                      "config": window.selected_config} for window in result.windows
                 ]):
             return profile_blockers + ["experiment_metadata"]
-        # Task 3 introduces the remaining profile execution paths. Until then,
-        # this recorded-result interface can only certify its existing adaptive run.
-        if spec.profile != GRID_PLUS_OPTIONAL_TREND_PROFILE:
-            return profile_blockers + ["experiment_metadata"]
-        expected = experiment_evidence(result, spec)
-        if any(manifest.get(key) != value for key, value in expected.items()):
-            return profile_blockers + ["experiment_metadata"]
-        for window, recorded in zip(result.windows, expected["experiment_windows"]):
-            strategy = recorded["strategy_spec"]
-            if (strategy is None or strategy["config"] != window.selected_config
-                    or strategy["config_hash"] != window.config_hash):
+        if spec.profile.strategy is None:
+            if not _core_experiment_evidence_matches(result, spec):
                 return profile_blockers + ["experiment_metadata"]
-            _validate_execution_boundaries(window, manifest["screened_axes"], spec)
+        else:
+            expected = experiment_evidence(result, spec)
+            if any(manifest.get(key) != value for key, value in expected.items()):
+                return profile_blockers + ["experiment_metadata"]
+            for window, recorded in zip(result.windows, expected["experiment_windows"]):
+                strategy = recorded["strategy_spec"]
+                if (strategy is None or strategy["config"] != window.selected_config
+                        or strategy["config_hash"] != window.config_hash):
+                    return profile_blockers + ["experiment_metadata"]
+                _validate_execution_boundaries(window, manifest["screened_axes"], spec)
     except (KeyError, TypeError, ValueError, AttributeError):
         return profile_blockers + ["experiment_metadata"]
     blockers = list(profile_blockers)
     for window in result.windows:
+        if spec.profile.strategy is None:
+            if (
+                window.candidate_scores
+                or window.selected_scores
+                or window.strategy_observations
+                or window.excess_attribution is not None
+                or window.training_end >= window.validation_start
+            ):
+                blockers.append("experiment_metadata")
+            continue
         if not window.candidate_scores or not window.selected_scores:
             blockers.append("candidate_scores")
         else:
@@ -189,6 +486,8 @@ def _experiment_blockers(result: InstrumentValidationResult) -> list[str]:
         if (not window.strategy_observations or window.excess_attribution is None
                 or window.training_end >= window.validation_start):
             blockers.append("daily_state_attribution")
+            if spec.profile == GRID_PLUS_OPTIONAL_TREND_PROFILE:
+                blockers.append("profile_mode_attribution")
             continue
         try:
             if any(point.nav_date > spec.as_of_date or point.nav_date < spec.start_date
@@ -204,6 +503,8 @@ def _experiment_blockers(result: InstrumentValidationResult) -> list[str]:
                 raise ValueError("recorded attribution does not reconcile")
         except (TypeError, ValueError, AttributeError, ArithmeticError):
             blockers.append("daily_state_attribution")
+            if spec.profile == GRID_PLUS_OPTIONAL_TREND_PROFILE:
+                blockers.append("profile_mode_attribution")
     return blockers
 
 
@@ -216,7 +517,12 @@ def _validate_execution_boundaries(window, manifest_axes, spec) -> None:
         family: "grid" if family == "grid_only" else "trend"
         for family in spec.profile.selection_families
     }
-    if not isinstance(manifest_axes, Mapping) or set(manifest_axes) != set(family_sections.values()):
+    required_sections = set(family_sections.values())
+    if (
+        not isinstance(manifest_axes, Mapping)
+        or not required_sections.issubset(manifest_axes)
+        or any(manifest_axes[section] for section in set(manifest_axes) - required_sections)
+    ):
         raise ValueError("missing screening metadata")
     if not isinstance(window.screened_axes, Mapping) or set(window.screened_axes) != set(family_sections):
         raise ValueError("missing window screening metadata")
@@ -414,6 +720,9 @@ def _daily_nav_rows(result: InstrumentValidationResult) -> list[dict[str, object
 
 
 def _candidate_score_rows(result: InstrumentValidationResult) -> list[dict[str, object]]:
+    spec = _profile_spec(result)
+    if spec is not None and spec.profile.strategy is None:
+        return []
     rows = []
     for window in result.windows:
         selected = [score.to_dict() for score in (window.selected_scores or {}).values()]
@@ -638,6 +947,8 @@ def write_validation_artifacts(result: InstrumentValidationResult, output_dir: P
             and result.decision.conclusion is ResearchConclusion.PASSED
         ),
         "decision": _decision_payload(result, blockers),
+        "strategy_profile": _strategy_profile_payload(result),
+        "trend_diagnostics": _trend_diagnostics(result),
         "comparison": _comparison(result, blockers),
         "oos_distribution": _distribution(window_rows) if not blockers else None,
         "execution": _execution(result, blockers),
