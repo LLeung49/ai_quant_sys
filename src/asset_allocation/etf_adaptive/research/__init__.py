@@ -23,6 +23,14 @@ from .strategy_specs import (
     run_benchmark_spec,
     run_strategy_spec,
 )
+from .strategy_profiles import (
+    CORE_HOLD_REBALANCE_PROFILE,
+    GRID_CORE_PROFILE,
+    GRID_PLUS_OPTIONAL_TREND_PROFILE,
+    StrategyProfileSpec,
+    profile_for_id,
+    profile_training_plan,
+)
 from .decision import (
     DecisionSummary,
     ResearchConclusion,
@@ -109,6 +117,7 @@ __all__ = [
     "ResearchReportManifest",
     "ResearchRunConfig",
     "StrategySpec",
+    "StrategyProfileSpec",
     "SubLayerPortfolio",
     "SubLayerPortfolioEvaluation",
     "SubLayerSelectionEvidence",
@@ -135,6 +144,9 @@ __all__ = [
     "FIXED_HALF_SPEC",
     "FULL_ADAPTIVE_SPEC",
     "GRID_ONLY_SPEC",
+    "GRID_CORE_PROFILE",
+    "GRID_PLUS_OPTIONAL_TREND_PROFILE",
+    "CORE_HOLD_REBALANCE_PROFILE",
     "max_drawdown",
     "pairwise_risk",
     "pareto_front",
@@ -145,6 +157,8 @@ __all__ = [
     "run_research",
     "run_staged_walk_forward",
     "run_strategy_spec",
+    "profile_for_id",
+    "profile_training_plan",
     "select_best_product",
     "select_products_by_index",
     "select_sub_layer_products",
