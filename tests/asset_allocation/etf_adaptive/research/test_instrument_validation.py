@@ -16,7 +16,7 @@ from asset_allocation.etf_adaptive.research.instrument_validation import (
     ValidationScope,
     ValidationStatus,
     evaluate_validation_gate,
-    run_instrument_validation,
+    legacy_unprofiled as run_instrument_validation,
     resolve_validation_start,
 )
 from asset_allocation.etf_adaptive.research.decision import DecisionSummary, ResearchConclusion
@@ -29,6 +29,204 @@ from asset_allocation.etf_adaptive.state import (
     Regime,
 )
 from asset_allocation.etf_adaptive.research.walk_forward import build_windows
+from asset_allocation.etf_adaptive.research.strategy_profiles import (
+    GRID_CORE_PROFILE,
+    GRID_PLUS_OPTIONAL_TREND_PROFILE,
+    CORE_HOLD_REBALANCE_PROFILE,
+)
+
+
+@pytest.fixture
+def profile_validation(monkeypatch):
+    """Real OOS execution; deterministic train replays isolate the family gate."""
+    from asset_allocation.etf_adaptive.contracts import ETFEligibility
+    from asset_allocation.etf_adaptive.research import instrument_validation as module
+    from asset_allocation.etf_adaptive.research.baselines import BaselineKind, BaselineRun
+    from asset_allocation.etf_adaptive.research.walk_forward import WalkForwardWindow
+
+    dates = tuple(date(2025, 1, 1) + timedelta(days=index) for index in range(335))
+    windows = tuple(WalkForwardWindow(
+        f"wf_{index:03d}", dates[251 + index * 28:271 + index * 28],
+        dates[271 + index * 28:279 + index * 28],
+    ) for index in range(3))
+    bars = tuple(DualPriceBar(
+        stock_code="515450.SH", trade_date=day,
+        signal_open=price, signal_high=price * 1.01, signal_low=price * .99, signal_close=price,
+        raw_open=price, raw_high=price * 1.01, raw_low=price * .99, raw_close=price,
+        amount=20_000_000.0, suspended=False, adjustment_ratio=1.0,
+        execution_availability=ExecutionAvailability(False, False, "test"),
+    ) for index, day in enumerate(dates) for price in (10 + (index % 5) * .02,))
+
+    class Provider:
+        def load_bars(self, stock_code, start_date, end_date):
+            return tuple(bar for bar in bars if start_date <= bar.trade_date <= end_date)
+
+        def load_actions(self, stock_code, start_date, end_date):
+            return ()
+
+        def load_eligibility(self, stock_code, bars):
+            return {bar.trade_date: ETFEligibility(True, (), "core_broad", 252, 20_000_000.0)
+                    for bar in bars}
+
+    training_kinds = []
+
+    def replay(kind, request, provider, config):
+        training_kinds.append(kind.value)
+        values = ((100, 99, 103, 102.5, 110) if kind is BaselineKind.GRID_ONLY else
+                  (100, 99, 101, 100.5, 98) if kind is BaselineKind.BUY_AND_HOLD else
+                  (100, 100, 100, 100, 100))
+        segment = tuple(day for day in dates if request.trade_start_date <= day <= request.end_date)
+        nav = tuple(DailyNav(day, Decimal(str(total)), Decimal("0")) for day, total in zip(segment, values))
+        return BaselineRun(kind, config, BacktestResult(request, (), nav))
+
+    monkeypatch.setattr(module, "build_windows", lambda *args, **kwargs: windows)
+    monkeypatch.setattr(module, "run_baseline", replay)
+    candidates = tuple(ParameterCandidate(
+        AdaptiveConfig(grid=GridConfig(step_pct=step)), "grid_only",
+    ) for step in (.01, .015, .02))
+
+    def validate(profile, *, plan=None, omit_plan=False):
+        return module.run_instrument_validation(
+            FIXED_VALIDATION_TARGETS[0], Provider(), dates[0], dates[-1], Decimal("100000"),
+            profile=profile,
+            **({} if omit_plan else {"training_plan": plan if plan is not None else
+                                   ({"grid_only": (candidates, ("step_pct",), ())}
+                                    if profile.strategy is not None else {})}),
+        )
+
+    return validate, training_kinds, candidates
+
+
+@pytest.mark.parametrize("profile", (GRID_CORE_PROFILE, GRID_PLUS_OPTIONAL_TREND_PROFILE))
+def test_profile_accepts_stable_grid_when_standalone_trend_metrics_are_undefined(profile_validation, profile):
+    validate, training_kinds, _ = profile_validation
+
+    result = validate(profile)
+
+    assert result.rejection_reason is None
+    assert len(result.windows) == 3
+    assert result.evidence.stable_parameter_region is True
+    assert set(training_kinds) == {"grid_only", "buy_and_hold"}
+    for window in result.windows:
+        assert window.profile_id == profile.profile_id
+        assert set(window.selected_scores) == {"grid_only"}
+        assert window.trend_training_surface == ()
+        assert window.selected_config["trend"] == asdict(profile.strategy.config.trend)
+        assert window.excess_attribution is not None
+        assert window.strategy_observations
+        assert set(window.benchmark_runs) == {"buy_and_hold", "fixed_half_hold"}
+        assert all(run.request.trade_start_date == window.validation_start
+                   and run.nav[0].nav_date == window.validation_start
+                   for run in window.benchmark_runs.values())
+    if profile is GRID_CORE_PROFILE:
+        assert all(point.regime is Regime.GRID for window in result.windows
+                   for point in window.strategy_observations)
+
+
+def test_core_hold_rebalance_runs_both_ledgers_without_adaptive_selection(profile_validation, monkeypatch):
+    from asset_allocation.etf_adaptive.research import instrument_validation as module
+
+    def adaptive_forbidden(*args, **kwargs):
+        pytest.fail("core hold must not execute adaptive selection or strategy")
+
+    monkeypatch.setattr(module, "_select_training_candidate", adaptive_forbidden)
+    monkeypatch.setattr(module, "run_strategy_spec", adaptive_forbidden, raising=False)
+    validate, training_kinds, _ = profile_validation
+
+    result = validate(CORE_HOLD_REBALANCE_PROFILE, omit_plan=True)
+
+    assert result.rejection_reason is None
+    assert len(result.windows) == 3
+    assert training_kinds == []
+    for window in result.windows:
+        assert window.selected_config is None
+        assert window.profile_id == "core_hold_rebalance"
+        assert not window.candidate_scores and not window.selected_scores
+        assert set(window.benchmark_runs) == {"buy_and_hold", "fixed_half_hold"}
+        assert window.benchmark_daily_nav == window.benchmark_runs["buy_and_hold"].nav
+        assert window.strategy_daily_nav == window.benchmark_runs["fixed_half_hold"].nav
+        assert window.strategy_daily_nav != window.benchmark_daily_nav
+        assert window.strategy_metrics.total_cost > 0
+        assert all(event.kind != "strategy_signal" for event in window.strategy_events)
+
+
+@pytest.mark.parametrize("profile", (GRID_CORE_PROFILE, GRID_PLUS_OPTIONAL_TREND_PROFILE))
+def test_profile_rejects_unstable_grid_without_executing_default_config(profile_validation, profile):
+    validate, _, candidates = profile_validation
+
+    result = validate(profile, plan={"grid_only": (candidates[:1], ("step_pct",), ())})
+
+    assert result.rejection_reason == "no_stable_grid_training_parameters"
+    assert result.decision.conclusion is ResearchConclusion.DO_NOT_TRADE
+    assert result.activation_eligible is False
+    assert result.windows[0].profile_id == profile.profile_id
+    assert result.windows[0].selected_config is None
+    assert not result.windows[0].strategy_events
+
+
+def test_new_validation_requires_an_explicit_profile():
+    from asset_allocation.etf_adaptive.research.instrument_validation import run_instrument_validation
+
+    with pytest.raises(TypeError, match="profile"):
+        run_instrument_validation(FIXED_VALIDATION_TARGETS[0], object(),
+                                  date(2025, 1, 1), date(2026, 1, 1), Decimal("100000"))
+
+
+@pytest.mark.parametrize("profile", (GRID_CORE_PROFILE, GRID_PLUS_OPTIONAL_TREND_PROFILE,
+                                     CORE_HOLD_REBALANCE_PROFILE))
+def test_profile_records_executed_benchmark_provenance_and_cost_evidence(profile_validation, profile):
+    validate, _, _ = profile_validation
+
+    result = validate(profile)
+
+    assert result.run_manifest["profile_id"] == profile.profile_id
+    assert result.run_manifest["profile_hash"] == profile.profile_hash()
+    for window, recorded in zip(result.windows, result.run_manifest["execution_windows"]):
+        assert recorded["window_id"] == window.window_id
+        assert recorded["profile_id"] == profile.profile_id
+        assert recorded["execution_config"] == asdict(window.execution_config)
+        assert recorded["reference_benchmark_id"] == "buy_and_hold"
+        assert recorded["strategy_spec"] is None if profile.strategy is None else (
+            recorded["strategy_spec"]["policy_id"] == profile.strategy.policy_id)
+        assert {item["benchmark_id"] for item in recorded["benchmarks"]} == {"buy_and_hold", "fixed_half_hold"}
+        for benchmark in recorded["benchmarks"]:
+            run = window.benchmark_runs[benchmark["benchmark_id"]]
+            assert benchmark["validation_start"] == window.validation_start.isoformat()
+            assert benchmark["validation_end"] == run.nav[-1].nav_date.isoformat()
+            assert benchmark["nav_sessions"] == len(run.nav)
+            assert benchmark["metrics"]["total_cost"] > 0
+            assert benchmark["spec_hash"]
+            assert benchmark["provenance_hash"]
+            assert run.nav[0].total == Decimal("100000")
+            assert run.events[0].event_date > window.validation_start
+
+
+@pytest.mark.parametrize("mutation", ("wrong_family", "trend_axis", "trend_config", "cost_config", "empty"))
+def test_profile_rejects_plan_that_cannot_reproduce_frozen_execution(profile_validation, mutation):
+    validate, training_kinds, candidates = profile_validation
+    axes = ("step_pct",)
+    if mutation == "wrong_family":
+        candidates = tuple(replace(candidate, family="trend_only") for candidate in candidates)
+    elif mutation == "trend_axis":
+        axes = ("risk_per_unit",)
+    elif mutation == "trend_config":
+        candidates = tuple(replace(candidate, config=replace(
+            candidate.config, trend=replace(candidate.config.trend, max_units=2),
+        )) for candidate in candidates)
+    elif mutation == "cost_config":
+        candidates = tuple(replace(candidate, config=replace(
+            candidate.config, cost=CostConfig(minimum_commission=1),
+        )) for candidate in candidates)
+    else:
+        candidates = ()
+
+    result = validate(GRID_PLUS_OPTIONAL_TREND_PROFILE,
+                      plan={"grid_only": (candidates, axes, ())})
+
+    assert result.status is ValidationStatus.DATA_REJECTED
+    assert result.decision.conclusion is ResearchConclusion.DO_NOT_TRADE
+    assert not result.windows
+    assert training_kinds == []
 
 
 def test_fixed_targets_are_the_confirmed_ten_exposures() -> None:

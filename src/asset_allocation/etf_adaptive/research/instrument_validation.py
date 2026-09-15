@@ -1,18 +1,20 @@
 """Fixed-universe contracts for independent ETF strategy validation."""
 
+from __future__ import annotations
+
 from dataclasses import asdict, dataclass, replace
 from datetime import date
 from decimal import Decimal
 from enum import Enum
 from hashlib import sha256
 from math import isfinite
-from typing import Mapping, Protocol, Sequence
+from typing import TYPE_CHECKING, Mapping, Protocol, Sequence
 
 from ..config import AdaptiveConfig, CostConfig
 from ..contracts import DataQualityError, DualPriceBar, SubLayer
 from ..execution import commission, execution_fee
 from ..indicators import IndicatorSnapshot, compute_indicators
-from ..state import BacktestRequest
+from ..state import BacktestRequest, BacktestResult
 from ..state import BacktestEvent, DailyNav, DailyStrategyObservation, Side
 from .attribution import ExcessAttribution, build_excess_attribution
 from .baselines import BaselineKind, run_baseline, run_baselines
@@ -29,6 +31,13 @@ from .parameters import (
 from .metrics import max_drawdown
 from .walk_forward import build_windows
 from .validation_eligibility import ELIGIBILITY_HISTORY_SESSIONS
+from .strategy_specs import (
+    BUY_AND_HOLD_SPEC, FIXED_HALF_SPEC, benchmark_provenance_hash,
+    run_benchmark_spec, run_strategy_spec,
+)
+
+if TYPE_CHECKING:
+    from .strategy_profiles import StrategyProfileSpec
 
 
 class ValidationStatus(str, Enum):
@@ -130,6 +139,9 @@ class ValidationWindowResult:
     screened_axes: Mapping[str, tuple[tuple[str, ...], ...]] | None = None
     strategy_observations: tuple[DailyStrategyObservation, ...] = ()
     excess_attribution: ExcessAttribution | None = None
+    profile_id: str = "legacy_unprofiled"
+    benchmark_runs: Mapping[str, BacktestResult] | None = None
+    execution_config: AdaptiveConfig | None = None
 
 
 class _Provider(Protocol):
@@ -238,7 +250,35 @@ def run_instrument_validation(
     as_of_date: date,
     initial_cash: Decimal,
     *,
+    profile: StrategyProfileSpec,
     training_plan: Mapping | None = None,
+) -> InstrumentValidationResult:
+    """Validate only an explicitly registered research profile."""
+    from .strategy_profiles import StrategyProfileSpec, profile_for_id
+
+    if not isinstance(profile, StrategyProfileSpec) or profile != profile_for_id(profile.profile_id):
+        raise ValueError("validation requires a registered strategy profile")
+    return _run_instrument_validation(
+        target, provider, start_date, as_of_date, initial_cash,
+        profile=profile, training_plan=training_plan,
+    )
+
+
+def legacy_unprofiled(
+    target: ValidationTarget, provider: _Provider, start_date: date,
+    as_of_date: date, initial_cash: Decimal, *, training_plan: Mapping | None = None,
+) -> InstrumentValidationResult:
+    """Explicit compatibility helper for historical unprofiled validation tests."""
+    return _run_instrument_validation(
+        target, provider, start_date, as_of_date, initial_cash,
+        profile=None, training_plan=training_plan,
+    )
+
+
+def _run_instrument_validation(
+    target: ValidationTarget, provider: _Provider, start_date: date,
+    as_of_date: date, initial_cash: Decimal, *, profile: StrategyProfileSpec | None,
+    training_plan: Mapping | None,
 ) -> InstrumentValidationResult:
     """Fail closed before any parameter screening when history is absent."""
 
@@ -248,6 +288,7 @@ def run_instrument_validation(
         raise ValueError("invalid validation date range")
     if not isinstance(initial_cash, Decimal) or not initial_cash.is_finite() or initial_cash <= 0:
         raise ValueError("initial_cash must be a positive finite Decimal")
+    profile_id = profile.profile_id if profile is not None else "legacy_unprofiled"
     try:
         start_date = resolve_validation_start(provider, target.stock_code, start_date, as_of_date)
         provider = CachedValidationProvider(provider)
@@ -275,7 +316,33 @@ def run_instrument_validation(
     }
     try:
         for window in windows:
-            if target.scope is ValidationScope.REFERENCE_ONLY:
+            if profile is not None:
+                selections = _select_profile_training(
+                    profile, training_plan, target.stock_code, provider, window.train_dates,
+                    initial_cash, bars[0].trade_date, qualification_start,
+                )
+                grid_selection = selections.get("grid_only")
+                grid_surface = grid_selection.surface if grid_selection else ()
+                trend_surface = ()
+                candidate_scores = tuple(score for selection in selections.values()
+                                         for score in selection.candidate_scores)
+                selected_scores = {family: selection.selected_score for family, selection in selections.items()
+                                   if selection.selected_score is not None}
+                screened_axes = {family: selection.screened_axes for family, selection in selections.items()}
+                if any(selection.candidate is None for selection in selections.values()):
+                    results.append(ValidationWindowResult(
+                        window.window_id, window.train_end, window.validation_dates[0], "",
+                        0.0, 0.0, (), (), grid_training_surface=grid_surface,
+                        candidate_scores=candidate_scores, screened_axes=screened_axes,
+                        profile_id=profile_id,
+                    ))
+                    return _no_trade_result(
+                        target, ValidationStatus.FAILED, as_of_date,
+                        "no_stable_grid_training_parameters", tuple(results),
+                    )
+                config = (replace(profile.strategy.config, grid=grid_selection.candidate.config.grid)
+                          if profile.strategy is not None else AdaptiveConfig.default())
+            elif target.scope is ValidationScope.REFERENCE_ONLY:
                 config = AdaptiveConfig.default()
                 grid_surface: tuple[TrainingSurfaceSummary, ...] = ()
                 trend_surface: tuple[TrainingSurfaceSummary, ...] = ()
@@ -336,17 +403,18 @@ def run_instrument_validation(
                 }
             # Indicators see the training history, but the Task 1 engine
             # starts the accounting state at the validation boundary.
-            runs = run_baselines(BacktestRequest(target.stock_code, initial_cash, bars[0].trade_date, window.validation_end, window.validation_dates[0]), provider, config)
-            strategy_nav = _validation_nav(runs[BaselineKind.FULL_ADAPTIVE].result.nav, window.validation_dates)
-            benchmark_nav = _validation_nav(runs[BaselineKind.BUY_AND_HOLD].result.nav, window.validation_dates)
+            strategy_result, benchmark_result, benchmark_runs = _execute_validation_window(
+                profile, config, BacktestRequest(target.stock_code, initial_cash, bars[0].trade_date,
+                                                 window.validation_end, window.validation_dates[0]), provider,
+            )
+            strategy_nav = _validation_nav(strategy_result.nav, window.validation_dates)
+            benchmark_nav = _validation_nav(benchmark_result.nav, window.validation_dates)
             strategy = strategy_nav[-1] / strategy_nav[0] - 1
             benchmark = benchmark_nav[-1] / benchmark_nav[0] - 1
-            strategy_result = runs[BaselineKind.FULL_ADAPTIVE].result
-            benchmark_result = runs[BaselineKind.BUY_AND_HOLD].result
             strategy_metrics = _recorded_performance(strategy_result.nav, strategy_result.events, config.cost)
             benchmark_metrics = _recorded_performance(benchmark_result.nav, benchmark_result.events, config.cost)
             if not strategy_result.observations:
-                if target.scope is ValidationScope.FORMAL:
+                if target.scope is ValidationScope.FORMAL and (profile is None or profile.strategy is not None):
                     raise ValueError("strategy observations are required for formal validation")
                 excess_attribution = None
             else:
@@ -369,12 +437,15 @@ def run_instrument_validation(
                 strategy_invested, strategy_cash, benchmark_invested, benchmark_cash,
                 grid_surface, trend_surface,
                 config.cost,
-                asdict(config),
+                asdict(config) if profile is None or profile.strategy is not None else None,
                 candidate_scores=candidate_scores,
                 selected_scores=selected_scores,
                 screened_axes=screened_axes,
                 strategy_observations=strategy_result.observations,
                 excess_attribution=excess_attribution,
+                profile_id=profile_id,
+                benchmark_runs=benchmark_runs,
+                execution_config=config,
             ))
     except (ValueError, DataQualityError) as exc:
         return _data_rejected_result(target, as_of_date, str(exc), tuple(results))
@@ -393,7 +464,7 @@ def run_instrument_validation(
         tuple(value * initial_oos_nav for value in benchmark_path),
         tuple(trade for row in results for trade in _recorded_trades(row.benchmark_events, row.cost_config)),
     )
-    evidence = _research_evidence(results, strategy_metrics, benchmark_metrics)
+    evidence = _research_evidence(results, strategy_metrics, benchmark_metrics, profile=profile)
     decision = evaluate_research_decision(evidence)
     status = ValidationStatus.PASSED if decision.conclusion is ResearchConclusion.PASSED else ValidationStatus.FAILED
     return InstrumentValidationResult(
@@ -405,8 +476,57 @@ def run_instrument_validation(
         sum(row.strategy_cash_sessions for row in results),
         sum(row.benchmark_invested_sessions for row in results),
         sum(row.benchmark_cash_sessions for row in results),
-        _run_manifest(target, start_date, as_of_date, provider, bars, results),
+        _run_manifest(target, start_date, as_of_date, provider, bars, results, profile=profile),
     )
+
+
+def _execute_validation_window(profile, config, request, provider):
+    """Keep explicit profile execution separate from historical baseline names."""
+    if profile is None:
+        runs = run_baselines(request, provider, config)
+        return runs[BaselineKind.FULL_ADAPTIVE].result, runs[BaselineKind.BUY_AND_HOLD].result, None
+    benchmarks = {spec.benchmark_id: run_benchmark_spec(spec, config, request, provider)
+                  for spec in profile.benchmarks}
+    strategy = (run_strategy_spec(replace(profile.strategy, config=config), request, provider)
+                if profile.strategy is not None else benchmarks[FIXED_HALF_SPEC.benchmark_id])
+    return strategy, benchmarks[BUY_AND_HOLD_SPEC.benchmark_id], benchmarks
+
+
+def _select_profile_training(profile, training_plan, stock_code, provider, dates,
+                             initial_cash, history_start, evaluation_start):
+    from .strategy_profiles import profile_training_plan
+    from .parameters import GRID_STEPS, GRID_UNITS, FIXED_INITIAL
+
+    if training_plan is None:
+        training_plan = profile_training_plan(
+            profile, profile.strategy.config if profile.strategy else AdaptiveConfig.default(),
+            {"step_pct": GRID_STEPS, "unit_pct": GRID_UNITS, "fixed_initial_pct": FIXED_INITIAL}
+            if profile.selection_families else {},
+        )
+        training_plan = {family: (candidates, axes, ("atr_stop_multiple", "cooldown_sessions"))
+                         for family, (candidates, axes, _) in training_plan.items()}
+    if set(training_plan) != set(profile.selection_families):
+        raise ValueError("training plan families differ from profile declaration")
+    for family, (candidates, axes, expansion_axes) in training_plan.items():
+        if not candidates or any(not isinstance(candidate, ParameterCandidate) or candidate.family != family
+                                 for candidate in candidates):
+            raise ValueError("training plan requires nonempty candidates in the declared family")
+        if any(candidate.config.trend != profile.strategy.config.trend
+               or candidate.config.cost != profile.strategy.config.cost for candidate in candidates):
+            raise ValueError("training candidates must preserve frozen trend and cost configuration")
+        # Reuse the profile boundary to validate both initial and expansion axes
+        # before executing any train replay, including out-of-family axes.
+        from .experiment import APPROVED_EXPERIMENT_AXES
+        for axis in (*axes, *expansion_axes):
+            profile_training_plan(profile, profile.strategy.config,
+                                  {axis: APPROVED_EXPERIMENT_AXES.get(axis, ())})
+    return {
+        family: _select_training_candidate(
+            stock_code, provider, dates, initial_cash, candidates, axes, len(dates) // 4,
+            expansion_axes, history_start=history_start, evaluation_start=evaluation_start,
+        )
+        for family, (candidates, axes, expansion_axes) in training_plan.items()
+    }
 
 
 @dataclass(frozen=True)
@@ -659,6 +779,8 @@ def _research_evidence(
     results: Sequence[ValidationWindowResult],
     strategy: PerformanceMetrics,
     benchmark: PerformanceMetrics,
+    *,
+    profile: StrategyProfileSpec | None = None,
 ) -> ResearchEvidence:
     initial_oos_nav = float(results[0].strategy_daily_nav[0].total)
     total_cost = sum(row.strategy_metrics.total_cost for row in results if row.strategy_metrics is not None)
@@ -668,7 +790,11 @@ def _research_evidence(
         data_valid=True,
         oos_window_count=len(results),
         oos_non_lagging_share=sum(row.strategy_return >= row.benchmark_return for row in results) / len(results),
-        stable_parameter_region=all(row.grid_training_surface and row.trend_training_surface for row in results),
+        stable_parameter_region=(all(
+            all(family in (row.selected_scores or {}) and row.selected_scores[family].stable
+                for family in profile.selection_families)
+            for row in results
+        ) if profile is not None else all(row.grid_training_surface and row.trend_training_surface for row in results)),
         annual_excess=strategy.annual_return - benchmark.annual_return,
         drawdown_improvement=abs(benchmark.max_drawdown) - abs(strategy.max_drawdown),
         sharpe_excess=strategy.sharpe - benchmark.sharpe,
@@ -697,10 +823,12 @@ def _run_manifest(
     provider: object,
     bars: Sequence[DualPriceBar],
     windows: Sequence[ValidationWindowResult],
+    *,
+    profile: StrategyProfileSpec | None = None,
 ) -> Mapping[str, object]:
     """Record enough immutable evidence to replay and audit a formal run."""
     data_fingerprint = sha256(repr(tuple(bars)).encode("utf-8")).hexdigest()
-    return {
+    manifest = {
         "schema_version": 1,
         "runner": "run_instrument_validation",
         "source_provider": type(getattr(provider, "_provider", provider)).__name__,
@@ -724,6 +852,39 @@ def _run_manifest(
                                        for axis in stage))
             for section, family in (("grid", "grid_only"), ("trend", "trend_only"))
         },
+    }
+    if profile is not None:
+        manifest.update(
+            profile_id=profile.profile_id,
+            profile_hash=profile.profile_hash(),
+            execution_windows=[_profile_execution_manifest(profile, row) for row in windows],
+        )
+    return manifest
+
+
+def _profile_execution_manifest(profile, window) -> dict[str, object]:
+    """Bind declarations to completed OOS ledgers, never to intended runs alone."""
+    config = window.execution_config
+    strategy = replace(profile.strategy, config=config) if profile.strategy is not None else None
+    benchmarks = []
+    for spec in profile.benchmarks:
+        run = window.benchmark_runs[spec.benchmark_id]
+        benchmarks.append({
+            **asdict(spec),
+            "spec_hash": spec.spec_hash(),
+            "provenance_hash": benchmark_provenance_hash(spec, config),
+            "validation_start": run.nav[0].nav_date.isoformat(),
+            "validation_end": run.nav[-1].nav_date.isoformat(),
+            "nav_sessions": len(run.nav),
+            "metrics": asdict(_recorded_performance(run.nav, run.events, config.cost)),
+        })
+    return {
+        "window_id": window.window_id,
+        "profile_id": profile.profile_id,
+        "execution_config": asdict(config),
+        "reference_benchmark_id": BUY_AND_HOLD_SPEC.benchmark_id,
+        "strategy_spec": {**asdict(strategy), "spec_hash": strategy.spec_hash()} if strategy else None,
+        "benchmarks": benchmarks,
     }
 
 
