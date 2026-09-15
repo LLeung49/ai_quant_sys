@@ -1,7 +1,7 @@
 """Fixed-universe contracts for independent ETF strategy validation."""
 
 from dataclasses import asdict, dataclass, replace
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 from enum import Enum
 from hashlib import sha256
@@ -28,6 +28,7 @@ from .parameters import (
 )
 from .metrics import max_drawdown
 from .walk_forward import build_windows
+from .validation_eligibility import ELIGIBILITY_HISTORY_SESSIONS
 
 
 class ValidationStatus(str, Enum):
@@ -39,11 +40,6 @@ class ValidationStatus(str, Enum):
 class ValidationScope(str, Enum):
     FORMAL = "formal"
     REFERENCE_ONLY = "reference_only"
-
-
-# 252 market sessions need more than a calendar year once holidays are included.
-# This is input-only warm-up: accounting still begins at the requested session.
-ELIGIBILITY_WARMUP_CALENDAR_DAYS = 400
 
 
 @dataclass(frozen=True)
@@ -256,13 +252,17 @@ def run_instrument_validation(
         start_date = resolve_validation_start(provider, target.stock_code, start_date, as_of_date)
         provider = CachedValidationProvider(provider)
         bars = tuple(provider.load_bars(
-            target.stock_code, start_date - timedelta(days=ELIGIBILITY_WARMUP_CALENDAR_DAYS), as_of_date,
+            target.stock_code, start_date, as_of_date,
         ))
     except DataQualityError as exc:
         return _data_rejected_result(target, as_of_date, str(exc))
     if not bars:
         return _data_rejected_result(target, as_of_date, "no market bars in requested range")
-    evaluation_dates = tuple(bar.trade_date for bar in bars if bar.trade_date >= start_date)
+    # Qualification itself needs 252 observed sessions.  Keep those sessions
+    # as input-only history, then build train/OOS windows from the first date
+    # whose eligibility can be computed without inventing pre-listing data.
+    evaluation_dates = tuple(bar.trade_date for bar in bars[ELIGIBILITY_HISTORY_SESSIONS - 1:])
+    qualification_start = evaluation_dates[0] if evaluation_dates else bars[0].trade_date
     try:
         windows = build_windows(evaluation_dates, train_sessions=target.minimum_train_sessions)
     except ValueError:
@@ -295,12 +295,12 @@ def run_instrument_validation(
                 grid_selection = _select_training_candidate(
                     target.stock_code, provider, window.train_dates, initial_cash,
                     grid_plan[0], grid_plan[1], segment_size, grid_plan[2],
-                    history_start=bars[0].trade_date, evaluation_start=start_date,
+                    history_start=bars[0].trade_date, evaluation_start=qualification_start,
                 )
                 trend_selection = _select_training_candidate(
                     target.stock_code, provider, window.train_dates, initial_cash,
                     trend_plan[0], trend_plan[1], segment_size, trend_plan[2],
-                    history_start=bars[0].trade_date, evaluation_start=start_date,
+                    history_start=bars[0].trade_date, evaluation_start=qualification_start,
                 )
                 if grid_selection.candidate is None or trend_selection.candidate is None:
                     results.append(ValidationWindowResult(

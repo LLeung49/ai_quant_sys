@@ -6,6 +6,9 @@ from datetime import date
 from ..contracts import DualPriceBar, ETFEligibility
 
 
+ELIGIBILITY_HISTORY_SESSIONS = 252
+
+
 def validation_eligibility(stock_code: str, bars: Sequence[DualPriceBar]) -> dict[date, ETFEligibility]:
     """Apply history, liquidity and tradability checks without geography filtering."""
     ordered = tuple(sorted(bars, key=lambda item: item.trade_date))
@@ -14,7 +17,7 @@ def validation_eligibility(stock_code: str, bars: Sequence[DualPriceBar]) -> dic
         history = ordered[: index + 1]
         average = sum(item.amount for item in history[-20:]) / min(len(history), 20)
         reasons = []
-        if len(history) < 252:
+        if len(history) < ELIGIBILITY_HISTORY_SESSIONS:
             reasons.append("history_lt_252")
         if average < 10_000_000:
             reasons.append("avg_amount_20_lt_10000000")
