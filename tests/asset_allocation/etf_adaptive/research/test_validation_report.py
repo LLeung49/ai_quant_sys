@@ -21,7 +21,10 @@ from asset_allocation.etf_adaptive.research.instrument_validation import (
     ValidationStatus, ValidationTarget, ValidationWindowResult,
 )
 from asset_allocation.etf_adaptive.research.metrics import PerformanceMetrics
-from asset_allocation.etf_adaptive.research.validation_report import write_validation_artifacts
+from asset_allocation.etf_adaptive.research.validation_report import (
+    validation_publication_decision,
+    write_validation_artifacts,
+)
 from asset_allocation.etf_adaptive.state import BacktestEvent, DailyNav, DailyStrategyObservation, Regime
 
 
@@ -137,20 +140,31 @@ def _legacy_recorded_result() -> InstrumentValidationResult:
     return replace(rebound, run_manifest=manifest)
 
 
-def test_validation_artifacts_publish_canonical_profile_evidence(tmp_path: Path) -> None:
+def test_validation_artifacts_fail_closed_without_all_profile_benchmarks(tmp_path: Path) -> None:
     manifest = write_validation_artifacts(_recorded_result(), tmp_path / "159915.SZ")
 
     summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
     report = manifest.report_markdown.read_text(encoding="utf-8")
 
-    assert summary["decision"] == {"conclusion": "passed", "blockers": []}
-    assert summary["comparison"]["strategy"]["sortino"] == 0.70
-    assert summary["execution"]["strategy"]["exposure_ratio"] == 2 / 3
+    assert summary["decision"] == {
+        "conclusion": "do_not_trade", "blockers": ["unexecuted_benchmark_evidence"],
+    }
+    assert summary["comparison"] is None
+    assert summary["execution"] is None
     assert summary["data_provenance"]["data_cutoff"] == "2026-09-08"
-    assert "Sortino" in report
+    assert "experiment evidence" in report
     assert manifest.chart_png.exists() and manifest.chart_png.stat().st_size > 1_000
     assert (tmp_path / "159915.SZ" / "charts" / "wf_000.png").exists()
     assert manifest.daily_nav_csv.exists()
+
+
+def test_optional_trend_profile_cannot_publish_without_all_benchmark_oos_evidence() -> None:
+    result = _recorded_result()
+
+    decision = validation_publication_decision(result)
+
+    assert decision["conclusion"] == "do_not_trade"
+    assert "unexecuted_benchmark_evidence" in decision["blockers"]
 
 
 def test_legacy_validation_artifacts_preserve_provenance_but_fail_closed(tmp_path: Path) -> None:
@@ -240,8 +254,7 @@ def test_report_exports_candidate_scores_and_reconciled_attribution(tmp_path):
     assert len(attribution) == 3
     assert attribution[0]["reconciliation_error"] == pytest.approx(0.0)
     report = manifest.report_markdown.read_text(encoding="utf-8")
-    assert "Largest absolute contributor: trend_return" in report
-    assert "trend entry/exit" in report
+    assert "experiment evidence" in report
     states = list(csv.DictReader(manifest.daily_state_csv.open(encoding="utf-8")))
     assert len(states) == 9
     assert states[0]["actual_exposure"] == "0.0"
@@ -371,7 +384,8 @@ def test_experiment_allows_provider_to_advance_to_first_aligned_session(tmp_path
     result = bind_experiment(result, spec)
     manifest = write_validation_artifacts(result, tmp_path / "report")
     summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
-    assert summary["decision"]["conclusion"] == "passed"
+    assert summary["decision"]["conclusion"] == "do_not_trade"
+    assert "unexecuted_benchmark_evidence" in summary["decision"]["blockers"]
 
 
 @pytest.mark.parametrize("change", [
@@ -382,9 +396,11 @@ def test_experiment_allows_provider_to_advance_to_first_aligned_session(tmp_path
 ])
 def test_formal_gate_rejects_rebound_cost_and_axis_bypasses(change):
     # Rebinding hashes must not turn altered execution settings into approved evidence.
-    from asset_allocation.etf_adaptive.research.validation_report import validation_publication_decision
     result = _recorded_result()
-    assert validation_publication_decision(result)["conclusion"] == "passed"
+    baseline = validation_publication_decision(result)
+    assert baseline == {
+        "conclusion": "do_not_trade", "blockers": ["unexecuted_benchmark_evidence"],
+    }
     spec = ExperimentSpec.from_dict(result.run_manifest["experiment"])
     window = result.windows[0]
     config = AdaptiveConfig.default()
@@ -430,9 +446,11 @@ def test_formal_gate_rejects_rebound_cost_and_axis_bypasses(change):
 def test_formal_gate_binds_candidate_deviations_to_its_own_screened_axes():
     # Break caught: an axis declared by a different screening stage cannot approve
     # an undeclared deviation in this candidate after its evidence is rebound.
-    from asset_allocation.etf_adaptive.research.validation_report import validation_publication_decision
     result = _recorded_result()
-    assert validation_publication_decision(result)["conclusion"] == "passed"
+    baseline = validation_publication_decision(result)
+    assert baseline == {
+        "conclusion": "do_not_trade", "blockers": ["unexecuted_benchmark_evidence"],
+    }
     spec = ExperimentSpec.from_dict(result.run_manifest["experiment"])
     default = AdaptiveConfig.default()
     altered = replace(default, grid=replace(default.grid, unit_pct=0.15))

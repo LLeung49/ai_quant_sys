@@ -26,6 +26,7 @@ from .experiment import ExperimentSpec, experiment_evidence
 from .instrument_validation import InstrumentValidationResult, ValidationWindowResult
 from .metrics import PerformanceMetrics
 from .strategy_profiles import GRID_PLUS_OPTIONAL_TREND_PROFILE
+from .strategy_specs import BUY_AND_HOLD_SPEC
 
 
 @dataclass(frozen=True)
@@ -135,8 +136,11 @@ def _evidence_blockers(result: InstrumentValidationResult) -> list[str]:
 def _experiment_blockers(result: InstrumentValidationResult) -> list[str]:
     """Bind declared experiments to stored train-only scores and daily evidence."""
     manifest = result.run_manifest
+    profile_blockers: list[str] = []
     try:
         spec = ExperimentSpec.from_dict(manifest["experiment"])
+        if spec.benchmarks != (BUY_AND_HOLD_SPEC,):
+            profile_blockers.append("unexecuted_benchmark_evidence")
         if (result.target.stock_code not in spec.target_codes
                 or result.as_of_date != spec.as_of_date
                 or not spec.start_date <= date.fromisoformat(manifest["requested_start"]) <= spec.as_of_date
@@ -145,23 +149,23 @@ def _experiment_blockers(result: InstrumentValidationResult) -> list[str]:
                     {"window_id": window.window_id, "config_hash": window.config_hash,
                      "config": window.selected_config} for window in result.windows
                 ]):
-            return ["experiment_metadata"]
+            return profile_blockers + ["experiment_metadata"]
         # Task 3 introduces the remaining profile execution paths. Until then,
         # this recorded-result interface can only certify its existing adaptive run.
         if spec.profile != GRID_PLUS_OPTIONAL_TREND_PROFILE:
-            return ["experiment_metadata"]
+            return profile_blockers + ["experiment_metadata"]
         expected = experiment_evidence(result, spec)
         if any(manifest.get(key) != value for key, value in expected.items()):
-            return ["experiment_metadata"]
+            return profile_blockers + ["experiment_metadata"]
         for window, recorded in zip(result.windows, expected["experiment_windows"]):
             strategy = recorded["strategy_spec"]
             if (strategy is None or strategy["config"] != window.selected_config
                     or strategy["config_hash"] != window.config_hash):
-                return ["experiment_metadata"]
+                return profile_blockers + ["experiment_metadata"]
             _validate_execution_boundaries(window, manifest["screened_axes"], spec)
     except (KeyError, TypeError, ValueError, AttributeError):
-        return ["experiment_metadata"]
-    blockers = []
+        return profile_blockers + ["experiment_metadata"]
+    blockers = list(profile_blockers)
     for window in result.windows:
         if not window.candidate_scores or not window.selected_scores:
             blockers.append("candidate_scores")
