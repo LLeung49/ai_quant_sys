@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, replace
+from dataclasses import InitVar, asdict, dataclass, replace
 from datetime import date
 from hashlib import sha256
 import json
@@ -56,6 +56,9 @@ def _profile_payload(profile) -> dict[str, object]:
     }
 
 
+_LEGACY_READ = object()
+
+
 @dataclass(frozen=True)
 class ExperimentSpec:
     experiment_id: str
@@ -64,9 +67,10 @@ class ExperimentSpec:
     allowed_axes: Mapping[str, tuple[object, ...]]
     start_date: date
     as_of_date: date
+    _legacy_read: InitVar[object] = None
 
-    def __post_init__(self) -> None:
-        from .strategy_profiles import StrategyProfileSpec, profile_training_plan
+    def __post_init__(self, _legacy_read: object) -> None:
+        from .strategy_profiles import StrategyProfileSpec, profile_for_id, profile_training_plan
 
         if not isinstance(self.experiment_id, str) or not self.experiment_id.strip():
             raise ValueError("experiment_id must be non-empty")
@@ -77,6 +81,16 @@ class ExperimentSpec:
             raise ValueError("experiment target must belong to fixed validation targets")
         if not isinstance(self.profile, StrategyProfileSpec):
             raise ValueError("experiment requires a strategy profile")
+        if _legacy_read is _LEGACY_READ:
+            if self.profile.profile_id != "legacy_unprofiled":
+                raise ValueError("legacy experiment read requires legacy_unprofiled")
+        else:
+            try:
+                registered = profile_for_id(self.profile.profile_id)
+            except ValueError as exc:
+                raise ValueError("experiment requires a registered strategy profile") from exc
+            if self.profile != registered:
+                raise ValueError("experiment requires a registered strategy profile")
         if self.start_date > self.as_of_date:
             raise ValueError("start date must not be after as-of date")
         axes: dict[str, tuple[object, ...]] = {}
@@ -129,7 +143,8 @@ class ExperimentSpec:
             )
         return cls(payload["experiment_id"], tuple(payload["target_codes"]), profile,
                    payload["allowed_axes"], date.fromisoformat(payload["start_date"]),
-                   date.fromisoformat(payload["as_of_date"]))
+                   date.fromisoformat(payload["as_of_date"]),
+                   _legacy_read=_LEGACY_READ if "profile" not in payload else None)
 
 
 _TARGETED_STUDIES = MappingProxyType({

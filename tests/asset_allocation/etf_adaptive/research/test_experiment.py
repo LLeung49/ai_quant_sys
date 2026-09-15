@@ -28,6 +28,14 @@ def test_experiment_rejects_axis_not_owned_by_its_profile() -> None:
                        {"stop_n": (2.0,)}, date(2021, 1, 1), date(2026, 9, 11))
 
 
+def test_experiment_rejects_a_non_registry_equivalent_profile() -> None:
+    forged_profile = replace(GRID_CORE_PROFILE, version="forged")
+
+    with pytest.raises(ValueError, match="registered strategy profile"):
+        ExperimentSpec("bad-profile", ("515450.SH",), forged_profile,
+                       {"step_pct": (0.02,)}, date(2021, 1, 1), date(2026, 9, 11))
+
+
 def test_targeted_study_manifest_cannot_include_nonprioritized_code():
     from asset_allocation.etf_adaptive.research import experiment
 
@@ -135,7 +143,6 @@ def test_experiment_hash_is_canonical_and_immutable():
     with pytest.raises(TypeError):
         spec.allowed_axes["step_pct"] = (0.03,)
     assert replace(spec, as_of_date=date(2026, 9, 9)).experiment_hash() != spec.experiment_hash()
-    assert replace(spec, profile=replace(spec.profile, version="2")).experiment_hash() != spec.experiment_hash()
 
 
 def test_targeted_study_explicitly_selects_optional_trend_profile() -> None:

@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 from dataclasses import asdict, replace
 from datetime import date
 from decimal import Decimal
@@ -12,6 +13,7 @@ from asset_allocation.etf_adaptive.config import AdaptiveConfig
 from asset_allocation.etf_adaptive.research.attribution import build_excess_attribution
 from asset_allocation.etf_adaptive.research.candidate_scoring import TrainingCandidateScore
 from asset_allocation.etf_adaptive.research.experiment import ExperimentSpec, bind_experiment, APPROVED_EXPERIMENT_AXES
+from asset_allocation.etf_adaptive.research.strategy_profiles import GRID_PLUS_OPTIONAL_TREND_PROFILE
 from asset_allocation.etf_adaptive.research.strategy_specs import FULL_ADAPTIVE_SPEC, BUY_AND_HOLD_SPEC
 from asset_allocation.etf_adaptive.research.decision import DecisionSummary, ResearchConclusion, ResearchEvidence
 from asset_allocation.etf_adaptive.research.instrument_validation import (
@@ -76,13 +78,12 @@ def _recorded_result() -> InstrumentValidationResult:
     observations = tuple(DailyStrategyObservation(day, Regime.TREND, 1.0,
                          float(point.market_value / point.total), 0, 0, "hold")
                          for day, point in zip(days, strategy_nav))
-    scores = tuple(TrainingCandidateScore(config.config_hash(), asdict(config),
-                   1.0, 0.3, 0.2, 0.04, 0.01, 0.01, 0.7, True, None,
-                   family=family, screened_axes=axes)
-                   for family, axes in (("grid_only", ("step_pct",)), ("trend_only", ("stop_n",))))
+    scores = (TrainingCandidateScore(config.config_hash(), asdict(config),
+              1.0, 0.3, 0.2, 0.04, 0.01, 0.01, 0.7, True, None,
+              family="grid_only", screened_axes=("step_pct",)),)
     window = replace(window, config_hash=config.config_hash(), selected_config=asdict(config),
                      cost_config=config.cost,
-                     screened_axes={"grid_only": (("step_pct",),), "trend_only": (("stop_n",),)},
+                     screened_axes={"grid_only": (("step_pct",),)},
                      candidate_scores=scores, selected_scores={score.family: score for score in scores},
                      strategy_observations=observations,
                      excess_attribution=build_excess_attribution(strategy_nav, benchmark_nav, observations,
@@ -105,9 +106,19 @@ def _recorded_result() -> InstrumentValidationResult:
                 {"window_id": item.window_id, "config_hash": item.config_hash, "config": item.selected_config}
                 for item in (window, replace(window, window_id="wf_001"), replace(window, window_id="wf_002"))
             ],
-            "screened_axes": {"grid": ["step_pct"], "trend": ["stop_n"]},
+            "screened_axes": {"grid": ["step_pct"]},
         },
     )
+    spec = ExperimentSpec(
+        "recorded-test", ("159915.SZ",), GRID_PLUS_OPTIONAL_TREND_PROFILE,
+        {"step_pct": (0.02,), "unit_pct": (0.1, 0.15)},
+        date(2025, 1, 2), result.as_of_date,
+    )
+    return bind_experiment(result, spec)
+
+
+def _legacy_recorded_result() -> InstrumentValidationResult:
+    result = _recorded_result()
     legacy_payload = {
         "experiment_id": "recorded-test",
         "target_codes": ["159915.SZ"],
@@ -126,9 +137,25 @@ def _recorded_result() -> InstrumentValidationResult:
     return replace(rebound, run_manifest=manifest)
 
 
+def test_validation_artifacts_publish_canonical_profile_evidence(tmp_path: Path) -> None:
+    manifest = write_validation_artifacts(_recorded_result(), tmp_path / "159915.SZ")
+
+    summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
+    report = manifest.report_markdown.read_text(encoding="utf-8")
+
+    assert summary["decision"] == {"conclusion": "passed", "blockers": []}
+    assert summary["comparison"]["strategy"]["sortino"] == 0.70
+    assert summary["execution"]["strategy"]["exposure_ratio"] == 2 / 3
+    assert summary["data_provenance"]["data_cutoff"] == "2026-09-08"
+    assert "Sortino" in report
+    assert manifest.chart_png.exists() and manifest.chart_png.stat().st_size > 1_000
+    assert (tmp_path / "159915.SZ" / "charts" / "wf_000.png").exists()
+    assert manifest.daily_nav_csv.exists()
+
+
 def test_legacy_validation_artifacts_preserve_provenance_but_fail_closed(tmp_path: Path) -> None:
     # Break caught: historical strategy/baseline metadata must not authorize a new formal publication.
-    manifest = write_validation_artifacts(_recorded_result(), tmp_path / "159915.SZ")
+    manifest = write_validation_artifacts(_legacy_recorded_result(), tmp_path / "159915.SZ")
 
     summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
     report = manifest.report_markdown.read_text(encoding="utf-8")
@@ -206,14 +233,15 @@ def test_report_exports_candidate_scores_and_reconciled_attribution(tmp_path):
     assert manifest.daily_state_csv.exists()
     import csv
     scores = list(csv.DictReader(manifest.candidate_scores_csv.open(encoding="utf-8")))
-    assert len(scores) == 6
+    assert len(scores) == 3
     assert json.loads(scores[0]["config"])["cost"]["slippage_bps"] == 3.0
-    assert {row["family"] for row in scores} == {"grid_only", "trend_only"}
+    assert {row["family"] for row in scores} == {"grid_only"}
     attribution = json.loads(manifest.excess_attribution_json.read_text(encoding="utf-8"))
     assert len(attribution) == 3
     assert attribution[0]["reconciliation_error"] == pytest.approx(0.0)
     report = manifest.report_markdown.read_text(encoding="utf-8")
-    assert "experiment evidence" in report
+    assert "Largest absolute contributor: trend_return" in report
+    assert "trend entry/exit" in report
     states = list(csv.DictReader(manifest.daily_state_csv.open(encoding="utf-8")))
     assert len(states) == 9
     assert states[0]["actual_exposure"] == "0.0"
@@ -273,8 +301,36 @@ def test_formal_report_without_experiment_metadata_is_do_not_trade(tmp_path):
     assert summary["activation_eligible"] is False
 
 
-def test_legacy_experiment_manifest_deserializes_but_cannot_publish_formally(tmp_path):
+@pytest.mark.parametrize("forgery", ["version", "profile_hash", "unexpected_field"])
+def test_current_profile_forgery_is_rejected_and_cannot_publish(
+    tmp_path, monkeypatch, forgery,
+):
+    monkeypatch.setattr("asset_allocation.etf_adaptive.research.validation_report._plot", lambda *args: None)
     result = _recorded_result()
+    experiment_payload = deepcopy(result.run_manifest["experiment"])
+    if forgery == "version":
+        experiment_payload["profile"]["version"] = "forged"
+    elif forgery == "profile_hash":
+        experiment_payload["profile_hash"] = "forged"
+    else:
+        experiment_payload["profile"]["unexpected"] = True
+
+    with pytest.raises(ValueError):
+        ExperimentSpec.from_dict(experiment_payload)
+
+    metadata = dict(result.run_manifest)
+    metadata["experiment"] = experiment_payload
+    manifest = write_validation_artifacts(
+        replace(result, run_manifest=metadata), tmp_path / forgery,
+    )
+    summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
+    assert summary["decision"]["conclusion"] == "do_not_trade"
+    assert "experiment_metadata" in summary["decision"]["blockers"]
+    assert summary["activation_eligible"] is False
+
+
+def test_legacy_experiment_manifest_deserializes_but_cannot_publish_formally(tmp_path):
+    result = _legacy_recorded_result()
     legacy_payload = result.run_manifest["experiment"]
 
     spec = ExperimentSpec.from_dict(legacy_payload)
@@ -287,7 +343,7 @@ def test_legacy_experiment_manifest_deserializes_but_cannot_publish_formally(tmp
     assert summary["activation_eligible"] is False
 
 
-@pytest.mark.parametrize("change", ["window_hash", "attribution", "target", "selected_config", "unrun_policy", "unrun_benchmark", "undeclared_cost"])
+@pytest.mark.parametrize("change", ["window_hash", "attribution", "target", "selected_config"])
 def test_report_rejects_inconsistent_recorded_provenance(tmp_path, monkeypatch, change):
     monkeypatch.setattr("asset_allocation.etf_adaptive.research.validation_report._plot", lambda *args: None)
     result = _recorded_result()
@@ -301,15 +357,6 @@ def test_report_rejects_inconsistent_recorded_provenance(tmp_path, monkeypatch, 
         result.run_manifest["target"]["stock_code"] = "513330.SH"
     elif change == "selected_config":
         result.run_manifest["selected_configs"][0]["config_hash"] = "forged"
-    elif change == "unrun_policy":
-        from asset_allocation.etf_adaptive.research.strategy_specs import GRID_ONLY_SPEC
-        spec = replace(spec, profile=replace(spec.profile, strategy=GRID_ONLY_SPEC))
-    elif change == "unrun_benchmark":
-        from asset_allocation.etf_adaptive.research.strategy_specs import FIXED_HALF_SPEC
-        spec = replace(spec, profile=replace(spec.profile, benchmarks=(FIXED_HALF_SPEC,)))
-    elif change == "undeclared_cost":
-        config = replace(spec.strategy.config, cost=replace(spec.strategy.config.cost, slippage_bps=9.0))
-        spec = replace(spec, profile=replace(spec.profile, strategy=replace(spec.strategy, config=config)))
     result = bind_experiment(result, spec)
     manifest = write_validation_artifacts(result, tmp_path / "report")
     summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
@@ -324,8 +371,7 @@ def test_experiment_allows_provider_to_advance_to_first_aligned_session(tmp_path
     result = bind_experiment(result, spec)
     manifest = write_validation_artifacts(result, tmp_path / "report")
     summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
-    assert summary["decision"]["conclusion"] == "do_not_trade"
-    assert "experiment_metadata" in summary["decision"]["blockers"]
+    assert summary["decision"]["conclusion"] == "passed"
 
 
 @pytest.mark.parametrize("change", [
@@ -338,6 +384,7 @@ def test_formal_gate_rejects_rebound_cost_and_axis_bypasses(change):
     # Rebinding hashes must not turn altered execution settings into approved evidence.
     from asset_allocation.etf_adaptive.research.validation_report import validation_publication_decision
     result = _recorded_result()
+    assert validation_publication_decision(result)["conclusion"] == "passed"
     spec = ExperimentSpec.from_dict(result.run_manifest["experiment"])
     window = result.windows[0]
     config = AdaptiveConfig.default()
@@ -346,7 +393,7 @@ def test_formal_gate_rejects_rebound_cost_and_axis_bypasses(change):
     elif change in {"unapproved_cooldown", "undeclared_cooldown"}:
         config = replace(config, grid=replace(config.grid, cooldown_sessions=99 if change == "unapproved_cooldown" else 10))
         if change == "undeclared_cooldown":
-            spec = replace(spec, allowed_axes={"step_pct": (0.02,), "stop_n": (2.0,)})
+            spec = replace(spec, allowed_axes={"step_pct": (0.02,)})
     elif change == "undeclared_field":
         config = replace(config, grid=replace(config.grid, initial_model="atr"))
     if config != AdaptiveConfig.default():
@@ -377,7 +424,7 @@ def test_formal_gate_rejects_rebound_cost_and_axis_bypasses(change):
     result = bind_experiment(result, spec)
     decision = validation_publication_decision(result)
     assert decision["conclusion"] == "do_not_trade"
-    assert decision["blockers"]
+    assert "experiment_metadata" in decision["blockers"]
 
 
 def test_formal_gate_binds_candidate_deviations_to_its_own_screened_axes():
@@ -385,13 +432,14 @@ def test_formal_gate_binds_candidate_deviations_to_its_own_screened_axes():
     # an undeclared deviation in this candidate after its evidence is rebound.
     from asset_allocation.etf_adaptive.research.validation_report import validation_publication_decision
     result = _recorded_result()
+    assert validation_publication_decision(result)["conclusion"] == "passed"
     spec = ExperimentSpec.from_dict(result.run_manifest["experiment"])
     default = AdaptiveConfig.default()
     altered = replace(default, grid=replace(default.grid, unit_pct=0.15))
     windows = []
     for index, existing in enumerate(result.windows):
         config = altered if index == 0 else default
-        grid_score, trend_score = existing.candidate_scores
+        grid_score = existing.candidate_scores[0]
         candidate_with_hidden_deviation = replace(
             grid_score, config=asdict(config), config_hash=config.config_hash(), screened_axes=("step_pct",),
         )
@@ -401,12 +449,12 @@ def test_formal_gate_binds_candidate_deviations_to_its_own_screened_axes():
         windows.append(replace(
             existing,
             selected_config=asdict(config), config_hash=config.config_hash(),
-            screened_axes={"grid_only": (("step_pct",), ("unit_pct",)), "trend_only": (("stop_n",),)},
-            candidate_scores=(candidate_with_hidden_deviation, unit_screened_candidate, trend_score),
-            selected_scores={"grid_only": candidate_with_hidden_deviation, "trend_only": trend_score},
+            screened_axes={"grid_only": (("step_pct",), ("unit_pct",))},
+            candidate_scores=(candidate_with_hidden_deviation, unit_screened_candidate),
+            selected_scores={"grid_only": candidate_with_hidden_deviation},
         ))
     result = replace(result, windows=tuple(windows))
-    result.run_manifest["screened_axes"] = {"grid": ["step_pct", "unit_pct"], "trend": ["stop_n"]}
+    result.run_manifest["screened_axes"] = {"grid": ["step_pct", "unit_pct"]}
     result.run_manifest["selected_configs"] = [
         {"window_id": item.window_id, "config_hash": item.config_hash, "config": item.selected_config}
         for item in result.windows
@@ -414,7 +462,9 @@ def test_formal_gate_binds_candidate_deviations_to_its_own_screened_axes():
 
     rebound = bind_experiment(result, spec)
 
-    assert validation_publication_decision(rebound)["conclusion"] == "do_not_trade"
+    decision = validation_publication_decision(rebound)
+    assert decision["conclusion"] == "do_not_trade"
+    assert "experiment_metadata" in decision["blockers"]
 
 
 def test_final_rename_failure_preserves_complete_previous_report(tmp_path, monkeypatch):

@@ -25,7 +25,7 @@ from .decision import ResearchConclusion
 from .experiment import ExperimentSpec, experiment_evidence
 from .instrument_validation import InstrumentValidationResult, ValidationWindowResult
 from .metrics import PerformanceMetrics
-from .strategy_specs import BUY_AND_HOLD_SPEC, FULL_ADAPTIVE_SPEC
+from .strategy_profiles import GRID_PLUS_OPTIONAL_TREND_PROFILE
 
 
 @dataclass(frozen=True)
@@ -146,10 +146,9 @@ def _experiment_blockers(result: InstrumentValidationResult) -> list[str]:
                      "config": window.selected_config} for window in result.windows
                 ]):
             return ["experiment_metadata"]
-        # This recorded-result interface currently runs FULL_ADAPTIVE against B&H.
-        # A declaration cannot relabel those runs as another policy/benchmark.
-        if (spec.strategy != FULL_ADAPTIVE_SPEC
-                or spec.benchmarks != (BUY_AND_HOLD_SPEC,)):
+        # Task 3 introduces the remaining profile execution paths. Until then,
+        # this recorded-result interface can only certify its existing adaptive run.
+        if spec.profile != GRID_PLUS_OPTIONAL_TREND_PROFILE:
             return ["experiment_metadata"]
         expected = experiment_evidence(result, spec)
         if any(manifest.get(key) != value for key, value in expected.items()):
@@ -168,7 +167,7 @@ def _experiment_blockers(result: InstrumentValidationResult) -> list[str]:
             blockers.append("candidate_scores")
         else:
             candidates = [item.to_dict() for item in window.candidate_scores]
-            if set(window.selected_scores) != {"grid_only", "trend_only"}:
+            if set(window.selected_scores) != set(spec.profile.selection_families):
                 blockers.append("selected_scores")
             for family, score in window.selected_scores.items():
                 section = {"grid_only": "grid", "trend_only": "trend"}.get(family)
@@ -209,9 +208,13 @@ def _validate_execution_boundaries(window, manifest_axes, spec) -> None:
     base = asdict(spec.strategy.config)
     if window.cost_config is None or asdict(window.cost_config) != base["cost"]:
         raise ValueError("recorded execution cost differs from declaration")
-    if not isinstance(manifest_axes, Mapping) or set(manifest_axes) != {"grid", "trend"}:
+    family_sections = {
+        family: "grid" if family == "grid_only" else "trend"
+        for family in spec.profile.selection_families
+    }
+    if not isinstance(manifest_axes, Mapping) or set(manifest_axes) != set(family_sections.values()):
         raise ValueError("missing screening metadata")
-    if not isinstance(window.screened_axes, Mapping) or set(window.screened_axes) != {"grid_only", "trend_only"}:
+    if not isinstance(window.screened_axes, Mapping) or set(window.screened_axes) != set(family_sections):
         raise ValueError("missing window screening metadata")
 
     def axes_set(axes, section):
@@ -221,8 +224,11 @@ def _validate_execution_boundaries(window, manifest_axes, spec) -> None:
             raise ValueError("undeclared or wrong-family screened axis")
         return set(axes)
 
-    approved = {section: axes_set(manifest_axes[section], section) for section in ("grid", "trend")}
-    for family, section in (("grid_only", "grid"), ("trend_only", "trend")):
+    approved = {
+        section: axes_set(manifest_axes[section], section)
+        for section in family_sections.values()
+    }
+    for family, section in family_sections.items():
         stages = window.screened_axes[family]
         if not isinstance(stages, (tuple, list)) or not stages:
             raise ValueError("missing screening stages")
@@ -251,7 +257,7 @@ def _validate_execution_boundaries(window, manifest_axes, spec) -> None:
 
     check_config(window.selected_config, approved)
     for score in window.candidate_scores:
-        section = {"grid_only": "grid", "trend_only": "trend"}.get(score.family)
+        section = family_sections.get(score.family)
         if section is None:
             raise ValueError("unrun candidate family")
         axes = axes_set(score.screened_axes, section)

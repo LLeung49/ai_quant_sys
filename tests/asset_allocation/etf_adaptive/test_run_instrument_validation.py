@@ -50,6 +50,7 @@ def test_cli_binds_declared_experiment_before_publication(tmp_path, monkeypatch)
     metadata = captured[0].run_manifest
     assert metadata["experiment"]["target_codes"] == [target.stock_code]
     assert metadata["experiment"]["as_of_date"] == "2026-09-08"
+    assert metadata["experiment"]["profile"]["profile_id"] == "legacy_unprofiled"
     assert metadata["experiment_hash"]
     assert metadata["strategy_spec"]["policy_id"] == "full_adaptive"
 

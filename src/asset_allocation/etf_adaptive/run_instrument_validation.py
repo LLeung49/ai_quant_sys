@@ -1,6 +1,7 @@
 """Run fixed-universe ETF validation and publish local research artifacts."""
 
 import argparse
+from dataclasses import asdict
 from datetime import date
 from decimal import Decimal
 import json
@@ -12,6 +13,19 @@ from .research.experiment import (APPROVED_EXPERIMENT_AXES, ExperimentSpec, bind
 from .research.strategy_specs import FULL_ADAPTIVE_SPEC, BUY_AND_HOLD_SPEC
 from .research.validation_provider import default_validation_provider
 from .research.validation_report import validation_publication_decision, write_atomic_text, write_validation_artifacts
+
+
+def _legacy_fixed_experiment(stock_code: str, start_date: date, as_of_date: date) -> ExperimentSpec:
+    """Keep the historical fixed-universe CLI readable and non-actionable."""
+    return ExperimentSpec.from_dict({
+        "experiment_id": "fixed-etf-adaptive-validation-v1",
+        "target_codes": [stock_code],
+        "strategy": asdict(FULL_ADAPTIVE_SPEC),
+        "benchmarks": [asdict(BUY_AND_HOLD_SPEC)],
+        "allowed_axes": {axis: list(values) for axis, values in APPROVED_EXPERIMENT_AXES.items()},
+        "start_date": start_date.isoformat(),
+        "as_of_date": as_of_date.isoformat(),
+    })
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -54,10 +68,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"validating {target.stock_code} from {effective_start}", flush=True)
         options = {"training_plan": study_training_plan(study)} if study else {}
         result = run_instrument_validation(target, provider, effective_start, cutoff, Decimal(args.initial_cash), **options)
-        experiment = study or ExperimentSpec(
-            "fixed-etf-adaptive-validation-v1", (target.stock_code,), FULL_ADAPTIVE_SPEC,
-            (BUY_AND_HOLD_SPEC,), APPROVED_EXPERIMENT_AXES, effective_start, cutoff,
-        )
+        experiment = study or _legacy_fixed_experiment(target.stock_code, effective_start, cutoff)
         result = bind_experiment(result, experiment)
         write_validation_artifacts(result, output / target.stock_code)
         print(f"completed {target.stock_code}: {result.status.value}", flush=True)
