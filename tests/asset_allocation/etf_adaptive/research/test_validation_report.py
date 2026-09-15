@@ -166,7 +166,12 @@ def _optional_trend_manifest(result: InstrumentValidationResult) -> Mapping[str,
 
 
 def _profiled_recorded_result(profile=GRID_PLUS_OPTIONAL_TREND_PROFILE) -> InstrumentValidationResult:
-    from asset_allocation.etf_adaptive.research.instrument_validation import _run_manifest
+    from asset_allocation.etf_adaptive.research.instrument_validation import (
+        _recorded_performance,
+        _run_manifest,
+        _stitch_paths,
+    )
+    from asset_allocation.etf_adaptive.research.metrics import calculate_performance
 
     result = _recorded_result()
     config = AdaptiveConfig.default()
@@ -191,7 +196,20 @@ def _profiled_recorded_result(profile=GRID_PLUS_OPTIONAL_TREND_PROFILE) -> Instr
             "profile_id": profile.profile_id,
             "benchmark_runs": benchmark_runs,
             "execution_config": config,
+            "strategy_metrics": _recorded_performance(
+                window.strategy_daily_nav, window.strategy_events, config.cost,
+            ),
+            "benchmark_metrics": _recorded_performance(
+                window.benchmark_daily_nav, window.benchmark_events, config.cost,
+            ),
         }
+        updates["excess_attribution"] = build_excess_attribution(
+            window.strategy_daily_nav,
+            window.benchmark_daily_nav,
+            window.strategy_observations,
+            window.strategy_events,
+            execution_cost=updates["strategy_metrics"].total_cost,
+        )
         if profile is CORE_HOLD_REBALANCE_PROFILE:
             updates.update(
                 selected_config=None,
@@ -204,7 +222,34 @@ def _profiled_recorded_result(profile=GRID_PLUS_OPTIONAL_TREND_PROFILE) -> Instr
                 trend_training_surface=(),
             )
         windows.append(replace(window, **updates))
-    result = replace(result, windows=tuple(windows))
+    strategy_path = _stitch_paths(tuple(window.strategy_nav for window in windows))
+    benchmark_path = _stitch_paths(tuple(window.benchmark_nav for window in windows))
+    strategy_metrics = replace(
+        calculate_performance(strategy_path, ()),
+        total_cost=sum(window.strategy_metrics.total_cost for window in windows),
+    )
+    benchmark_metrics = replace(
+        calculate_performance(benchmark_path, ()),
+        total_cost=sum(window.benchmark_metrics.total_cost for window in windows),
+    )
+    evidence = replace(
+        result.evidence,
+        drawdown_improvement=(
+            abs(benchmark_metrics.max_drawdown) - abs(strategy_metrics.max_drawdown)
+        ),
+        cvar5_improvement=benchmark_metrics.cvar5 - strategy_metrics.cvar5,
+        total_cost=strategy_metrics.total_cost,
+        cost_drag=strategy_metrics.total_cost / result.evidence.initial_oos_nav,
+    )
+    result = replace(
+        result,
+        windows=tuple(windows),
+        strategy_metrics=strategy_metrics,
+        benchmark_metrics=benchmark_metrics,
+        strategy_max_drawdown=abs(strategy_metrics.max_drawdown),
+        benchmark_max_drawdown=abs(benchmark_metrics.max_drawdown),
+        evidence=evidence,
+    )
     manifest = _run_manifest(
         result.target,
         date(2025, 1, 2),
@@ -307,8 +352,8 @@ def test_complete_recorded_profile_execution_removes_unexecuted_benchmark_blocke
         },
     }
     assert summary["trend_diagnostics"]["active_sessions"] == 6
-    assert summary["trend_diagnostics"]["execution_cost"] == pytest.approx(3.0)
-    assert summary["trend_diagnostics"]["incremental_execution_cost"] == pytest.approx(2.4)
+    assert summary["trend_diagnostics"]["execution_cost"] == pytest.approx(15.073417974607617)
+    assert summary["trend_diagnostics"]["incremental_execution_cost"] == pytest.approx(15.073417974607617)
 
 
 def test_missing_recorded_profile_benchmark_run_remains_fail_closed() -> None:
@@ -363,6 +408,51 @@ def test_unreconciled_optional_trend_attribution_uses_profile_blocker() -> None:
     assert "profile_mode_attribution" in decision["blockers"]
 
 
+def test_optional_trend_report_rejects_cost_not_reconciled_to_recorded_events(tmp_path) -> None:
+    # Break caught: matching forged metric/attribution cost fields can bypass the recorded-event ledger.
+    result = _profiled_recorded_result()
+    window = result.windows[0]
+    forged_cost = window.strategy_metrics.total_cost + 7.0
+    forged_window = replace(
+        window,
+        strategy_metrics=replace(window.strategy_metrics, total_cost=forged_cost),
+        excess_attribution=replace(window.excess_attribution, execution_cost=forged_cost),
+    )
+    result = replace(result, windows=(forged_window, *result.windows[1:]))
+    result = bind_experiment(result, ExperimentSpec.from_dict(result.run_manifest["experiment"]))
+
+    summary = json.loads(
+        write_validation_artifacts(result, tmp_path / "forged-cost").summary_json.read_text()
+    )
+
+    assert summary["decision"]["conclusion"] == "do_not_trade"
+    assert "profile_mode_attribution" in summary["decision"]["blockers"]
+    assert summary["trend_diagnostics"] is None
+
+
+@pytest.mark.parametrize("metric_name, forged_value", (
+    ("max_drawdown", -0.75),
+    ("cvar5", -0.50),
+))
+def test_optional_trend_report_rejects_aggregate_risk_not_reconciled_to_nav(
+    tmp_path, metric_name, forged_value,
+) -> None:
+    # Break caught: mutable aggregate MDD/CVaR fields can publish unsupported diagnostic deltas.
+    result = _profiled_recorded_result()
+    result = replace(
+        result,
+        strategy_metrics=replace(result.strategy_metrics, **{metric_name: forged_value}),
+    )
+
+    summary = json.loads(
+        write_validation_artifacts(result, tmp_path / metric_name).summary_json.read_text()
+    )
+
+    assert summary["decision"]["conclusion"] == "do_not_trade"
+    assert "profile_mode_attribution" in summary["decision"]["blockers"]
+    assert summary["trend_diagnostics"] is None
+
+
 def test_low_optional_trend_activity_is_diagnostic_only(tmp_path) -> None:
     # Break caught: a zero active-session diagnostic can be promoted into an unstated trading gate.
     result = _profiled_recorded_result()
@@ -390,6 +480,39 @@ def test_low_optional_trend_activity_is_diagnostic_only(tmp_path) -> None:
     assert summary["trend_diagnostics"]["active_sessions"] == 0
     assert summary["decision"]["conclusion"] == "passed"
     assert "profile_mode_attribution" not in summary["decision"]["blockers"]
+
+
+def test_shortened_non_reference_benchmark_ledger_is_unexecuted_evidence() -> None:
+    # Break caught: a benchmark manifest can faithfully describe a ledger that omits the OOS tail.
+    from asset_allocation.etf_adaptive.research.instrument_validation import _run_manifest
+
+    result = _profiled_recorded_result()
+    window = result.windows[0]
+    shortened = replace(
+        window.benchmark_runs["fixed_half_hold"],
+        nav=window.benchmark_runs["fixed_half_hold"].nav[:-1],
+    )
+    shortened_window = replace(
+        window,
+        benchmark_runs={**window.benchmark_runs, "fixed_half_hold": shortened},
+    )
+    result = replace(result, windows=(shortened_window, *result.windows[1:]))
+    execution_manifest = _run_manifest(
+        result.target,
+        date(2025, 1, 2),
+        result.as_of_date,
+        object(),
+        result.windows[0].market_bars,
+        result.windows,
+        profile=GRID_PLUS_OPTIONAL_TREND_PROFILE,
+    )
+    manifest = deepcopy(result.run_manifest)
+    manifest["execution_windows"] = execution_manifest["execution_windows"]
+
+    decision = validation_publication_decision(replace(result, run_manifest=manifest))
+
+    assert decision["conclusion"] == "do_not_trade"
+    assert "unexecuted_benchmark_evidence" in decision["blockers"]
 
 
 @pytest.mark.parametrize("profile", (GRID_CORE_PROFILE, CORE_HOLD_REBALANCE_PROFILE))
@@ -422,6 +545,38 @@ def test_core_hold_report_keeps_candidate_surface_empty(tmp_path) -> None:
     summary = json.loads(artifacts.summary_json.read_text())
     assert summary["strategy_profile"]["executable_strategy_id"] is None
     assert summary["decision"]["conclusion"] == "do_not_trade"
+
+
+@pytest.mark.parametrize("experiment_metadata", ("missing", "conflicting"))
+def test_core_candidate_csv_stays_empty_when_experiment_metadata_is_invalid(
+    tmp_path, experiment_metadata,
+) -> None:
+    # Break caught: a broken experiment payload can disable deterministic-core candidate suppression.
+    import csv
+
+    result = _profiled_recorded_result(CORE_HOLD_REBALANCE_PROFILE)
+    forged_candidate = _recorded_result().windows[0].candidate_scores[0]
+    result = replace(
+        result,
+        windows=(
+            replace(result.windows[0], candidate_scores=(forged_candidate,)),
+            *result.windows[1:],
+        ),
+    )
+    manifest = deepcopy(result.run_manifest)
+    if experiment_metadata == "missing":
+        manifest.pop("experiment")
+    else:
+        grid = _profiled_recorded_result(GRID_CORE_PROFILE)
+        manifest["experiment"] = deepcopy(grid.run_manifest["experiment"])
+
+    artifacts = write_validation_artifacts(
+        replace(result, run_manifest=manifest), tmp_path / experiment_metadata,
+    )
+    summary = json.loads(artifacts.summary_json.read_text())
+
+    assert summary["decision"]["conclusion"] == "do_not_trade"
+    assert list(csv.DictReader(artifacts.candidate_scores_csv.open(encoding="utf-8"))) == []
 
 
 def test_validation_artifacts_fail_closed_without_all_profile_benchmarks(tmp_path: Path) -> None:

@@ -29,8 +29,9 @@ from .instrument_validation import (
     ValidationWindowResult,
     _recorded_performance,
 )
-from .metrics import PerformanceMetrics
+from .metrics import PerformanceMetrics, calculate_performance
 from .strategy_profiles import (
+    CORE_HOLD_REBALANCE_PROFILE,
     GRID_PLUS_OPTIONAL_TREND_PROFILE,
     StrategyProfileSpec,
     profile_for_id,
@@ -124,7 +125,11 @@ def _profile_mode_attribution_is_complete(
     result: InstrumentValidationResult,
     spec: ExperimentSpec,
 ) -> bool:
-    if not result.windows:
+    if (
+        not result.windows
+        or result.strategy_metrics is None
+        or result.benchmark_metrics is None
+    ):
         return False
     try:
         for window in result.windows:
@@ -139,12 +144,24 @@ def _profile_mode_attribution_is_complete(
                 )
             ):
                 return False
+            strategy_cost = _recorded_performance(
+                window.strategy_daily_nav, window.strategy_events, window.cost_config,
+            ).total_cost
+            benchmark_cost = _recorded_performance(
+                window.benchmark_daily_nav, window.benchmark_events, window.cost_config,
+            ).total_cost
+            if (
+                window.benchmark_metrics is None
+                or not isclose(window.strategy_metrics.total_cost, strategy_cost, abs_tol=1e-9)
+                or not isclose(window.benchmark_metrics.total_cost, benchmark_cost, abs_tol=1e-9)
+            ):
+                return False
             actual = build_excess_attribution(
                 window.strategy_daily_nav,
                 window.benchmark_daily_nav,
                 window.strategy_observations,
                 window.strategy_events,
-                execution_cost=window.strategy_metrics.total_cost,
+                execution_cost=strategy_cost,
             )
             if any(
                 not _finite(value)
@@ -152,9 +169,36 @@ def _profile_mode_attribution_is_complete(
                 for name, value in asdict(window.excess_attribution).items()
             ):
                 return False
+        strategy_metrics = _recorded_aggregate_nav_metrics(result, "strategy")
+        benchmark_metrics = _recorded_aggregate_nav_metrics(result, "benchmark")
+        if any((
+            not isclose(result.strategy_metrics.max_drawdown, strategy_metrics.max_drawdown,
+                        abs_tol=1e-9),
+            not isclose(result.strategy_metrics.cvar5, strategy_metrics.cvar5, abs_tol=1e-9),
+            not isclose(result.benchmark_metrics.max_drawdown, benchmark_metrics.max_drawdown,
+                        abs_tol=1e-9),
+            not isclose(result.benchmark_metrics.cvar5, benchmark_metrics.cvar5, abs_tol=1e-9),
+        )):
+            return False
     except (TypeError, ValueError, AttributeError, ArithmeticError):
         return False
     return True
+
+
+def _recorded_aggregate_nav_metrics(
+    result: InstrumentValidationResult,
+    role: str,
+) -> PerformanceMetrics:
+    compounded = 1.0
+    stitched: list[float] = []
+    for window in result.windows:
+        nav = window.strategy_daily_nav if role == "strategy" else window.benchmark_daily_nav
+        if not nav or nav[0].total <= 0:
+            raise ValueError("recorded NAV is missing or non-positive")
+        normalized = tuple(float(point.total / nav[0].total) for point in nav)
+        stitched.extend(compounded * value for value in normalized)
+        compounded = stitched[-1]
+    return calculate_performance(tuple(stitched), ())
 
 
 def _trend_diagnostics(result: InstrumentValidationResult) -> dict[str, object] | None:
@@ -192,16 +236,28 @@ def _trend_diagnostics(result: InstrumentValidationResult) -> dict[str, object] 
             window.excess_attribution.transition_return for window in result.windows
         ),
         "execution_cost": sum(
-            window.excess_attribution.execution_cost for window in result.windows
+            _recorded_performance(
+                window.strategy_daily_nav, window.strategy_events, window.cost_config,
+            ).total_cost
+            for window in result.windows
         ),
         "incremental_execution_cost": sum(
-            window.strategy_metrics.total_cost - window.benchmark_metrics.total_cost
+            _recorded_performance(
+                window.strategy_daily_nav, window.strategy_events, window.cost_config,
+            ).total_cost
+            - _recorded_performance(
+                window.benchmark_daily_nav, window.benchmark_events, window.cost_config,
+            ).total_cost
             for window in result.windows
         ),
         "max_drawdown_delta": (
-            result.strategy_metrics.max_drawdown - result.benchmark_metrics.max_drawdown
+            _recorded_aggregate_nav_metrics(result, "strategy").max_drawdown
+            - _recorded_aggregate_nav_metrics(result, "benchmark").max_drawdown
         ),
-        "cvar5_delta": result.strategy_metrics.cvar5 - result.benchmark_metrics.cvar5,
+        "cvar5_delta": (
+            _recorded_aggregate_nav_metrics(result, "strategy").cvar5
+            - _recorded_aggregate_nav_metrics(result, "benchmark").cvar5
+        ),
     }
 
 
@@ -276,6 +332,7 @@ def _evidence_blockers(result: InstrumentValidationResult) -> list[str]:
     if (
         spec is not None
         and spec.profile == GRID_PLUS_OPTIONAL_TREND_PROFILE
+        and _profile_execution_is_complete(result, spec.profile)
         and not _profile_mode_attribution_is_complete(result, spec)
     ):
         blockers.append("profile_mode_attribution")
@@ -332,6 +389,8 @@ def _profile_execution_is_complete(
                      if isinstance(item, Mapping)}
             if set(by_id) != set(declared):
                 return False
+            reference_run = runs[BUY_AND_HOLD_SPEC.benchmark_id]
+            reference_dates = tuple(point.nav_date for point in reference_run.nav)
             for benchmark_id, benchmark in declared.items():
                 run = runs[benchmark_id]
                 nav = tuple(run.nav)
@@ -343,8 +402,11 @@ def _profile_execution_is_complete(
                     or len({point.nav_date for point in nav}) != len(nav)
                     or tuple(sorted(point.nav_date for point in nav))
                     != tuple(point.nav_date for point in nav)
+                    or tuple(point.nav_date for point in nav) != reference_dates
+                    or run.request != reference_run.request
                     or run.request.stock_code != result.target.stock_code
                     or run.request.trade_start_date != window.validation_start
+                    or nav[-1].nav_date != run.request.end_date
                 ):
                     return False
                 expected_benchmark = {
@@ -720,6 +782,8 @@ def _daily_nav_rows(result: InstrumentValidationResult) -> list[dict[str, object
 
 
 def _candidate_score_rows(result: InstrumentValidationResult) -> list[dict[str, object]]:
+    if _has_recorded_core_profile_signal(result):
+        return []
     spec = _profile_spec(result)
     if spec is not None and spec.profile.strategy is None:
         return []
@@ -733,6 +797,14 @@ def _candidate_score_rows(result: InstrumentValidationResult) -> list[dict[str, 
                          "config": json.dumps(payload["config"], sort_keys=True, allow_nan=False),
                          "screened_axes": json.dumps(payload["screened_axes"])})
     return rows
+
+
+def _has_recorded_core_profile_signal(result: InstrumentValidationResult) -> bool:
+    core_id = CORE_HOLD_REBALANCE_PROFILE.profile_id
+    manifest = result.run_manifest
+    return (
+        isinstance(manifest, Mapping) and manifest.get("profile_id") == core_id
+    ) or any(window.profile_id == core_id for window in result.windows)
 
 
 def _daily_state_rows(result: InstrumentValidationResult) -> list[dict[str, object]]:
