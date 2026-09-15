@@ -430,6 +430,46 @@ def test_optional_trend_report_rejects_cost_not_reconciled_to_recorded_events(tm
     assert summary["trend_diagnostics"] is None
 
 
+def test_optional_trend_report_rejects_cost_config_not_bound_to_execution_manifest(
+    tmp_path,
+) -> None:
+    # Break caught: forged cost config plus matching metrics/attribution can still emit diagnostics.
+    from asset_allocation.etf_adaptive.research.instrument_validation import _recorded_performance
+
+    result = _profiled_recorded_result()
+    window = result.windows[0]
+    forged_cost_config = replace(window.cost_config, slippage_bps=9.0)
+    strategy_metrics = _recorded_performance(
+        window.strategy_daily_nav, window.strategy_events, forged_cost_config,
+    )
+    benchmark_metrics = _recorded_performance(
+        window.benchmark_daily_nav, window.benchmark_events, forged_cost_config,
+    )
+    forged_window = replace(
+        window,
+        cost_config=forged_cost_config,
+        strategy_metrics=strategy_metrics,
+        benchmark_metrics=benchmark_metrics,
+        excess_attribution=build_excess_attribution(
+            window.strategy_daily_nav,
+            window.benchmark_daily_nav,
+            window.strategy_observations,
+            window.strategy_events,
+            execution_cost=strategy_metrics.total_cost,
+        ),
+    )
+    result = replace(result, windows=(forged_window, *result.windows[1:]))
+    result = bind_experiment(result, ExperimentSpec.from_dict(result.run_manifest["experiment"]))
+
+    summary = json.loads(
+        write_validation_artifacts(result, tmp_path / "forged-cost-config").summary_json.read_text()
+    )
+
+    assert summary["decision"]["conclusion"] == "do_not_trade"
+    assert "profile_mode_attribution" in summary["decision"]["blockers"]
+    assert summary["trend_diagnostics"] is None
+
+
 @pytest.mark.parametrize("metric_name, forged_value", (
     ("max_drawdown", -0.75),
     ("cvar5", -0.50),
@@ -515,6 +555,44 @@ def test_shortened_non_reference_benchmark_ledger_is_unexecuted_evidence() -> No
     assert "unexecuted_benchmark_evidence" in decision["blockers"]
 
 
+def test_all_shortened_benchmark_ledgers_remain_unexecuted_against_market_window() -> None:
+    # Break caught: peers can agree on a shortened request while omitting recorded OOS market sessions.
+    from asset_allocation.etf_adaptive.research.instrument_validation import _run_manifest
+
+    result = _profiled_recorded_result()
+    window = result.windows[0]
+    shortened_runs = {
+        benchmark_id: replace(
+            run,
+            request=replace(run.request, end_date=run.nav[-2].nav_date),
+            nav=run.nav[:-1],
+        )
+        for benchmark_id, run in window.benchmark_runs.items()
+    }
+    shortened_window = replace(
+        window,
+        benchmark_runs=shortened_runs,
+        benchmark_daily_nav=shortened_runs["buy_and_hold"].nav,
+    )
+    result = replace(result, windows=(shortened_window, *result.windows[1:]))
+    execution_manifest = _run_manifest(
+        result.target,
+        date(2025, 1, 2),
+        result.as_of_date,
+        object(),
+        result.windows[0].market_bars,
+        result.windows,
+        profile=GRID_PLUS_OPTIONAL_TREND_PROFILE,
+    )
+    manifest = deepcopy(result.run_manifest)
+    manifest["execution_windows"] = execution_manifest["execution_windows"]
+
+    decision = validation_publication_decision(replace(result, run_manifest=manifest))
+
+    assert decision["conclusion"] == "do_not_trade"
+    assert "unexecuted_benchmark_evidence" in decision["blockers"]
+
+
 @pytest.mark.parametrize("profile", (GRID_CORE_PROFILE, CORE_HOLD_REBALANCE_PROFILE))
 def test_non_optional_profiles_publish_null_trend_diagnostics(tmp_path, profile) -> None:
     result = _profiled_recorded_result(profile)
@@ -572,6 +650,32 @@ def test_core_candidate_csv_stays_empty_when_experiment_metadata_is_invalid(
 
     artifacts = write_validation_artifacts(
         replace(result, run_manifest=manifest), tmp_path / experiment_metadata,
+    )
+    summary = json.loads(artifacts.summary_json.read_text())
+
+    assert summary["decision"]["conclusion"] == "do_not_trade"
+    assert list(csv.DictReader(artifacts.candidate_scores_csv.open(encoding="utf-8"))) == []
+
+
+def test_core_candidate_csv_uses_execution_window_profile_signal(tmp_path) -> None:
+    # Break caught: forged root/window identities can hide a recorded core execution profile.
+    import csv
+
+    result = _profiled_recorded_result(CORE_HOLD_REBALANCE_PROFILE)
+    grid = _profiled_recorded_result(GRID_CORE_PROFILE)
+    forged_candidate = _recorded_result().windows[0].candidate_scores[0]
+    windows = tuple(replace(
+        window,
+        profile_id=GRID_CORE_PROFILE.profile_id,
+        candidate_scores=(forged_candidate,) if index == 0 else (),
+    ) for index, window in enumerate(result.windows))
+    manifest = deepcopy(result.run_manifest)
+    manifest["profile_id"] = GRID_CORE_PROFILE.profile_id
+    manifest["profile_hash"] = GRID_CORE_PROFILE.profile_hash()
+    manifest["experiment"] = deepcopy(grid.run_manifest["experiment"])
+
+    artifacts = write_validation_artifacts(
+        replace(result, windows=windows, run_manifest=manifest), tmp_path / "execution-core",
     )
     summary = json.loads(artifacts.summary_json.read_text())
 

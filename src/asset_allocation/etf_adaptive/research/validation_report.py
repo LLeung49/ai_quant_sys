@@ -132,11 +132,23 @@ def _profile_mode_attribution_is_complete(
     ):
         return False
     try:
-        for window in result.windows:
+        manifest = result.run_manifest
+        recorded_windows = manifest["execution_windows"]
+        if (
+            not isinstance(recorded_windows, list)
+            or len(recorded_windows) != len(result.windows)
+        ):
+            return False
+        for window, recorded in zip(result.windows, recorded_windows):
+            execution_config = window.execution_config
             if (
                 not window.strategy_observations
                 or window.excess_attribution is None
                 or window.strategy_metrics is None
+                or not isinstance(execution_config, AdaptiveConfig)
+                or window.cost_config != execution_config.cost
+                or not isinstance(recorded, Mapping)
+                or recorded.get("execution_config") != asdict(execution_config)
                 or window.training_end >= window.validation_start
                 or any(
                     point.nav_date > spec.as_of_date or point.nav_date < spec.start_date
@@ -145,10 +157,10 @@ def _profile_mode_attribution_is_complete(
             ):
                 return False
             strategy_cost = _recorded_performance(
-                window.strategy_daily_nav, window.strategy_events, window.cost_config,
+                window.strategy_daily_nav, window.strategy_events, execution_config.cost,
             ).total_cost
             benchmark_cost = _recorded_performance(
-                window.benchmark_daily_nav, window.benchmark_events, window.cost_config,
+                window.benchmark_daily_nav, window.benchmark_events, execution_config.cost,
             ).total_cost
             if (
                 window.benchmark_metrics is None
@@ -207,6 +219,7 @@ def _trend_diagnostics(result: InstrumentValidationResult) -> dict[str, object] 
         spec is None
         or spec.profile != GRID_PLUS_OPTIONAL_TREND_PROFILE
         or _manifest_profile(result) != spec.profile
+        or not _profile_execution_is_complete(result, spec.profile)
         or not _profile_mode_attribution_is_complete(result, spec)
     ):
         return None
@@ -237,16 +250,22 @@ def _trend_diagnostics(result: InstrumentValidationResult) -> dict[str, object] 
         ),
         "execution_cost": sum(
             _recorded_performance(
-                window.strategy_daily_nav, window.strategy_events, window.cost_config,
+                window.strategy_daily_nav,
+                window.strategy_events,
+                window.execution_config.cost,
             ).total_cost
             for window in result.windows
         ),
         "incremental_execution_cost": sum(
             _recorded_performance(
-                window.strategy_daily_nav, window.strategy_events, window.cost_config,
+                window.strategy_daily_nav,
+                window.strategy_events,
+                window.execution_config.cost,
             ).total_cost
             - _recorded_performance(
-                window.benchmark_daily_nav, window.benchmark_events, window.cost_config,
+                window.benchmark_daily_nav,
+                window.benchmark_events,
+                window.execution_config.cost,
             ).total_cost
             for window in result.windows
         ),
@@ -329,13 +348,17 @@ def _evidence_blockers(result: InstrumentValidationResult) -> list[str]:
             blockers.append("selected_config")
     elif any(window.selected_config is not None for window in result.windows):
         blockers.append("selected_config")
-    if (
-        spec is not None
-        and spec.profile == GRID_PLUS_OPTIONAL_TREND_PROFILE
-        and _profile_execution_is_complete(result, spec.profile)
-        and not _profile_mode_attribution_is_complete(result, spec)
-    ):
-        blockers.append("profile_mode_attribution")
+    if spec is not None and spec.profile == GRID_PLUS_OPTIONAL_TREND_PROFILE:
+        execution_complete = _profile_execution_is_complete(result, spec.profile)
+        manifest_has_execution_evidence = (
+            isinstance(result.run_manifest, Mapping)
+            and isinstance(result.run_manifest.get("execution_windows"), list)
+        )
+        if (
+            (manifest_has_execution_evidence and not execution_complete)
+            or (execution_complete and not _profile_mode_attribution_is_complete(result, spec))
+        ):
+            blockers.append("profile_mode_attribution")
     blockers.extend(_experiment_blockers(result))
     return list(dict.fromkeys(blockers))
 
@@ -362,10 +385,15 @@ def _profile_execution_is_complete(
         for window, recorded in zip(result.windows, recorded_windows):
             config = window.execution_config
             runs = window.benchmark_runs
+            intended_dates = tuple(bar.trade_date for bar in window.market_bars)
             if (
                 not isinstance(config, AdaptiveConfig)
                 or not isinstance(runs, Mapping)
                 or set(runs) != set(declared)
+                or not intended_dates
+                or intended_dates[0] != window.validation_start
+                or len(set(intended_dates)) != len(intended_dates)
+                or tuple(sorted(intended_dates)) != intended_dates
                 or window.cost_config != config.cost
                 or not isinstance(recorded, Mapping)
                 or recorded.get("window_id") != window.window_id
@@ -402,6 +430,7 @@ def _profile_execution_is_complete(
                     or len({point.nav_date for point in nav}) != len(nav)
                     or tuple(sorted(point.nav_date for point in nav))
                     != tuple(point.nav_date for point in nav)
+                    or tuple(point.nav_date for point in nav) != intended_dates
                     or tuple(point.nav_date for point in nav) != reference_dates
                     or run.request != reference_run.request
                     or run.request.stock_code != result.target.stock_code
@@ -802,9 +831,16 @@ def _candidate_score_rows(result: InstrumentValidationResult) -> list[dict[str, 
 def _has_recorded_core_profile_signal(result: InstrumentValidationResult) -> bool:
     core_id = CORE_HOLD_REBALANCE_PROFILE.profile_id
     manifest = result.run_manifest
+    execution_windows = manifest.get("execution_windows") if isinstance(manifest, Mapping) else None
     return (
         isinstance(manifest, Mapping) and manifest.get("profile_id") == core_id
-    ) or any(window.profile_id == core_id for window in result.windows)
+    ) or any(window.profile_id == core_id for window in result.windows) or (
+        isinstance(execution_windows, list)
+        and any(
+            isinstance(window, Mapping) and window.get("profile_id") == core_id
+            for window in execution_windows
+        )
+    )
 
 
 def _daily_state_rows(result: InstrumentValidationResult) -> list[dict[str, object]]:
