@@ -198,25 +198,27 @@ class CachedValidationProvider:
 
 
 class _TrainingReplayProvider:
-    """Expose pre-validation warm-up and one train segment, never prior OOS sessions."""
+    """Expose warm-up and eligible training history, excluding other OOS dates."""
 
-    def __init__(self, provider: object, evaluation_start: date, trade_start: date) -> None:
+    def __init__(self, provider: object, evaluation_start: date, training_dates: Sequence[date]) -> None:
         self._provider = provider
         self._evaluation_start = evaluation_start
-        self._trade_start = trade_start
+        self._training_dates = frozenset(training_dates)
 
     def load_bars(self, stock_code: str, start_date: date, end_date: date):
         bars = self._provider.load_bars(stock_code, start_date, end_date)
         return tuple(
             bar for bar in bars
-            if bar.trade_date < self._evaluation_start or bar.trade_date >= self._trade_start
+            if start_date <= bar.trade_date <= end_date
+            and (bar.trade_date < self._evaluation_start or bar.trade_date in self._training_dates)
         )
 
     def load_actions(self, stock_code: str, start_date: date, end_date: date):
         actions = self._provider.load_actions(stock_code, start_date, end_date)
         return tuple(
             action for action in actions
-            if action.effective_date < self._evaluation_start or action.effective_date >= self._trade_start
+            if start_date <= action.effective_date <= end_date
+            and (action.effective_date < self._evaluation_start or action.effective_date in self._training_dates)
         )
 
     def load_eligibility(self, stock_code: str, bars):
@@ -627,7 +629,7 @@ def _screen_training_candidates(
         total_sessions = 0
         for segment in segments:
             request = BacktestRequest(stock_code, initial_cash, history_start, segment[-1], segment[0])
-            replay_provider = _TrainingReplayProvider(provider, evaluation_start, segment[0])
+            replay_provider = _TrainingReplayProvider(provider, evaluation_start, dates)
             strategy = run_baseline(candidate_kind, request, replay_provider, candidate.config)
             benchmark = run_baseline(BaselineKind.BUY_AND_HOLD, request, replay_provider, candidate.config)
             excess.append(_nav_return(strategy.result.nav) - _nav_return(benchmark.result.nav))

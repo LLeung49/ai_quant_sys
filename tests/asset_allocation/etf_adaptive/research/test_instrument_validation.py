@@ -777,3 +777,40 @@ def test_training_segments_keep_prior_history_for_eligibility_without_booking_wa
     assert {request.trade_start_date for request in requests} == {dates[index] for index in range(0, len(dates), 5)}
     assert all(request.end_date in dates and request.end_date < dates[-1] or request.end_date == dates[-1]
                for request in requests)
+
+
+def test_second_training_segment_keeps_prior_training_indicator_history(monkeypatch) -> None:
+    # Dropping 126 prior TRAINING days removes the first day's usable MA20.
+    from asset_allocation.etf_adaptive.indicators import compute_indicators
+    from asset_allocation.etf_adaptive.research import instrument_validation as module
+    from asset_allocation.etf_adaptive.research.baselines import BaselineRun
+
+    days = tuple(date(2024, 1, 1) + timedelta(days=index) for index in range(503))
+    bars = tuple(DualPriceBar(
+        "510300.SH", day, price, price, price, price, price, price, price, price,
+        20_000_000.0, False, 1.0,
+    ) for index, day in enumerate(days) for price in (10.0 if index < 251 else 20.0,))
+
+    class Provider:
+        def load_bars(self, stock_code, start_date, end_date):
+            return tuple(bar for bar in bars if start_date <= bar.trade_date <= end_date)
+
+    observed = []
+
+    def replay(kind, request, provider, config):
+        history = provider.load_bars(request.stock_code, request.start_date, request.trade_start_date)
+        if request.trade_start_date == days[377]:
+            snapshot = compute_indicators(history)[-1]
+            observed.append((len(history), snapshot.ma20 if snapshot is not None else None))
+        nav = tuple(DailyNav(day, Decimal(str(total)), Decimal("0"))
+                    for day, total in zip(days[days.index(request.trade_start_date):], (100, 99, 103, 101, 105)))
+        return BaselineRun(kind, config, BacktestResult(request, (), nav))
+
+    monkeypatch.setattr(module, "run_baseline", replay)
+    module._screen_training_candidates(
+        "510300.SH", Provider(), days[251:], Decimal("100"),
+        (ParameterCandidate(AdaptiveConfig.default(), family="grid_only"),),
+        ("step_pct",), 126, history_start=days[0], evaluation_start=days[251],
+    )
+
+    assert observed == [(378, 20.0), (378, 20.0)]

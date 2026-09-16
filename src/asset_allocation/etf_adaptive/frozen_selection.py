@@ -21,7 +21,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
-from .config import AdaptiveConfig
+from .config import AdaptiveConfig, CostConfig, GridConfig, TrendConfig
 from .contracts import InstrumentType, SubLayer, asset_layer_for
 from .shadow_store import FrozenConfigRecord, ShadowStore
 
@@ -126,13 +126,7 @@ class FrozenSelection:
             str(layer): float(weight)
             for layer, weight in payload.get("layer_weights", {}).items()
         }
-        base_config = AdaptiveConfig.default()
-        try:
-            declared_hash = str(payload.get("declared_config_hash") or "")
-        except (KeyError, TypeError):
-            declared_hash = ""
-        if declared_hash:
-            base_config = _rebuild_config(payload)
+        base_config = _rebuild_config(payload)
         _validate_configured_sub_layer_budgets(payload, targets)
         return cls(
             selection_id=str(payload["selection_id"]),
@@ -158,10 +152,20 @@ class FrozenSelection:
 
 
 def _rebuild_config(payload: Mapping[str, Any]) -> AdaptiveConfig:
-    declared_hash = payload.get("declared_config_hash")
-    if not declared_hash:
+    if "declared_config_hash" not in payload and "config" not in payload:
         return AdaptiveConfig.default()
-    return AdaptiveConfig.default()
+    try:
+        data = payload["config"]
+        config = AdaptiveConfig(
+            grid=GridConfig(**data["grid"]),
+            trend=TrendConfig(**data["trend"]),
+            cost=CostConfig(**data["cost"]),
+        )
+        if config.config_hash() != payload["declared_config_hash"]:
+            raise ValueError("declared_config_hash does not match config")
+    except (KeyError, TypeError, ValueError) as exc:
+        raise FrozenSelectionError(f"invalid declared config: {exc}") from exc
+    return config
 
 
 def _validate_targets(targets: Sequence[FrozenTarget]) -> None:
@@ -321,16 +325,14 @@ def _parse_date(value: Any) -> date:
     raise FrozenSelectionError(f"expected ISO date string, got {value!r}")
 
 
-def activate_selection(
-    store: ShadowStore,
-    selection: FrozenSelection,
-    *,
-    now: datetime | None = None,
-) -> FrozenConfigRecord:
-    """Validate activation and persist the frozen selection to ``store``."""
-
-    selection.validate_activation(date.today() if now is None else now.date())
+def _activation_payload(selection: FrozenSelection) -> dict[str, Any]:
+    """Keep selection and parameter identities separate in the persisted envelope."""
     payload = dict(selection.selection_payload)
+    payload["selection_hash"] = selection.config_hash
+    payload["declared_config_hash"] = selection.base_config.config_hash()
+    # Normalization changes the original manifest's representation. Preserve
+    # that signed input so a loader can still recompute its canonical identity.
+    payload["selection_manifest"] = dict(selection.selection_payload)
     # Persist the normalized frozen records, not the possibly sparse manifest
     # representation, so every daily consumer receives the immutable funding
     # and identity fields without inferring them from a parent layer.
@@ -347,10 +349,24 @@ def activate_selection(
         }
         for target in selection.targets
     ]
+    return payload
+
+
+def activate_selection(
+    store: ShadowStore,
+    selection: FrozenSelection,
+    *,
+    now: datetime | None = None,
+) -> FrozenConfigRecord:
+    """Validate activation and persist the frozen selection to ``store``."""
+
+    selection.validate_activation(date.today() if now is None else now.date())
     record = FrozenConfigRecord(
+        # The existing storage/run key identifies the whole approved selection,
+        # so activations with equal parameters but different funding stay distinct.
         config_hash=selection.config_hash,
         config=selection.base_config,
-        selection_payload=payload,
+        selection_payload=_activation_payload(selection),
         data_cutoff=selection.data_cutoff,
         activation_date=selection.activation_date,
         review_date=selection.review_date,

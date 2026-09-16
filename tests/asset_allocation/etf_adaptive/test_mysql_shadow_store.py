@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from dataclasses import asdict
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
+import json
 
 import pytest
 
 from asset_allocation.etf_adaptive.config import AdaptiveConfig, CostConfig, GridConfig, TrendConfig
+from asset_allocation.etf_adaptive.frozen_selection import FrozenSelection, _canonical_hash, activate_selection
 from asset_allocation.etf_adaptive.mysql_shadow_store import (
     MySQLShadowStore,
     _deserialize_strategy_state,
@@ -100,6 +103,74 @@ def _connection_factory(connection: _RecordingConnection):
     def factory() -> _RecordingConnection:
         return connection
     return factory
+
+
+def _selection_payload(config=None):
+    payload = {
+        "selection_id": "round-trip", "data_cutoff": "2026-09-01",
+        "activation_date": "2026-09-01",
+        "review_date": (date(2026, 9, 1) + timedelta(days=183)).isoformat(),
+        "targets": [{"stock_code": "510300.SH", "sub_layer": "broad_domestic_core",
+                     "sub_layer_budget": "42000", "instrument_type": "etf", "weight": "1"}],
+    }
+    if config is not None:
+        payload.update(config=asdict(config), declared_config_hash=config.config_hash())
+    payload["config_hash"] = _canonical_hash(payload)
+    return payload
+
+
+class _FrozenRowCursor(_RecordingCursor):
+    """Persist the actual INSERT tuple at the external SQL boundary."""
+    frozen_row = None
+
+    def execute(self, sql, params=None):
+        super().execute(sql, params)
+        if "INSERT INTO asset_allocation_etf_adaptive_frozen_config" in sql:
+            self.frozen_row = params
+
+    def fetchone(self):
+        return self.frozen_row
+
+
+@pytest.mark.parametrize("custom", (False, True))
+@pytest.mark.parametrize("active", (False, True))
+def test_normal_selection_activation_round_trips_through_mysql(custom, active):
+    config = AdaptiveConfig(grid=GridConfig(step_pct=0.035), cost=CostConfig(slippage_bps=4.0)) if custom else AdaptiveConfig.default()
+    selection = FrozenSelection.from_payload(_selection_payload(config if custom else None))
+    conn = _RecordingConnection()
+    conn.cursor_obj = _FrozenRowCursor()
+    store = MySQLShadowStore(connection_factory=_connection_factory(conn))
+    activated = activate_selection(store, selection, now=datetime(2026, 9, 1, 17, 0))
+
+    loaded = store.load_active_frozen_config(date(2026, 9, 2)) if active else store.load_frozen_config(selection.config_hash)
+
+    assert loaded == activated
+    assert loaded.config == config
+    assert loaded.config_hash == selection.config_hash != config.config_hash()
+    assert loaded.selection_payload["selection_hash"] == selection.config_hash
+    assert loaded.selection_payload["declared_config_hash"] == config.config_hash()
+
+
+@pytest.mark.parametrize("field", ("config", "selection"))
+def test_mysql_selection_load_rejects_tampering_of_either_identity(field):
+    selection = FrozenSelection.from_payload(_selection_payload())
+    conn = _RecordingConnection()
+    conn.cursor_obj = _FrozenRowCursor()
+    store = MySQLShadowStore(connection_factory=_connection_factory(conn))
+    activate_selection(store, selection, now=datetime(2026, 9, 1, 17, 0))
+    row = list(conn.cursor_obj.frozen_row)
+    if field == "config":
+        payload = json.loads(row[1])
+        payload["grid"]["step_pct"] = 0.035
+        row[1] = json.dumps(payload)
+    else:
+        payload = json.loads(row[2])
+        payload["targets"][0]["sub_layer_budget"] = "99999"
+        row[2] = json.dumps(payload)
+    conn.cursor_obj.frozen_row = tuple(row)
+
+    with pytest.raises(ValueError):
+        store.load_active_frozen_config(date(2026, 9, 2))
 
 
 def _frozen_record() -> FrozenConfigRecord:
@@ -398,6 +469,9 @@ def test_load_active_frozen_config_restores_the_approved_nondefault_parameters()
 
 def test_iter_runs_yields_shadow_run_records_for_each_row() -> None:
     conn = _RecordingConnection()
+    store = MySQLShadowStore(connection_factory=_connection_factory(conn))
+    store.ensure_schema()
+    conn.cursor_obj = _RecordingCursor()
     state_json = _serialize_strategy_state(_run_record().state.state)
     conn.cursor_obj.set_results(
         [
@@ -405,9 +479,8 @@ def test_iter_runs_yields_shadow_run_records_for_each_row() -> None:
              state_json, Decimal("99000"), 100, "grid"),
             ("run-2", date(2026, 9, 1), "510500.SH", "shadow-v1", "cfg-x", date(2026, 9, 2),
              state_json, Decimal("99000"), 100, "grid"),
-        ],
+        ], [], [],
     )
-    store = MySQLShadowStore(connection_factory=_connection_factory(conn))
 
     runs = list(store.iter_runs())
 
@@ -415,6 +488,31 @@ def test_iter_runs_yields_shadow_run_records_for_each_row() -> None:
     assert runs[0].run_id == "run-1"
     assert runs[0].state.state.position_shares == 100
     assert runs[0].state.cash == Decimal("99000")
+
+
+def test_iter_runs_restores_advice_and_observations_for_continuity_verification() -> None:
+    conn = _RecordingConnection()
+    store = MySQLShadowStore(connection_factory=_connection_factory(conn))
+    store.ensure_schema()
+    conn.cursor_obj = _RecordingCursor()
+    record = _run_record()
+    conn.cursor_obj.set_results(
+        [(record.run_id, record.identity.as_of_date, "510300.SH", "shadow-v1", record.config_hash,
+          date(2026, 9, 2), _serialize_strategy_state(record.state.state), Decimal("99000"), 100, "grid")],
+        [(record.run_id, "510300.SH", date(2026, 9, 1), date(2026, 9, 2), date(2026, 9, 1),
+          "buy", "grid_buy", record.config_hash, Decimal("0.1"), Decimal("0.005"), "GRID unit", '[["grid_anchor", 1.0]]')],
+        [(date(2026, 9, 2), "510300.SH", record.config_hash, Decimal("1.0"), Decimal("1.02"),
+          Decimal("3.0"), 1, "observed")],
+    )
+
+    restored = tuple(store.iter_runs())[0]
+
+    assert len(restored.advices) == len(restored.observations) == 1
+    assert restored.advices[0].order.reason is OrderReason.GRID_BUY
+    assert restored.advices[0].order.target_budget == 0.1
+    assert restored.advices[0].execution_eligible_date == date(2026, 9, 2)
+    assert restored.observations[0].raw_open == 1.0
+    assert restored.observations[0].fill_complete is True
 
 
 

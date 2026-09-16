@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 import uuid
+from dataclasses import asdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -19,6 +20,7 @@ from asset_allocation.etf_adaptive.frozen_selection import (
     activate_selection,
 )
 from asset_allocation.etf_adaptive.shadow_store import InMemoryShadowStore
+from asset_allocation.etf_adaptive.config import AdaptiveConfig, CostConfig, GridConfig, TrendConfig
 
 
 REPORTS_ROOT = Path("D:/aiQuant/ai_quant_sys/reports/pytest-frozen-selection-tmp")
@@ -89,6 +91,36 @@ def test_frozen_selection_round_trips_valid_payload() -> None:
     assert selection.review_date == date(2026, 9, 1) + timedelta(days=SIX_MONTH_REVIEW_DAYS)
     assert selection.review_window_days == SIX_MONTH_REVIEW_DAYS
     assert {target.stock_code for target in selection.targets} == {"510300.SH", "510500.SH"}
+
+
+def test_frozen_selection_restores_declared_custom_configuration() -> None:
+    config = AdaptiveConfig(
+        grid=GridConfig(step_pct=0.035, unit_pct=0.15),
+        trend=TrendConfig(stop_n=2.5, require_macd_bullish=False),
+        cost=CostConfig(slippage_bps=4.0, sell_tax_rate=0.001, transfer_fee_rate=0.0001),
+    )
+    payload = _payload(config_hash="irrelevant")
+    payload.update(config=asdict(config), declared_config_hash=config.config_hash())
+    payload["config_hash"] = _canonical_hash(payload)
+
+    assert FrozenSelection.from_payload(payload).base_config == config
+
+
+@pytest.mark.parametrize("mutation", ("missing_config", "wrong_hash", "missing_hash"))
+def test_frozen_selection_rejects_incomplete_or_mismatched_declared_config(mutation) -> None:
+    config = AdaptiveConfig(grid=GridConfig(step_pct=0.035))
+    payload = _payload(config_hash="irrelevant")
+    payload.update(config=asdict(config), declared_config_hash=config.config_hash())
+    if mutation == "missing_config":
+        del payload["config"]
+    elif mutation == "wrong_hash":
+        payload["declared_config_hash"] = AdaptiveConfig.default().config_hash()
+    else:
+        del payload["declared_config_hash"]
+    payload["config_hash"] = _canonical_hash(payload)
+
+    with pytest.raises(FrozenSelectionError, match="config"):
+        FrozenSelection.from_payload(payload)
 
 
 @pytest.mark.parametrize("target_count", (1, 3))

@@ -51,6 +51,13 @@ class ShadowRunIdentity:
 
 @dataclass(frozen=True)
 class FrozenConfigRecord:
+    """Frozen parameters and selection evidence.
+
+    ``config_hash`` is the legacy storage key: for activated selections it is
+    the canonical selection hash. ``selection_payload.declared_config_hash``
+    separately identifies ``config``; these hashes must never be compared.
+    """
+
     config_hash: str
     config: AdaptiveConfig
     selection_payload: Mapping[str, object]

@@ -164,6 +164,35 @@ def _serialize_mapping(mapping: Mapping[str, Any]) -> str:
     return json.dumps(dict(mapping), ensure_ascii=False, sort_keys=True, default=str)
 
 
+def _deserialize_frozen_record(row) -> FrozenConfigRecord:
+    config = _deserialize_adaptive_config(row[1])
+    payload = json.loads(row[2]) if row[2] else {}
+    if not isinstance(payload, dict):
+        raise ValueError("invalid frozen selection payload")
+    if "selection_hash" in payload or "selection_manifest" in payload:
+        from .frozen_selection import FrozenSelection, _activation_payload
+
+        selection = FrozenSelection.from_payload(payload.get("selection_manifest"))
+        if (
+            row[0] != selection.config_hash
+            or payload.get("selection_hash") != selection.config_hash
+            or payload.get("declared_config_hash") != config.config_hash()
+            or selection.base_config != config
+            or payload != _activation_payload(selection)
+            or (row[3], row[4], row[5]) != (
+                selection.data_cutoff, selection.activation_date, selection.review_date,
+            )
+        ):
+            raise ValueError("frozen selection or config identity does not match recorded evidence")
+    elif config.config_hash() != row[0]:
+        # Historical parameter-only records used the column as a parameter hash.
+        raise ValueError("frozen config hash does not match config_json")
+    return FrozenConfigRecord(
+        config_hash=row[0], config=config, selection_payload=payload,
+        data_cutoff=row[3], activation_date=row[4], review_date=row[5], activated_at=row[6],
+    )
+
+
 class MySQLShadowStore:
     """Transactional MySQL implementation of the ``ShadowStore`` protocol.
 
@@ -257,18 +286,7 @@ class MySQLShadowStore:
                 row = cursor.fetchone()
                 if not row:
                     return None
-                config = _deserialize_adaptive_config(row[1])
-                if config.config_hash() != row[0]:
-                    raise ValueError("frozen config hash does not match config_json")
-                return FrozenConfigRecord(
-                    config_hash=row[0],
-                    config=config,
-                    selection_payload=json.loads(row[2]) if row[2] else {},
-                    data_cutoff=row[3],
-                    activation_date=row[4],
-                    review_date=row[5],
-                    activated_at=row[6],
-                )
+                return _deserialize_frozen_record(row)
             finally:
                 cursor.close()
         finally:
@@ -294,18 +312,7 @@ class MySQLShadowStore:
                 row = cursor.fetchone()
                 if not row:
                     return None
-                config = _deserialize_adaptive_config(row[1])
-                if config.config_hash() != row[0]:
-                    raise ValueError("frozen config hash does not match config_json")
-                return FrozenConfigRecord(
-                    config_hash=row[0],
-                    config=config,
-                    selection_payload=json.loads(row[2]) if row[2] else {},
-                    data_cutoff=row[3],
-                    activation_date=row[4],
-                    review_date=row[5],
-                    activated_at=row[6],
-                )
+                return _deserialize_frozen_record(row)
             finally:
                 cursor.close()
         finally:
@@ -538,10 +545,57 @@ class MySQLShadowStore:
                     """
                 )
                 rows = cursor.fetchall()
+                cursor.execute(
+                    """
+                    SELECT run_id, stock_code, as_of_date, execution_eligible_date,
+                           signal_date, side, reason, config_hash, target_budget,
+                           risk_per_unit, quantity_rationale, signal_thresholds_json
+                    FROM asset_allocation_etf_adaptive_order_advice
+                    ORDER BY as_of_date, id
+                    """
+                )
+                advice_rows = cursor.fetchall()
+                cursor.execute(
+                    """
+                    SELECT execution_eligible_date, stock_code, config_hash,
+                           raw_open, raw_close, slippage_bps, fill_complete, notes
+                    FROM asset_allocation_etf_adaptive_fill_observation
+                    ORDER BY execution_eligible_date, id
+                    """
+                )
+                observation_rows = cursor.fetchall()
             finally:
                 cursor.close()
         finally:
             self._close_connection(conn)
+        advices_by_run: dict[str, list[AdviceRecord]] = {}
+        for row in advice_rows:
+            (run_id, stock_code, as_of_date, eligible_date, signal_date, side, reason,
+             config_hash, budget, risk, rationale, thresholds) = row
+            advice = AdviceRecord(
+                run_id=run_id, stock_code=stock_code, as_of_date=as_of_date,
+                execution_eligible_date=eligible_date, signal_date=signal_date,
+                config_hash=config_hash,
+                order=OrderIntent(
+                    signal_date=signal_date, side=Side(side), reason=OrderReason(reason),
+                    # The existing SQL model does not persist ATR. Continuity
+                    # must not reconstruct ATR-dependent quantities from defaults.
+                    signal_atr20=None,
+                    signal_thresholds=tuple((name, float(value)) for name, value in json.loads(thresholds)),
+                    target_budget=float(budget), risk_per_unit=float(risk), quantity_rationale=rationale,
+                ),
+            )
+            advices_by_run.setdefault(run_id, []).append(advice)
+        observations_by_key: dict[tuple, list[FillObservation]] = {}
+        for row in observation_rows:
+            observation = FillObservation(
+                execution_eligible_date=row[0], stock_code=row[1], config_hash=row[2],
+                raw_open=float(row[3]) if row[3] is not None else None,
+                raw_close=float(row[4]) if row[4] is not None else None,
+                slippage_bps=float(row[5]) if row[5] is not None else None,
+                fill_complete=bool(row[6]), notes=row[7],
+            )
+            observations_by_key.setdefault((row[0], row[1], row[2]), []).append(observation)
         for row in rows:
             (run_id, as_of_date, stock_code, model_version, config_hash, execution_eligible_date,
              state_json, cash, position_shares, regime) = row
@@ -565,7 +619,10 @@ class MySQLShadowStore:
                     position_shares=position_shares,
                     regime=regime,
                 ),
-                advices=(),
+                advices=tuple(advices_by_run.get(run_id, ())),
+                observations=tuple(observations_by_key.get(
+                    (execution_eligible_date, stock_code, config_hash), (),
+                )),
             )
 
     @staticmethod

@@ -24,7 +24,9 @@ from asset_allocation.etf_adaptive.research.strategy_specs import (
     FULL_ADAPTIVE_SPEC,
     benchmark_provenance_hash,
 )
-from asset_allocation.etf_adaptive.research.decision import DecisionSummary, ResearchConclusion, ResearchEvidence
+from asset_allocation.etf_adaptive.research.decision import (
+    DecisionSummary, ResearchConclusion, ResearchEvidence, evaluate_research_decision,
+)
 from asset_allocation.etf_adaptive.research.instrument_validation import (
     InstrumentValidationResult, TrainingSurfaceSummary, ValidationScope,
     ValidationStatus, ValidationTarget, ValidationWindowResult,
@@ -300,6 +302,50 @@ def _profiled_recorded_result(profile=GRID_PLUS_OPTIONAL_TREND_PROFILE) -> Instr
     return bind_experiment(result, spec)
 
 
+@pytest.mark.parametrize("updates, expected_blocker", (
+    ({}, "cost_drag"),
+    ({"total_cost": 50.0, "cost_drag": 0.5}, "cost_drag"),
+    ({"total_cost": 1.0, "cost_drag": 0.01, "stable_parameter_region": False}, "stable_parameter_region"),
+    ({"total_cost": 1.0, "cost_drag": 0.01, "oos_non_lagging_share": 0.0}, "oos_evidence"),
+))
+def test_publication_recomputes_decision_from_recorded_evidence(updates, expected_blocker) -> None:
+    # A stale PASSED summary must never override a failing recorded gate.
+    result = _profiled_recorded_result()
+    result = replace(result, evidence=replace(result.evidence, **updates))
+    assert result.decision.conclusion is ResearchConclusion.PASSED
+    assert evaluate_research_decision(result.evidence).conclusion is ResearchConclusion.DO_NOT_TRADE
+
+    decision = validation_publication_decision(result)
+
+    assert decision["conclusion"] == "do_not_trade"
+    assert expected_blocker in decision["blockers"]
+
+
+def test_publication_reconciles_claimed_evidence_to_recorded_metrics() -> None:
+    # Forged positive evidence cannot bypass costs and risk in the recorded run.
+    result = _profiled_recorded_result()
+    result = replace(result, evidence=replace(
+        result.evidence, total_cost=1.0, cost_drag=0.01,
+        drawdown_improvement=0.1, cvar5_improvement=0.01,
+    ))
+    assert evaluate_research_decision(result.evidence).conclusion is ResearchConclusion.PASSED
+
+    decision = validation_publication_decision(result)
+
+    assert decision["conclusion"] == "do_not_trade"
+    assert "research_evidence_mismatch" in decision["blockers"]
+
+
+def test_recomputed_publication_decision_disables_artifact_activation(tmp_path) -> None:
+    result = _profiled_recorded_result()
+    assert result.activation_eligible is True
+
+    summary = json.loads(write_validation_artifacts(result, tmp_path / "report").summary_json.read_text())
+
+    assert summary["decision"]["conclusion"] == "do_not_trade"
+    assert summary["activation_eligible"] is False
+
+
 def test_optional_trend_report_publishes_required_integrated_diagnostics(tmp_path) -> None:
     # Break caught: an optional-TREND report can omit its profile identity and observed mode diagnostics.
     recorded = _profiled_recorded_result()
@@ -340,7 +386,8 @@ def test_complete_recorded_profile_execution_removes_unexecuted_benchmark_blocke
     )
 
     assert "unexecuted_benchmark_evidence" not in summary["decision"]["blockers"]
-    assert summary["decision"]["conclusion"] == "passed"
+    assert summary["decision"]["conclusion"] == "do_not_trade"
+    assert "cost_drag" in summary["decision"]["blockers"]
     assert summary["strategy_profile"] == {
         "profile_id": "grid_plus_optional_trend",
         "version": "1",
@@ -518,7 +565,7 @@ def test_low_optional_trend_activity_is_diagnostic_only(tmp_path) -> None:
     )
 
     assert summary["trend_diagnostics"]["active_sessions"] == 0
-    assert summary["decision"]["conclusion"] == "passed"
+    assert summary["decision"] == validation_publication_decision(_profiled_recorded_result())
     assert "profile_mode_attribution" not in summary["decision"]["blockers"]
 
 
@@ -689,9 +736,8 @@ def test_validation_artifacts_fail_closed_without_all_profile_benchmarks(tmp_pat
     summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
     report = manifest.report_markdown.read_text(encoding="utf-8")
 
-    assert summary["decision"] == {
-        "conclusion": "do_not_trade", "blockers": ["unexecuted_benchmark_evidence"],
-    }
+    assert summary["decision"]["conclusion"] == "do_not_trade"
+    assert "unexecuted_benchmark_evidence" in summary["decision"]["blockers"]
     assert summary["comparison"] is None
     assert summary["execution"] is None
     assert summary["data_provenance"]["data_cutoff"] == "2026-09-08"
@@ -717,9 +763,8 @@ def test_legacy_validation_artifacts_preserve_provenance_but_fail_closed(tmp_pat
     summary = json.loads(manifest.summary_json.read_text(encoding="utf-8"))
     report = manifest.report_markdown.read_text(encoding="utf-8")
 
-    assert summary["decision"] == {
-        "conclusion": "do_not_trade", "blockers": ["experiment_metadata"],
-    }
+    assert summary["decision"]["conclusion"] == "do_not_trade"
+    assert "experiment_metadata" in summary["decision"]["blockers"]
     assert summary["comparison"] is None
     assert summary["execution"] is None
     assert summary["data_provenance"]["data_cutoff"] == "2026-09-08"
@@ -941,9 +986,8 @@ def test_formal_gate_rejects_rebound_cost_and_axis_bypasses(change):
     # Rebinding hashes must not turn altered execution settings into approved evidence.
     result = _recorded_result()
     baseline = validation_publication_decision(result)
-    assert baseline == {
-        "conclusion": "do_not_trade", "blockers": ["unexecuted_benchmark_evidence"],
-    }
+    assert baseline["conclusion"] == "do_not_trade"
+    assert "unexecuted_benchmark_evidence" in baseline["blockers"]
     spec = ExperimentSpec.from_dict(result.run_manifest["experiment"])
     window = result.windows[0]
     config = AdaptiveConfig.default()
@@ -991,9 +1035,8 @@ def test_formal_gate_binds_candidate_deviations_to_its_own_screened_axes():
     # an undeclared deviation in this candidate after its evidence is rebound.
     result = _recorded_result()
     baseline = validation_publication_decision(result)
-    assert baseline == {
-        "conclusion": "do_not_trade", "blockers": ["unexecuted_benchmark_evidence"],
-    }
+    assert baseline["conclusion"] == "do_not_trade"
+    assert "unexecuted_benchmark_evidence" in baseline["blockers"]
     spec = ExperimentSpec.from_dict(result.run_manifest["experiment"])
     default = AdaptiveConfig.default()
     altered = replace(default, grid=replace(default.grid, unit_pct=0.15))

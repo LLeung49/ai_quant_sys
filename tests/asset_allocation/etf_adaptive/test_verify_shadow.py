@@ -95,7 +95,7 @@ def _store_with_n_sessions(n: int, *, config_hash: str = "cfg-shadow-1") -> InMe
     return store
 
 
-def _store_with_n_runs(n: int) -> InMemoryShadowStore:
+def _store_with_n_runs(n: int, *, changing_holdings: bool = False) -> InMemoryShadowStore:
     store = _store_with_n_sessions(n)
     for offset in range(n):
         as_of = START + timedelta(days=offset)
@@ -109,7 +109,7 @@ def _store_with_n_runs(n: int) -> InMemoryShadowStore:
             identity=identity,
             config_hash="cfg-shadow-1",
             execution_eligible_date=as_of + timedelta(days=1),
-            state=StrategyState(cash=Decimal("100000"), position_shares=offset % 10),
+            state=StrategyState(cash=Decimal("100000"), position_shares=offset % 10 if changing_holdings else 0),
             orders=(),
         )
         store.persist_run(record)
@@ -132,6 +132,70 @@ def test_readiness_passes_when_six_gate_clear() -> None:
 
     assert result.ready is True
     assert result.failures == ()
+
+
+def test_readiness_rejects_unexplained_holdings_changes() -> None:
+    store = _store_with_n_runs(60, changing_holdings=True)
+
+    result = verify_shadow_period(START, END, store)
+
+    assert result.ready is False
+    assert "state_continuity_eq_1" in result.failures
+
+
+@pytest.mark.parametrize("mutation", (
+    None, "missing_order", "missing_fill", "wrong_side", "wrong_fill_date",
+    "wrong_config", "incomplete_fill", "wrong_quantity", "wrong_cash", "unsupported_intent",
+    "changed_run_config", "changed_model",
+))
+def test_state_continuity_reconciles_prior_grid_advice_and_observed_fill(mutation) -> None:
+    store = _store_with_n_sessions(2)
+    first_state = StrategyState(cash=Decimal("100000"))
+    order = OrderIntent(
+        signal_date=START, side=Side.SELL if mutation == "wrong_side" else Side.BUY,
+        reason=OrderReason.TREND_ENTRY if mutation == "unsupported_intent" else OrderReason.GRID_INITIALIZE,
+        signal_atr20=None, signal_thresholds=(), target_budget=1005.0,
+        risk_per_unit=0.005, quantity_rationale="recorded allocation",
+    )
+    second_state = StrategyState(
+        cash=Decimal("98994.70") if mutation != "wrong_cash" else Decimal("98900"),
+        position_shares=100 if mutation != "wrong_quantity" else 200,
+    )
+    for index, state in enumerate((first_state, second_state)):
+        as_of = START + timedelta(days=index)
+        store.persist_run(build_run_record(
+            run_id=f"run-{index}", identity=ShadowRunIdentity(
+                as_of, "shadow-v2" if index and mutation == "changed_model" else "shadow-v1", "510300.SH",
+            ),
+            config_hash="other-config" if index and mutation == "changed_run_config" else "cfg-shadow-1",
+            execution_eligible_date=as_of + timedelta(days=1),
+            state=state, orders=(order,) if index == 0 and mutation != "missing_order" else (),
+        ))
+    observation = FillObservation(
+        execution_eligible_date=START + timedelta(days=2 if mutation == "wrong_fill_date" else 1),
+        stock_code="510300.SH", config_hash="wrong" if mutation == "wrong_config" else "cfg-shadow-1",
+        raw_open=10.0, raw_close=10.0, slippage_bps=3.0,
+        fill_complete=mutation != "incomplete_fill", notes=None,
+    )
+
+    result = verify_shadow_period(
+        START, END, store, observations=() if mutation == "missing_fill" else (observation,),
+    )
+
+    assert result.gate_results()["state_continuity_eq_1"] is (mutation is None)
+
+
+def test_state_continuity_allows_regime_change_without_balance_change() -> None:
+    store = _store_with_n_sessions(2)
+    for index, regime in enumerate((Regime.GRID, Regime.TREND)):
+        as_of = START + timedelta(days=index)
+        store.persist_run(build_run_record(
+            run_id=f"run-{index}", identity=ShadowRunIdentity(as_of, "shadow-v1", "510300.SH"),
+            config_hash="cfg-shadow-1", execution_eligible_date=as_of + timedelta(days=1),
+            state=StrategyState(cash=Decimal("100000"), regime=regime), orders=(),
+        ))
+
+    assert verify_shadow_period(START, END, store).gate_results()["state_continuity_eq_1"] is True
 
 
 def test_readiness_reports_every_gate_independently() -> None:

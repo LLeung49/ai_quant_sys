@@ -14,13 +14,17 @@ from __future__ import annotations
 import argparse
 import json
 import math
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
+from decimal import Decimal
 from pathlib import Path
 from typing import Callable, Iterable, Sequence
 
 from .run_shadow_daily import ShadowRunSummary
+from .contracts import DualPriceBar, ExecutionAvailability
+from .execution import ExecutionSimulator
+from .state import OrderReason
 from .shadow_store import (
     FillObservation,
     HealthCheck,
@@ -102,8 +106,59 @@ def _check_signal_reproducibility(
     return passed, detail
 
 
-def _check_state_continuity(runs: Sequence[ShadowRunRecord]) -> tuple[bool, str]:
-    """Fail when a later date has a prior position different from the prior day."""
+def _balances_reconcile(previous, current, observations, store) -> bool:
+    """Replay only the GRID quantities fully specified by the stored model."""
+    advices = previous.advices
+    if len(advices) != 1 or len(observations) != 1:
+        return False
+    advice, observation = advices[0], observations[0]
+    if (
+        current.config_hash != previous.config_hash
+        or current.identity.model_version != previous.identity.model_version
+        or advice.order.reason not in {OrderReason.GRID_INITIALIZE, OrderReason.GRID_BUY, OrderReason.GRID_SELL}
+        or advice.stock_code != previous.identity.stock_code
+        or advice.config_hash != previous.config_hash
+        or advice.as_of_date != previous.identity.as_of_date
+        or advice.signal_date != advice.order.signal_date
+        or advice.signal_date > previous.identity.as_of_date
+        or advice.execution_eligible_date != previous.execution_eligible_date
+        or advice.execution_eligible_date != observation.execution_eligible_date
+        or not previous.identity.as_of_date < observation.execution_eligible_date <= current.identity.as_of_date
+        or observation.fill_complete is not True
+        or observation.raw_open is None
+        or observation.slippage_bps is None
+    ):
+        return False
+    try:
+        frozen = store.load_frozen_config(previous.config_hash)
+        if frozen is None:
+            return False
+        price = float(observation.raw_open)
+        config = frozen.config
+        cost = replace(config.cost, slippage_bps=float(observation.slippage_bps))
+        # GRID sizing uses raw open only. A completed observation supplies the
+        # execution fact; no signal-coordinate inference is made for TREND.
+        bar = DualPriceBar(
+            previous.identity.stock_code, observation.execution_eligible_date,
+            price, price, price, price, price, price, price, price, 1.0, False, 1.0,
+            execution_availability=ExecutionAvailability(False, False, "recorded_completed_fill"),
+        )
+        replay = ExecutionSimulator(cost, config.trend).execute((advice.order,), bar, previous.state.state)
+        return (
+            len(replay.fills) == 1
+            and not replay.rejected_orders
+            and replay.state.position_shares == current.state.position_shares
+            # MySQL cash is DECIMAL(20,4); tolerate only storage rounding.
+            and abs(replay.state.cash - current.state.cash) <= Decimal("0.0001")
+        )
+    except (TypeError, ValueError, ArithmeticError):
+        return False
+
+
+def _check_state_continuity(
+    runs: Sequence[ShadowRunRecord], observations: Sequence[FillObservation], store: ShadowStore,
+) -> tuple[bool, str]:
+    """Require balance changes to reconcile with prior advice and completed fills."""
 
     by_stock: dict[str, list[ShadowRunRecord]] = {}
     for run in runs:
@@ -111,24 +166,31 @@ def _check_state_continuity(runs: Sequence[ShadowRunRecord]) -> tuple[bool, str]
     breaks: list[str] = []
     for stock_code, stock_runs in by_stock.items():
         sorted_runs = sorted(stock_runs, key=lambda run: run.identity.as_of_date)
-        previous_state: tuple | None = None
-        previous_date: date | None = None
+        previous = None
         for run in sorted_runs:
-            state_key = (
-                run.state.regime,
-                int(run.state.position_shares),
-                str(run.state.cash),
-            )
-            if previous_state is not None and previous_date is not None:
-                gap = (run.identity.as_of_date - previous_date).days
-                if 1 <= gap <= 5:
-                    if state_key == previous_state:
-                        breaks.append(
-                            f"{stock_code}@{run.identity.as_of_date}: identical state "
-                            f"but gap={gap} days suggests missing run"
-                        )
-            previous_state = state_key
-            previous_date = run.identity.as_of_date
+            state = run.state
+            if (
+                state.config_hash != run.config_hash
+                or state.stock_code != stock_code
+                or state.as_of_date != run.identity.as_of_date
+                or state.state.position_shares != state.position_shares
+                or abs(state.state.cash - state.cash) > Decimal("0.0001")
+                or (state.state.regime.value if state.state.regime is not None else None) != state.regime
+            ):
+                breaks.append(f"{stock_code}@{run.identity.as_of_date}: inconsistent state record")
+            if previous is not None:
+                fills = tuple(obs for obs in observations if (
+                    obs.stock_code == stock_code and obs.config_hash == previous.config_hash
+                    and previous.identity.as_of_date < obs.execution_eligible_date <= run.identity.as_of_date
+                    and obs.fill_complete is True
+                ))
+                unchanged = (
+                    state.position_shares == previous.state.position_shares
+                    and state.cash == previous.state.cash
+                )
+                if (not unchanged or fills) and not _balances_reconcile(previous, run, fills, store):
+                    breaks.append(f"{stock_code}@{run.identity.as_of_date}: unexplained balance change")
+            previous = run
     passed = not breaks
     detail = (
         f"state_continuity_eq_1: {len(breaks)} continuity violations observed"
@@ -237,10 +299,13 @@ def verify_shadow_period(
     if start_date > end_date:
         raise ValueError("start_date must not be after end_date")
     runs = _runs_in_window(store, start_date, end_date)
+    observations = tuple(dict.fromkeys((
+        *observations, *(obs for run in runs for obs in run.observations),
+    )))
     gate_runners: tuple[tuple[str, callable], ...] = (
         ("complete_sessions_gte_60", lambda: _check_complete_sessions(runs)),
         ("signal_reproducibility_eq_1", lambda: _check_signal_reproducibility(runs)),
-        ("state_continuity_eq_1", lambda: _check_state_continuity(runs)),
+        ("state_continuity_eq_1", lambda: _check_state_continuity(runs, observations, store)),
         ("future_data_violations_eq_0", lambda: _check_future_data_violations(runs)),
         ("unexplained_config_changes_eq_0", lambda: _check_unexplained_config_changes(runs)),
         ("observed_slippage_within_5bp_scenario", lambda: _check_slippage_within_5bp(observations)),

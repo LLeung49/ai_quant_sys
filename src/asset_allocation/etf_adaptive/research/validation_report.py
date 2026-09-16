@@ -22,12 +22,13 @@ from uuid import uuid4
 
 from ..config import AdaptiveConfig
 from .attribution import build_excess_attribution, build_result_attribution
-from .decision import ResearchConclusion
+from .decision import ResearchConclusion, evaluate_research_decision
 from .experiment import ExperimentSpec, experiment_evidence
 from .instrument_validation import (
     InstrumentValidationResult,
     ValidationWindowResult,
     _recorded_performance,
+    _research_evidence,
 )
 from .metrics import PerformanceMetrics, calculate_performance
 from .strategy_profiles import (
@@ -675,15 +676,40 @@ def validation_publication_decision(result: InstrumentValidationResult) -> dict[
 
 
 def _decision_payload(result: InstrumentValidationResult, blockers: list[str]) -> dict[str, object]:
-    if not blockers and result.decision is not None:
+    blockers = list(blockers)
+    computed = evaluate_research_decision(result.evidence) if result.evidence is not None else None
+    if result.evidence is not None:
+        try:
+            spec = _profile_spec(result)
+            expected = _research_evidence(
+                result.windows, result.strategy_metrics, result.benchmark_metrics,
+                profile=spec.profile if spec is not None and spec.profile.profile_id != "legacy_unprofiled" else None,
+            )
+            for name, value in asdict(expected).items():
+                recorded = getattr(result.evidence, name)
+                matches = (
+                    _finite(recorded) and isclose(recorded, value, rel_tol=1e-9, abs_tol=1e-12)
+                    if isinstance(value, float) else type(recorded) is type(value) and recorded == value
+                )
+                if not matches:
+                    blockers.append("research_evidence_mismatch")
+                    break
+            if not isclose(result.strategy_metrics.total_cost, expected.total_cost, abs_tol=1e-9):
+                blockers.append("research_evidence_mismatch")
+        except (IndexError, TypeError, ValueError, AttributeError, ArithmeticError):
+            blockers.append("research_evidence_mismatch")
+    if computed is not None and result.decision != computed:
+        blockers.append("decision_summary_mismatch")
+    if not blockers and computed is not None:
         return {
-            "conclusion": result.decision.conclusion.value,
-            "blockers": list(result.decision.blockers),
+            "conclusion": computed.conclusion.value,
+            "blockers": list(computed.blockers),
         }
     recorded_blockers = list(result.decision.blockers) if result.decision is not None else []
+    evidence_blockers = list(computed.blockers) if computed is not None else []
     return {
         "conclusion": ResearchConclusion.DO_NOT_TRADE.value,
-        "blockers": list(dict.fromkeys(recorded_blockers + blockers)),
+        "blockers": list(dict.fromkeys(recorded_blockers + evidence_blockers + blockers)),
     }
 
 
@@ -1039,6 +1065,7 @@ def write_validation_artifacts(result: InstrumentValidationResult, output_dir: P
     output_dir.parent.mkdir(parents=True, exist_ok=True)
     staging = Path(tempfile.mkdtemp(prefix=f".{output_dir.name}.", suffix=".staging", dir=output_dir.parent))
     blockers = _evidence_blockers(result)
+    decision = _decision_payload(result, blockers)
     window_rows = [_window_row(window) for window in result.windows]
     attribution = [_attribution_payload(window) for window in result.windows]
     excess_attribution = _excess_payload(result)
@@ -1050,11 +1077,9 @@ def write_validation_artifacts(result: InstrumentValidationResult, output_dir: P
         "status": result.status.value,
         "activation_eligible": bool(
             result.activation_eligible
-            and not blockers
-            and result.decision is not None
-            and result.decision.conclusion is ResearchConclusion.PASSED
+            and decision["conclusion"] == ResearchConclusion.PASSED.value
         ),
-        "decision": _decision_payload(result, blockers),
+        "decision": decision,
         "strategy_profile": _strategy_profile_payload(result),
         "trend_diagnostics": _trend_diagnostics(result),
         "comparison": _comparison(result, blockers),
