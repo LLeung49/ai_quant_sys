@@ -78,6 +78,6 @@ For `grid_plus_optional_trend`, reports additionally expose per-window and stitc
 
 ## Rollout
 
-1. Ship profile abstractions and tests with no change to current live/shadow selection.
-2. Run profile-specific research reports for the fixed ETF universe, storing results in a new report directory.
-3. Review report evidence and separately approve any future shadow-run candidate. No profile auto-authorizes real trading.
+- [x] Ship profile abstractions and tests with no change to current live/shadow selection. The research CLI now requires an explicit `--profile` for every named experiment; a new experiment name must also provide a `--stock-code` from the fixed validation manifest. The historical fixed-universe route remains explicitly `legacy_unprofiled`, research-only, and fail-closed.
+- [ ] Run profile-specific research reports for the fixed ETF universe, storing results in a new report directory.
+- [ ] Review report evidence and separately approve any future shadow-run candidate. No profile auto-authorizes real trading.

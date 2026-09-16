@@ -28,6 +28,43 @@ def test_experiment_rejects_axis_not_owned_by_its_profile() -> None:
                        {"stop_n": (2.0,)}, date(2021, 1, 1), date(2026, 9, 11))
 
 
+@pytest.mark.parametrize("has_window", [False, True])
+def test_bind_core_experiment_records_execution_config_without_adaptive_strategy(has_window):
+    from asset_allocation.etf_adaptive.config import AdaptiveConfig, CostConfig
+    from asset_allocation.etf_adaptive.research.experiment import bind_experiment
+    from asset_allocation.etf_adaptive.research.instrument_validation import (
+        FIXED_VALIDATION_TARGETS, InstrumentValidationResult, ValidationStatus, ValidationWindowResult,
+    )
+    from asset_allocation.etf_adaptive.research.strategy_profiles import CORE_HOLD_REBALANCE_PROFILE
+
+    target = FIXED_VALIDATION_TARGETS[0]
+    config = AdaptiveConfig(cost=CostConfig(slippage_bps=7.0))
+    window = ValidationWindowResult(
+        "wf_000", date(2025, 1, 2), date(2025, 1, 3), config.config_hash(),
+        0.0, 0.0, (), (), cost_config=config.cost, execution_config=config,
+        profile_id="core_hold_rebalance", screened_axes={},
+    )
+    result = InstrumentValidationResult(target, ValidationStatus.FAILED, date(2026, 9, 11),
+                                        windows=(window,) if has_window else ())
+    spec = ExperimentSpec("core-test", (target.stock_code,), CORE_HOLD_REBALANCE_PROFILE,
+                          {}, date(2021, 1, 1), result.as_of_date)
+
+    manifest = bind_experiment(result, spec).run_manifest
+
+    assert manifest["strategy_spec"] is None
+    assert len(manifest["benchmark_specs"]) == 2
+    if has_window:
+        recorded, = manifest["experiment_windows"]
+        assert recorded["strategy_spec"] is None
+        assert recorded["candidate_scores"] == []
+        assert recorded["selected_scores"] == {}
+        assert {item["benchmark_id"] for item in recorded["benchmark_specs"]} == {"buy_and_hold", "fixed_half_hold"}
+        assert all(item["config"]["cost"]["slippage_bps"] == 7.0 for item in recorded["benchmark_specs"])
+        assert all(item["provenance_hash"] for item in recorded["benchmark_specs"])
+    else:
+        assert manifest["experiment_windows"] == []
+
+
 def test_experiment_rejects_a_non_registry_equivalent_profile() -> None:
     forged_profile = replace(GRID_CORE_PROFILE, version="forged")
 
@@ -80,7 +117,7 @@ def test_star50_cli_missing_diagnostic_stops_before_provider(tmp_path, monkeypat
         pytest.fail("parameter runner must not read data before the diagnostic gate")
     monkeypatch.setattr(cli, "default_validation_provider", unexpected_provider)
     output = tmp_path / "study"
-    assert cli.main(["--experiment", "star50_extreme_window", "--start-date", "2021-01-01",
+    assert cli.main(["--experiment", "star50_extreme_window", "--profile", "grid_plus_optional_trend", "--start-date", "2021-01-01",
                      "--as-of-date", "2026-09-11", "--output-dir", str(output)]) == 4
     diagnostic = json.loads((output / "diagnostic.json").read_text(encoding="utf-8"))
     assert diagnostic["parameter_execution_allowed"] is False

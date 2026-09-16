@@ -241,8 +241,9 @@ def experiment_evidence(result: InstrumentValidationResult, spec: ExperimentSpec
     """Serialize stored score surfaces via their explicit immutable boundary."""
     windows = []
     for window in result.windows:
-        config = _config(window.selected_config) if window.selected_config else None
-        strategy = replace(spec.strategy, config=config) if config else None
+        config = (window.execution_config if spec.strategy is None else
+                  _config(window.selected_config) if window.selected_config else None)
+        strategy = replace(spec.strategy, config=config) if config and spec.strategy is not None else None
         windows.append({
             "window_id": window.window_id,
             "execution_cost_config": asdict(window.cost_config) if window.cost_config else None,
@@ -259,7 +260,7 @@ def experiment_evidence(result: InstrumentValidationResult, spec: ExperimentSpec
             "excess_attribution": asdict(window.excess_attribution) if window.excess_attribution else None,
         })
     return json.loads(_json({"experiment": spec.to_dict(), "experiment_hash": spec.experiment_hash(),
-                            "strategy_spec": asdict(spec.strategy),
+                            "strategy_spec": asdict(spec.strategy) if spec.strategy is not None else None,
                             "benchmark_specs": [asdict(item) for item in spec.benchmarks],
                             "experiment_windows": windows}))
 
