@@ -13,6 +13,7 @@ from asset_allocation.etf_adaptive.config import AdaptiveConfig, CostConfig, Gri
 from asset_allocation.etf_adaptive.research.instrument_validation import (
     CachedValidationProvider,
     FIXED_VALIDATION_TARGETS,
+    ResearchRunMode,
     ValidationScope,
     ValidationStatus,
     evaluate_validation_gate,
@@ -85,10 +86,11 @@ def profile_validation(monkeypatch):
         AdaptiveConfig(grid=GridConfig(step_pct=step)), "grid_only",
     ) for step in (.01, .015, .02))
 
-    def validate(profile, *, plan=None, omit_plan=False):
+    def validate(profile, *, plan=None, omit_plan=False, run_mode=ResearchRunMode.FORMAL_VALIDATION):
         return module.run_instrument_validation(
             FIXED_VALIDATION_TARGETS[0], Provider(), dates[0], dates[-1], Decimal("100000"),
             profile=profile,
+            run_mode=run_mode,
             **({} if omit_plan else {"training_plan": plan if plan is not None else
                                    ({"grid_only": (candidates, ("step_pct",), ())}
                                     if profile.strategy is not None else {})}),
@@ -162,6 +164,28 @@ def test_profile_rejects_unstable_grid_without_executing_default_config(profile_
     assert result.windows[0].profile_id == profile.profile_id
     assert result.windows[0].selected_config is None
     assert not result.windows[0].strategy_events
+
+
+def test_diagnostic_profile_runs_oos_for_unstable_training_selection(profile_validation):
+    validate, _, candidates = profile_validation
+
+    result = validate(
+        GRID_PLUS_OPTIONAL_TREND_PROFILE,
+        plan={"grid_only": (candidates[:1], ("step_pct",), ())},
+        run_mode=ResearchRunMode.RESEARCH_DIAGNOSTIC,
+    )
+
+    assert result.rejection_reason is None
+    assert result.activation_eligible is False
+    assert result.run_mode is ResearchRunMode.RESEARCH_DIAGNOSTIC
+    assert result.run_manifest["run_mode"] == "research_diagnostic"
+    assert result.run_manifest["trading_authorized"] is False
+    for window in result.windows:
+        assert window.selection_status == "diagnostic_unstable_selection"
+        assert window.formal_selection_rejection == "no_stable_grid_training_parameters"
+        assert window.training_selection_rank == 1
+        assert window.selected_config is not None
+        assert window.strategy_daily_nav
 
 
 def test_new_validation_requires_an_explicit_profile():

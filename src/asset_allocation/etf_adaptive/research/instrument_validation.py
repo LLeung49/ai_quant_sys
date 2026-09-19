@@ -28,6 +28,7 @@ from .parameters import (
     stable_parameter_candidates,
     trend_candidates,
 )
+from .candidate_scoring import select_diagnostic_representative
 from .metrics import max_drawdown
 from .walk_forward import build_windows
 from .validation_eligibility import ELIGIBILITY_HISTORY_SESSIONS
@@ -44,6 +45,13 @@ class ValidationStatus(str, Enum):
     PASSED = "passed"
     FAILED = "failed"
     DATA_REJECTED = "data_rejected"
+
+
+class ResearchRunMode(str, Enum):
+    """Whether a run is formal evidence or permanently diagnostic research."""
+
+    FORMAL_VALIDATION = "formal_validation"
+    RESEARCH_DIAGNOSTIC = "research_diagnostic"
 
 
 class ValidationScope(str, Enum):
@@ -96,6 +104,7 @@ class InstrumentValidationResult:
     benchmark_invested_sessions: int = 0
     benchmark_cash_sessions: int = 0
     run_manifest: Mapping[str, object] | None = None
+    run_mode: ResearchRunMode = ResearchRunMode.FORMAL_VALIDATION
 
 
 @dataclass(frozen=True)
@@ -142,6 +151,9 @@ class ValidationWindowResult:
     profile_id: str = "legacy_unprofiled"
     benchmark_runs: Mapping[str, BacktestResult] | None = None
     execution_config: AdaptiveConfig | None = None
+    selection_status: str = "stable"
+    formal_selection_rejection: str | None = None
+    training_selection_rank: int | None = None
 
 
 class _Provider(Protocol):
@@ -254,15 +266,18 @@ def run_instrument_validation(
     *,
     profile: StrategyProfileSpec,
     training_plan: Mapping | None = None,
+    run_mode: ResearchRunMode = ResearchRunMode.FORMAL_VALIDATION,
 ) -> InstrumentValidationResult:
     """Validate only an explicitly registered research profile."""
     from .strategy_profiles import StrategyProfileSpec, profile_for_id
 
     if not isinstance(profile, StrategyProfileSpec) or profile != profile_for_id(profile.profile_id):
         raise ValueError("validation requires a registered strategy profile")
+    if not isinstance(run_mode, ResearchRunMode):
+        raise ValueError("run_mode must be a ResearchRunMode")
     return _run_instrument_validation(
         target, provider, start_date, as_of_date, initial_cash,
-        profile=profile, training_plan=training_plan,
+        profile=profile, training_plan=training_plan, run_mode=run_mode,
     )
 
 
@@ -273,14 +288,14 @@ def legacy_unprofiled(
     """Explicit compatibility helper for historical unprofiled validation tests."""
     return _run_instrument_validation(
         target, provider, start_date, as_of_date, initial_cash,
-        profile=None, training_plan=training_plan,
+        profile=None, training_plan=training_plan, run_mode=ResearchRunMode.FORMAL_VALIDATION,
     )
 
 
 def _run_instrument_validation(
     target: ValidationTarget, provider: _Provider, start_date: date,
     as_of_date: date, initial_cash: Decimal, *, profile: StrategyProfileSpec | None,
-    training_plan: Mapping | None,
+    training_plan: Mapping | None, run_mode: ResearchRunMode,
 ) -> InstrumentValidationResult:
     """Fail closed before any parameter screening when history is absent."""
 
@@ -321,7 +336,7 @@ def _run_instrument_validation(
             if profile is not None:
                 selections = _select_profile_training(
                     profile, training_plan, target.stock_code, provider, window.train_dates,
-                    initial_cash, bars[0].trade_date, qualification_start,
+                    initial_cash, bars[0].trade_date, qualification_start, run_mode=run_mode,
                 )
                 grid_selection = selections.get("grid_only")
                 grid_surface = grid_selection.surface if grid_selection else ()
@@ -336,7 +351,8 @@ def _run_instrument_validation(
                         window.window_id, window.train_end, window.validation_dates[0], "",
                         0.0, 0.0, (), (), grid_training_surface=grid_surface,
                         candidate_scores=candidate_scores, screened_axes=screened_axes,
-                        profile_id=profile_id,
+                        profile_id=profile_id, selection_status="formal_selection_failed",
+                        formal_selection_rejection="no_stable_grid_training_parameters",
                     ))
                     return _no_trade_result(
                         target, ValidationStatus.FAILED, as_of_date,
@@ -448,6 +464,11 @@ def _run_instrument_validation(
                 profile_id=profile_id,
                 benchmark_runs=benchmark_runs,
                 execution_config=config,
+                selection_status=grid_selection.selection_status if grid_selection is not None else "stable",
+                formal_selection_rejection=(grid_selection.formal_selection_rejection
+                                            if grid_selection is not None else None),
+                training_selection_rank=(grid_selection.training_selection_rank
+                                         if grid_selection is not None else None),
             ))
     except (ValueError, DataQualityError) as exc:
         return _data_rejected_result(target, as_of_date, str(exc), tuple(results))
@@ -472,13 +493,15 @@ def _run_instrument_validation(
     return InstrumentValidationResult(
         target, status, as_of_date, None, tuple(results), strategy_annual,
         benchmark_annual, strategy_drawdown, benchmark_drawdown, target.scope,
-        _activation_eligible(target.scope, decision),
+        _activation_eligible(target.scope, decision) if run_mode is ResearchRunMode.FORMAL_VALIDATION else False,
         evidence, decision, strategy_metrics, benchmark_metrics,
         sum(row.strategy_invested_sessions for row in results),
         sum(row.strategy_cash_sessions for row in results),
         sum(row.benchmark_invested_sessions for row in results),
         sum(row.benchmark_cash_sessions for row in results),
-        _run_manifest(target, start_date, as_of_date, provider, bars, results, profile=profile),
+        _run_manifest(target, start_date, as_of_date, provider, bars, results,
+                      profile=profile, run_mode=run_mode),
+        run_mode,
     )
 
 
@@ -495,7 +518,7 @@ def _execute_validation_window(profile, config, request, provider):
 
 
 def _select_profile_training(profile, training_plan, stock_code, provider, dates,
-                             initial_cash, history_start, evaluation_start):
+                             initial_cash, history_start, evaluation_start, *, run_mode):
     from .strategy_profiles import profile_training_plan
     from .parameters import GRID_STEPS, GRID_UNITS, FIXED_INITIAL
 
@@ -526,6 +549,7 @@ def _select_profile_training(profile, training_plan, stock_code, provider, dates
         family: _select_training_candidate(
             stock_code, provider, dates, initial_cash, candidates, axes, len(dates) // 4,
             expansion_axes, history_start=history_start, evaluation_start=evaluation_start,
+            run_mode=run_mode,
         )
         for family, (candidates, axes, expansion_axes) in training_plan.items()
     }
@@ -554,6 +578,9 @@ class _TrainingSelection:
     candidate_scores: tuple[TrainingCandidateScore, ...]
     selected_score: TrainingCandidateScore | None
     screened_axes: tuple[tuple[str, ...], ...]
+    selection_status: str = "formal_selection_failed"
+    formal_selection_rejection: str | None = None
+    training_selection_rank: int | None = None
 
 
 def _select_training_candidate(
@@ -568,6 +595,7 @@ def _select_training_candidate(
     *,
     history_start: date | None = None,
     evaluation_start: date | None = None,
+    run_mode: ResearchRunMode = ResearchRunMode.FORMAL_VALIDATION,
 ) -> _TrainingSelection:
     """Select a baseline, then screen each approved new axis in sequence.
 
@@ -585,7 +613,16 @@ def _select_training_candidate(
         stock_code, provider, dates, initial_cash, candidates, axes, segment_size, **screen_kwargs,
     )
     if selected is None:
-        return _TrainingSelection(None, tuple(summaries), tuple(scores), None, (tuple(axes),))
+        diagnostic_score = (select_diagnostic_representative(scores)
+                            if run_mode is ResearchRunMode.RESEARCH_DIAGNOSTIC else None)
+        if diagnostic_score is None:
+            return _TrainingSelection(None, tuple(summaries), tuple(scores), None, (tuple(axes),))
+        selected = next(candidate for candidate in candidates
+                        if candidate.config_hash == diagnostic_score.config_hash)
+        return _TrainingSelection(
+            selected, tuple(summaries), tuple(scores), diagnostic_score, (tuple(axes),),
+            "diagnostic_unstable_selection", "no_stable_grid_training_parameters", 1,
+        )
     all_summaries = list(summaries)
     all_scores = list(scores)
     screened_axes = [tuple(axes)]
@@ -605,6 +642,7 @@ def _select_training_candidate(
     selected_score = next(score for score in scores if score.config_hash == selected.config_hash)
     return _TrainingSelection(
         selected, tuple(all_summaries), tuple(all_scores), selected_score, tuple(screened_axes),
+        "stable", None, 1,
     )
 
 
@@ -827,6 +865,7 @@ def _run_manifest(
     windows: Sequence[ValidationWindowResult],
     *,
     profile: StrategyProfileSpec | None = None,
+    run_mode: ResearchRunMode = ResearchRunMode.FORMAL_VALIDATION,
 ) -> Mapping[str, object]:
     """Record enough immutable evidence to replay and audit a formal run."""
     data_fingerprint = sha256(repr(tuple(bars)).encode("utf-8")).hexdigest()
@@ -837,6 +876,11 @@ def _run_manifest(
         "data_cutoff": as_of_date.isoformat(),
         "requested_start": start_date.isoformat(),
         "data_fingerprint": data_fingerprint,
+        "run_mode": run_mode.value,
+        "research_only": True,
+        "activation_eligible": False if run_mode is ResearchRunMode.RESEARCH_DIAGNOSTIC else None,
+        "shadow_run_eligible": False if run_mode is ResearchRunMode.RESEARCH_DIAGNOSTIC else None,
+        "trading_authorized": False,
         "target": {
             "exposure_id": target.exposure_id,
             "stock_code": target.stock_code,
