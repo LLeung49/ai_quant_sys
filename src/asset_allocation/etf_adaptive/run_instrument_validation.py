@@ -7,7 +7,9 @@ from decimal import Decimal
 import json
 from pathlib import Path
 
-from .research.instrument_validation import FIXED_VALIDATION_TARGETS, legacy_unprofiled, run_instrument_validation
+from .research.instrument_validation import (
+    FIXED_VALIDATION_TARGETS, ResearchRunMode, legacy_unprofiled, run_instrument_validation,
+)
 from .research.experiment import (APPROVED_EXPERIMENT_AXES, ExperimentSpec, bind_experiment,
                                   targeted_study, star50_diagnostic)
 from .research.strategy_profiles import profile_for_id, profile_training_plan
@@ -38,6 +40,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--stock-code")
     parser.add_argument("--experiment", help="Named research experiment; new names require --stock-code")
     parser.add_argument("--profile", choices=("grid_core", "grid_plus_optional_trend", "core_hold_rebalance"))
+    parser.add_argument("--run-mode", choices=tuple(mode.value for mode in ResearchRunMode),
+                        default=ResearchRunMode.FORMAL_VALIDATION.value)
     args = parser.parse_args(argv)
     if args.experiment is not None and args.profile is None:
         parser.error("--experiment requires --profile")
@@ -47,6 +51,9 @@ def main(argv: list[str] | None = None) -> int:
     if start > cutoff:
         raise ValueError("start date must not be after as-of date")
     output = Path(args.output_dir)
+    run_mode = ResearchRunMode(args.run_mode)
+    if run_mode is ResearchRunMode.RESEARCH_DIAGNOSTIC and "research_diagnostic" not in output.parts:
+        parser.error("diagnostic output-dir must include a research_diagnostic path component")
     study = None
     training_plan = None
     if args.experiment is not None:
@@ -92,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"validating {target.stock_code} from {effective_start}", flush=True)
         if study is not None:
             result = run_instrument_validation(target, provider, effective_start, cutoff, Decimal(args.initial_cash),
-                                               profile=study.profile, training_plan=training_plan)
+                                               profile=study.profile, training_plan=training_plan, run_mode=run_mode)
         else:
             result = legacy_unprofiled(target, provider, effective_start, cutoff, Decimal(args.initial_cash))
         experiment = study or _legacy_fixed_experiment(target.stock_code, effective_start, cutoff)
@@ -104,7 +111,12 @@ def main(argv: list[str] | None = None) -> int:
             json.dumps({"as_of_date": cutoff.isoformat(), "stock_code": target.stock_code,
                         "status": result.status.value, "rejection_reason": result.rejection_reason,
                         "decision": validation_publication_decision(result),
-                        "experiment_hash": result.run_manifest["experiment_hash"]}, ensure_ascii=False, indent=2),
+                        "experiment_hash": result.run_manifest["experiment_hash"],
+                        "run_mode": result.run_mode.value,
+                        "research_only": True,
+                        "activation_eligible": False if result.run_mode is ResearchRunMode.RESEARCH_DIAGNOSTIC else result.activation_eligible,
+                        "shadow_run_eligible": False if result.run_mode is ResearchRunMode.RESEARCH_DIAGNOSTIC else None,
+                        "trading_authorized": False}, ensure_ascii=False, indent=2),
         )
     rows = [{"exposure_id": result.target.exposure_id, "stock_code": result.target.stock_code,
              "status": result.status.value, "rejection_reason": result.rejection_reason,
@@ -116,10 +128,13 @@ def main(argv: list[str] | None = None) -> int:
              "profile_version": result.run_manifest["experiment"]["profile"]["version"],
              "profile_hash": result.run_manifest["experiment"]["profile_hash"],
              "decision": validation_publication_decision(result),
-             "activation_eligible": bool(result.activation_eligible and validation_publication_decision(result)["conclusion"] == "passed"),
+             "run_mode": result.run_mode.value,
+             "activation_eligible": bool(result.run_mode is ResearchRunMode.FORMAL_VALIDATION and result.activation_eligible and validation_publication_decision(result)["conclusion"] == "passed"),
+             "shadow_run_eligible": False if result.run_mode is ResearchRunMode.RESEARCH_DIAGNOSTIC else None,
+             "trading_authorized": False,
              "scope": result.target.scope.value,
              "available_from": result.target.available_from.isoformat() if result.target.available_from else None} for result in results]
-    write_atomic_text(output / "instrument_validation.json", json.dumps({"as_of_date": cutoff.isoformat(), "results": rows}, ensure_ascii=False, indent=2))
+    write_atomic_text(output / "instrument_validation.json", json.dumps({"as_of_date": cutoff.isoformat(), "run_mode": run_mode.value, "research_only": True, "trading_authorized": False, "results": rows}, ensure_ascii=False, indent=2))
     passed = [row["stock_code"] for row in rows if row["activation_eligible"]]
     markdown = (
         "# ETF 验证报告\n\n"

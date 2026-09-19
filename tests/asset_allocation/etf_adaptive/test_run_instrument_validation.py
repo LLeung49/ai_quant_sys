@@ -84,6 +84,19 @@ def _cli_args(output):
             "--output-dir", str(output)]
 
 
+def test_cli_rejects_diagnostic_output_without_mode_path(tmp_path, monkeypatch, capsys) -> None:
+    import asset_allocation.etf_adaptive.run_instrument_validation as module
+
+    monkeypatch.setattr(module, "default_validation_provider", lambda: pytest.fail("provider must not start"))
+    with pytest.raises(SystemExit) as exc:
+        module.main(_cli_args(tmp_path / "round2") + [
+            "--stock-code", "513330.SH", "--experiment", "round2", "--profile", "grid_plus_optional_trend",
+            "--run-mode", "research_diagnostic",
+        ])
+    assert exc.value.code == 2
+    assert "research_diagnostic path component" in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("name", ["industry-demo", "hk_internet", "chinext_reentry", "star50_extreme_window"])
 def test_cli_rejects_named_experiment_without_profile(tmp_path, monkeypatch, capsys, name):
     import asset_allocation.etf_adaptive.run_instrument_validation as module

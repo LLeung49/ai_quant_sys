@@ -26,6 +26,7 @@ from .decision import ResearchConclusion, evaluate_research_decision
 from .experiment import ExperimentSpec, experiment_evidence
 from .instrument_validation import (
     InstrumentValidationResult,
+    ResearchRunMode,
     ValidationWindowResult,
     _recorded_performance,
     _research_evidence,
@@ -675,8 +676,26 @@ def validation_publication_decision(result: InstrumentValidationResult) -> dict[
     return _decision_payload(result, _evidence_blockers(result))
 
 
+def _is_diagnostic(result: InstrumentValidationResult) -> bool:
+    return result.run_mode is ResearchRunMode.RESEARCH_DIAGNOSTIC
+
+
 def _decision_payload(result: InstrumentValidationResult, blockers: list[str]) -> dict[str, object]:
     blockers = list(blockers)
+    if _is_diagnostic(result):
+        manifest = result.run_manifest if isinstance(result.run_manifest, Mapping) else {}
+        authorization = (
+            manifest.get("research_only") is True,
+            manifest.get("activation_eligible") is False,
+            manifest.get("shadow_run_eligible") is False,
+            manifest.get("trading_authorized") is False,
+        )
+        if not all(authorization):
+            blockers.append("diagnostic_authorization_contract")
+        return {
+            "conclusion": "diagnostic_complete" if not blockers else "diagnostic_execution_failed",
+            "blockers": list(dict.fromkeys(blockers)),
+        }
     computed = evaluate_research_decision(result.evidence) if result.evidence is not None else None
     if result.evidence is not None:
         try:
@@ -763,6 +782,9 @@ def _window_row(window: ValidationWindowResult) -> dict[str, object]:
         "validation_start": window.validation_start.isoformat(), "config_hash": window.config_hash,
         "strategy_return": window.strategy_return, "benchmark_return": window.benchmark_return,
         "selected_config": json.dumps(window.selected_config, ensure_ascii=False, sort_keys=True),
+        "selection_status": window.selection_status,
+        "formal_selection_rejection": window.formal_selection_rejection,
+        "training_selection_rank": window.training_selection_rank,
         "excess_return": window.strategy_return - window.benchmark_return,
         **{f"strategy_{name}": strategy[name] if strategy else None for name in _METRIC_NAMES},
         **{f"benchmark_{name}": benchmark[name] if benchmark else None for name in _METRIC_NAMES},
@@ -989,7 +1011,7 @@ def _recommendation(conclusion: str) -> str:
         ResearchConclusion.CONTINUE_PARAMETER_OPTIMIZATION.value: "继续参数优化，不执行交易。",
         ResearchConclusion.EVALUATE_STRUCTURAL_CHANGE.value: "评估策略结构调整，不执行交易。",
         ResearchConclusion.DO_NOT_TRADE.value: "不交易，直至补齐并复核缺失或无效证据。",
-    }[conclusion]
+    }.get(conclusion, "Diagnostic research only; no authorization.")
 
 
 def _markdown(summary: dict[str, object], attribution: list[dict[str, object]]) -> str:
@@ -1075,10 +1097,15 @@ def write_validation_artifacts(result: InstrumentValidationResult, output_dir: P
         "sub_layer": result.target.sub_layer.value,
         "scope": result.scope.value,
         "status": result.status.value,
-        "activation_eligible": bool(
+        "run_mode": result.run_mode.value,
+        "research_only": True,
+        "activation_eligible": False if _is_diagnostic(result) else bool(
             result.activation_eligible
             and decision["conclusion"] == ResearchConclusion.PASSED.value
         ),
+        "shadow_run_eligible": False if _is_diagnostic(result) else None,
+        "trading_authorized": False,
+        "limitations": [],
         "decision": decision,
         "strategy_profile": _strategy_profile_payload(result),
         "trend_diagnostics": _trend_diagnostics(result),

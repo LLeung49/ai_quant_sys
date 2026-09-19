@@ -29,7 +29,7 @@ from asset_allocation.etf_adaptive.research.decision import (
 )
 from asset_allocation.etf_adaptive.research.instrument_validation import (
     InstrumentValidationResult, TrainingSurfaceSummary, ValidationScope,
-    ValidationStatus, ValidationTarget, ValidationWindowResult,
+    ValidationStatus, ValidationTarget, ValidationWindowResult, ResearchRunMode,
 )
 from asset_allocation.etf_adaptive.research.metrics import PerformanceMetrics
 from asset_allocation.etf_adaptive.research.validation_report import (
@@ -319,6 +319,33 @@ def test_publication_recomputes_decision_from_recorded_evidence(updates, expecte
 
     assert decision["conclusion"] == "do_not_trade"
     assert expected_blocker in decision["blockers"]
+
+
+def test_diagnostic_report_is_explicitly_non_authorizable(tmp_path) -> None:
+    result = _profiled_recorded_result()
+    manifest = {
+        **result.run_manifest,
+        "run_mode": "research_diagnostic",
+        "research_only": True,
+        "activation_eligible": False,
+        "shadow_run_eligible": False,
+        "trading_authorized": False,
+    }
+    diagnostic = replace(
+        result,
+        run_mode=ResearchRunMode.RESEARCH_DIAGNOSTIC,
+        activation_eligible=False,
+        run_manifest=manifest,
+    )
+
+    artifacts = write_validation_artifacts(diagnostic, tmp_path / "research_diagnostic" / "159915.SZ")
+    summary = json.loads(artifacts.summary_json.read_text(encoding="utf-8"))
+
+    assert summary["run_mode"] == "research_diagnostic"
+    assert summary["activation_eligible"] is False
+    assert summary["shadow_run_eligible"] is False
+    assert summary["trading_authorized"] is False
+    assert summary["decision"]["conclusion"] == "diagnostic_complete"
 
 
 def test_publication_reconciles_claimed_evidence_to_recorded_metrics() -> None:

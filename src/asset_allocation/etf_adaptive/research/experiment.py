@@ -260,6 +260,11 @@ def experiment_evidence(result: InstrumentValidationResult, spec: ExperimentSpec
             "excess_attribution": asdict(window.excess_attribution) if window.excess_attribution else None,
         })
     return json.loads(_json({"experiment": spec.to_dict(), "experiment_hash": spec.experiment_hash(),
+                            "run_mode": result.run_mode.value,
+                            "research_only": True,
+                            "activation_eligible": False if result.run_mode.value == "research_diagnostic" else result.activation_eligible,
+                            "shadow_run_eligible": False if result.run_mode.value == "research_diagnostic" else None,
+                            "trading_authorized": False,
                             "strategy_spec": asdict(spec.strategy) if spec.strategy is not None else None,
                             "benchmark_specs": [asdict(item) for item in spec.benchmarks],
                             "experiment_windows": windows}))
