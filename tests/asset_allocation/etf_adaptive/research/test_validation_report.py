@@ -345,7 +345,48 @@ def test_diagnostic_report_is_explicitly_non_authorizable(tmp_path) -> None:
     assert summary["activation_eligible"] is False
     assert summary["shadow_run_eligible"] is False
     assert summary["trading_authorized"] is False
+    assert summary["decision"]["conclusion"] == "diagnostic_complete", summary["decision"]
+
+
+def test_diagnostic_report_accepts_selected_unstable_training_score(tmp_path) -> None:
+    result = _profiled_recorded_result()
+    unstable_windows = []
+    for window in result.windows:
+        score = replace(
+            window.candidate_scores[0],
+            stable=False,
+            rejection_reason="outside_stable_plateau",
+        )
+        unstable_windows.append(replace(
+            window,
+            candidate_scores=(score,),
+            selected_scores={"grid_only": score},
+            selection_status="diagnostic_unstable_selection",
+            formal_selection_rejection="no_stable_grid_training_parameters",
+            training_selection_rank=1,
+        ))
+    manifest = {
+        **result.run_manifest,
+        "run_mode": "research_diagnostic",
+        "research_only": True,
+        "activation_eligible": False,
+        "shadow_run_eligible": False,
+        "trading_authorized": False,
+    }
+    diagnostic = replace(
+        result,
+        windows=tuple(unstable_windows),
+        run_mode=ResearchRunMode.RESEARCH_DIAGNOSTIC,
+        activation_eligible=False,
+        run_manifest=manifest,
+    )
+    diagnostic = bind_experiment(diagnostic, ExperimentSpec.from_dict(manifest["experiment"]))
+
+    artifacts = write_validation_artifacts(diagnostic, tmp_path / "research_diagnostic" / "159915.SZ")
+    summary = json.loads(artifacts.summary_json.read_text(encoding="utf-8"))
+
     assert summary["decision"]["conclusion"] == "diagnostic_complete"
+    assert summary["windows"][0]["selection_status"] == "diagnostic_unstable_selection"
 
 
 def test_publication_reconciles_claimed_evidence_to_recorded_metrics() -> None:

@@ -565,8 +565,15 @@ def _experiment_blockers(result: InstrumentValidationResult) -> list[str]:
                 blockers.append("selected_scores")
             for family, score in window.selected_scores.items():
                 section = {"grid_only": "grid", "trend_only": "trend"}.get(family)
-                if (section is None or score.family != family or not score.stable
-                        or score.rejection_reason is not None or score.to_dict() not in candidates
+                diagnostic_unstable = (
+                    _is_diagnostic(result)
+                    and window.selection_status == "diagnostic_unstable_selection"
+                    and score.rejection_reason == "outside_stable_plateau"
+                )
+                if (section is None or score.family != family
+                        or (not score.stable and not diagnostic_unstable)
+                        or (score.rejection_reason is not None and not diagnostic_unstable)
+                        or score.to_dict() not in candidates
                         or dict(score.config[section]) != window.selected_config[section]
                         or dict(score.config["cost"]) != window.selected_config["cost"]):
                     blockers.append("selected_scores")
