@@ -11,6 +11,7 @@ import pytest
 from asset_allocation.etf_adaptive.config import AdaptiveConfig, GridConfig, TrendConfig
 from asset_allocation.etf_adaptive.research.candidate_scoring import (
     TrainingCandidateScore,
+    select_diagnostic_representative,
     select_stable_representative,
 )
 
@@ -38,6 +39,32 @@ def test_select_stable_representative_rejects_high_score_outside_plateau() -> No
 def test_no_stable_representative_fails_closed() -> None:
     assert select_stable_representative(()) is None
     assert select_stable_representative((_score(stable=False),)) is None
+
+
+def test_diagnostic_representative_selects_complete_unstable_training_score() -> None:
+    preferred = _score(
+        AdaptiveConfig(grid=GridConfig(step_pct=0.02)),
+        stable=False,
+        rejection_reason="outside_stable_plateau",
+        positive_subperiod_share=1.0,
+    )
+    other = _score(
+        AdaptiveConfig(grid=GridConfig(step_pct=0.03)),
+        stable=False,
+        rejection_reason="outside_stable_plateau",
+    )
+
+    assert select_diagnostic_representative((other, preferred)) == preferred
+
+
+@pytest.mark.parametrize("changes", (
+    {"sortino_excess": None},
+    {"rejection_reason": "invalid_training_metrics:cost_drag"},
+))
+def test_diagnostic_representative_rejects_incomplete_or_non_plateau_failures(changes) -> None:
+    score = _score(stable=False, **({"rejection_reason": "outside_stable_plateau"} | changes))
+
+    assert select_diagnostic_representative((score,)) is None
 
 
 @pytest.mark.parametrize("better,worse", (

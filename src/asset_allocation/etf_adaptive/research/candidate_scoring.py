@@ -166,11 +166,38 @@ def select_stable_representative(
         except ValueError:
             continue
         stable.append(score)
-    return min(stable, key=lambda score: (
+    return min(stable, key=_selection_rank, default=None)
+
+
+def select_diagnostic_representative(
+    scores: Sequence[TrainingCandidateScore],
+) -> TrainingCandidateScore | None:
+    """Rank complete training evidence without promoting an unstable surface.
+
+    This selector is for explicitly diagnostic runs only.  It permits the
+    ordinary ``outside_stable_plateau`` rejection, but retains every metric,
+    canonical-config, and cost validation used by formal candidate scoring.
+    """
+    eligible = []
+    for score in scores:
+        if score.rejection_reason not in (None, "outside_stable_plateau"):
+            continue
+        if _metric_rejection_reason(score) is not None:
+            continue
+        try:
+            _validated_config(score.config, score.config_hash)
+        except ValueError:
+            continue
+        eligible.append(score)
+    return min(eligible, key=_selection_rank, default=None)
+
+
+def _selection_rank(score: TrainingCandidateScore) -> tuple[object, ...]:
+    return (
         -score.positive_subperiod_share,
         -score.sortino_excess,
         -score.sharpe_excess,
         score.cost_drag,
         conservative_config_key(score.config),
         score.config_hash,
-    ), default=None)
+    )
