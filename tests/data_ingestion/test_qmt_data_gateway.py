@@ -124,16 +124,24 @@ def test_financial_data_restores_nested_dataframes():
 
 def test_reference_envelopes_are_unwrapped():
     gateway = QMTDataGateway(base_url="http://qmt", token="test")
+    calls = []
     responses_by_path = {
         "stock_list_in_sector": {"stocks": ["600519.SH"]},
         "sector_list": {"sectors": ["SW1食品饮料"]},
         "instrument_detail": {"data": {"600519.SH": {"OpenDate": "20010827"}}},
         "divid_factors": {"factors": [{"time": "20250102", "factor": 1.2}]},
     }
-    gateway._session.request = lambda method, url, **kwargs: _Response(
-        next(value for key, value in responses_by_path.items() if key in url)
-    )
+    def request(method, url, **kwargs):
+        calls.append((method, url, kwargs["json"]))
+        return _Response(next(value for key, value in responses_by_path.items() if key in url))
+
+    gateway._session.request = request
     assert gateway.get_stock_list_in_sector("沪深A股") == ["600519.SH"]
+    assert calls[0] == (
+        "POST",
+        "http://qmt/api/data/stock_list_in_sector",
+        {"sectorname": "沪深A股"},
+    )
     assert gateway.get_sector_list() == ["SW1食品饮料"]
     assert gateway.get_instrument_detail(["600519.SH"])["600519.SH"]["OpenDate"] == "20010827"
     assert gateway.get_divid_factors("600519.SH").iloc[0]["factor"] == 1.2

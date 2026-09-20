@@ -246,7 +246,7 @@ class QMTDataGateway:
 
     def get_stock_list_in_sector(self, sector_name: str) -> list[str]:
         body = self._request(
-            "POST", "/api/xtdata/stock_list_in_sector", {"sector_name": sector_name}
+            "POST", "/api/data/stock_list_in_sector", {"sectorname": sector_name}
         )
         return [str(code) for code in body.get("stocks", [])]
 

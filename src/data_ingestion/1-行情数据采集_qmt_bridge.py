@@ -49,6 +49,22 @@ def set_gateway_for_test(gateway):
     global xtdata
     xtdata = gateway
 
+
+def _load_sector_stock_codes(gateway, sector_names):
+    """Return the de-duplicated eligible stock pool for all requested sectors."""
+    all_codes = []
+    seen = set()
+    for sector_name in sector_names:
+        codes = gateway.get_stock_list_in_sector(sector_name)
+        for code in codes or []:
+            code = str(code)
+            if '.' in code and code not in seen:
+                seen.add(code)
+                all_codes.append(code)
+    if not all_codes:
+        raise RuntimeError(f"股票列表为空，QMT 未返回板块成分股: {sector_names}")
+    return all_codes
+
 # sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from db_config import get_connection, execute_query
 
@@ -317,14 +333,7 @@ def main():
         print(f"\n[测试模式] 只采集 {TEST_STOCK}")
     else:
         print(f"\n获取 {SECTOR} 股票列表...")
-        all_codes = []
-        seen = set()
-        for sector_name in SECTOR:
-            codes = xtdata.get_stock_list_in_sector(sector_name)
-            for c in (codes or []):
-                if '.' in str(c) and c not in seen:
-                    seen.add(c)
-                    all_codes.append(c)
+        all_codes = _load_sector_stock_codes(xtdata, SECTOR)
         print(f"  共 {len(all_codes)} 只股票")
 
     # 批量查询DB中已有的最新日期
