@@ -123,6 +123,16 @@ class QMTDataGateway:
             frame.index = parsed.dt.strftime("%Y%m%d")
         return frame
 
+    @staticmethod
+    def _context_frame(columns: Any) -> pd.DataFrame:
+        """Restore a ContextInfo ``DataFrame.to_dict()`` result."""
+        if not isinstance(columns, dict):
+            return QMTDataGateway._frame(columns)
+        frame = pd.DataFrame(columns)
+        if not frame.empty:
+            frame.index = pd.to_datetime(frame.index.astype(str), errors="raise").strftime("%Y%m%d")
+        return frame
+
     def download_history_data(
         self,
         stock_code: str | list[str],
@@ -131,25 +141,9 @@ class QMTDataGateway:
         end_time: str = "",
     ) -> DownloadResult:
         stocks = [stock_code] if isinstance(stock_code, str) else list(stock_code)
-        downloaded: list[str] = []
-        failed: list[dict[str, Any]] = []
-        for batch in _chunks(stocks, 20):
-            body = self._request(
-                "POST",
-                "/api/xtdata/download_history_data",
-                {
-                    "stock_list": ",".join(batch),
-                    "period": period,
-                    "start_time": start_time,
-                    "end_time": end_time,
-                },
-            )
-            downloaded.extend(str(code) for code in body.get("downloaded", []))
-            failed.extend(body.get("failed", []) or [])
-        if failed:
-            codes = ", ".join(str(item.get("stock", "?")) for item in failed)
-            raise QMTBridgeError(f"history download failed: {codes}")
-        return DownloadResult(tuple(downloaded), tuple(failed))
+        # ContextInfo.get_market_data_ex obtains the QMT-managed history directly.
+        # The former xtdata download endpoint is unavailable in the regulated setup.
+        return DownloadResult(tuple(stocks), ())
 
     def get_market_data_ex(
         self,
@@ -166,20 +160,19 @@ class QMTDataGateway:
         for batch in _chunks(list(stock_list), 50):
             body = self._request(
                 "POST",
-                "/api/xtdata/market_data_ex",
+                "/api/data/market_data_ex",
                 {
-                    "field_list": ",".join(field_list),
-                    "stock_list": ",".join(batch),
+                    "fields": ",".join(field_list),
+                    "stock_code": ",".join(batch),
                     "period": period,
                     "start_time": start_time,
                     "end_time": end_time,
                     "count": count,
                     "dividend_type": dividend_type,
-                    "fill_data": str(fill_data).lower(),
                 },
             )
             for code, records in (body.get("data") or {}).items():
-                result[code] = self._frame(records)
+                result[code] = self._context_frame(records)
         return result
 
     def download_financial_data(
@@ -281,7 +274,7 @@ class QMTDataGateway:
         for batch in _chunks(stocks, 200):
             body = self._request(
                 "POST",
-                "/api/xtdata/instrument_detail",
+                "/api/data/instrument_detail",
                 {"stock_list": ",".join(batch), "iscomplete": iscomplete},
             )
             for code, detail in (body.get("data") or {}).items():
@@ -291,16 +284,30 @@ class QMTDataGateway:
                     result[code] = detail
         return result.get(stock_list, {}) if scalar else result
 
+    def get_last_volume(self, stock_code: str) -> int:
+        body = self._request(
+            "POST", "/api/data/last_volume", {"stockcode": stock_code}
+        )
+        return int(body.get("last_volume") or 0)
+
     def get_divid_factors(
         self, stock_code: str, start_time: str = "", end_time: str = ""
     ) -> pd.DataFrame:
         body = self._request(
-            "POST",
-            "/api/xtdata/divid_factors",
-            {
-                "stock_code": stock_code,
-                "start_time": start_time,
-                "end_time": end_time,
-            },
+            "POST", "/api/data/divid_factors", {"stockcode": stock_code}
         )
-        return self._frame(body.get("factors", []))
+        factors = body.get("factors") or {}
+        if isinstance(factors, list):
+            return self._frame(factors)
+        records = []
+        for timestamp, values in factors.items():
+            if not isinstance(values, list) or len(values) < 7:
+                continue
+            records.append({
+                "time": pd.to_datetime(int(timestamp), unit="ms").strftime("%Y%m%d"),
+                "factor": values[6],
+            })
+        frame = self._frame(records)
+        if start_time or end_time:
+            frame = frame.loc[start_time or None:end_time or None]
+        return frame

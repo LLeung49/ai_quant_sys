@@ -6,6 +6,7 @@ import tokenize
 ROOT = Path(__file__).parents[2]
 SERVER_COPY = ROOT / "docs/user_demand/qmt_switch/CY_QMT_API_qmt_bridge.py"
 SERVER_GBK_COPY = ROOT / "docs/user_demand/qmt_switch/CY_QMT_API_qmt_bridge_gbk.py"
+CONTEXT_SERVER_COPY = ROOT / "docs/user_demand/qmt_switch/CY_QMT_API_context_bridge.py"
 ETF_FIXTURE = ROOT / "tests/fixtures/qmt_bridge/etf_info.json"
 
 
@@ -42,3 +43,15 @@ def test_refresh_handlers_follow_existing_safe_call_convention():
     assert "safe_call(xtdata.download_sector_data)" in source
     assert "safe_call(xtdata.download_etf_info)" in source
     assert "safe_call(xtdata.get_etf_info)" in source
+
+
+def test_context_data_replacements_use_data_routes_not_xtdata_routes():
+    source = _server_source(CONTEXT_SERVER_COPY)
+    for route in (
+        "/api/data/instrument_detail",
+        "/api/data/raw_financial_data",
+        "/api/data/etf_info",
+    ):
+        assert route in source
+    assert "self.ctx().get_instrument_detail" in source
+    assert "self.ctx().get_raw_financial_data" in source

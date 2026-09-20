@@ -73,15 +73,11 @@ def test_market_data_restores_dataframe_index(monkeypatch):
     assert frame.iloc[0]["close"] == 2.0
 
 
-def test_history_download_raises_for_failed_code():
+def test_history_download_is_a_context_compatibility_noop():
     gateway = QMTDataGateway(base_url="http://qmt", token="test")
-    gateway._session.request = lambda method, url, **kwargs: _Response({
-        "status": "success",
-        "downloaded": ["600519.SH"],
-        "failed": [{"stock": "000001.SZ", "error": "offline"}],
-    })
-    with pytest.raises(QMTBridgeError, match="000001.SZ"):
-        gateway.download_history_data(["600519.SH", "000001.SZ"], "1d", "20250101")
+    gateway._session.request = lambda *args, **kwargs: pytest.fail("unexpected HTTP request")
+    result = gateway.download_history_data(["600519.SH", "000001.SZ"], "1d", "20250101")
+    assert result.downloaded == ("600519.SH", "000001.SZ")
 
 
 @pytest.mark.parametrize("dividend_type", ["none", "front", "back"])
@@ -129,7 +125,7 @@ def test_reference_envelopes_are_unwrapped():
         "stock_list_in_sector": {"stocks": ["600519.SH"]},
         "sector_list": {"sectors": ["SW1食品饮料"]},
         "instrument_detail": {"data": {"600519.SH": {"OpenDate": "20010827"}}},
-        "divid_factors": {"factors": [{"time": "20250102", "factor": 1.2}]},
+        "divid_factors": {"factors": {"1735689600000": [1, 0, 0, 0, 0, 0, 1.2]}},
     }
     def request(method, url, **kwargs):
         calls.append((method, url, kwargs["json"]))
@@ -200,8 +196,45 @@ def test_divid_factors_forwards_requested_window():
 
     gateway._session.request = request
     gateway.get_divid_factors("600519.SH", "20250101", "20250131")
-    assert calls == [{
-        "stock_code": "600519.SH",
-        "start_time": "20250101",
-        "end_time": "20250131",
-    }]
+    assert calls == [{"stockcode": "600519.SH"}]
+
+
+def test_context_data_endpoints_restore_xtdata_compatible_shapes():
+    gateway = QMTDataGateway(base_url="http://qmt", token="test")
+    calls = []
+
+    def request(method, url, **kwargs):
+        calls.append((method, url, kwargs["json"]))
+        if url.endswith("/market_data_ex"):
+            return _Response({"data": {"600519.SH": {"close": {"20250102": 2.0}}}})
+        if url.endswith("/instrument_detail"):
+            return _Response({"data": {"600519.SH": {"FloatVolume": 123}}})
+        if url.endswith("/divid_factors"):
+            return _Response({"stockcode": "600519.SH", "factors": {"1735689600000": [1, 0, 0, 0, 0, 0, 1.2]}})
+        if url.endswith("/last_volume"):
+            return _Response({"stockcode": "600519.SH", "last_volume": 456})
+        raise AssertionError(url)
+
+    gateway._session.request = request
+
+    market = gateway.get_market_data_ex(["close"], ["600519.SH"], "1d", "20250101")
+    assert market["600519.SH"].loc["20250102", "close"] == 2.0
+    assert gateway.get_instrument_detail("600519.SH")["FloatVolume"] == 123
+    assert gateway.get_last_volume("600519.SH") == 456
+    assert gateway.get_divid_factors("600519.SH").iloc[0]["factor"] == 1.2
+    assert calls[0] == (
+        "POST", "http://qmt/api/data/market_data_ex",
+        {"stock_code": "600519.SH", "fields": "close", "period": "1d",
+         "start_time": "20250101", "end_time": "", "count": -1,
+         "dividend_type": "none"},
+    )
+
+
+def test_context_market_data_does_not_require_xtdata_download():
+    gateway = QMTDataGateway(base_url="http://qmt", token="test")
+    gateway._session.request = lambda *args, **kwargs: pytest.fail("unexpected HTTP request")
+
+    result = gateway.download_history_data("600519.SH", "1d", "20250101")
+
+    assert result.downloaded == ("600519.SH",)
+    assert result.failed == ()
