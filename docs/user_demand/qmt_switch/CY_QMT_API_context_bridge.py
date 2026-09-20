@@ -538,7 +538,7 @@ class FinancialDataHandler(BaseHandler):
 
 def _financial_records(value):
     """Serialize ContextInfo raw financial DataFrame/Panel without stringifying it."""
-    if hasattr(value, 'items') and hasattr(value, 'major_axis') and hasattr(value, 'minor_axis'):
+    if type(value).__name__ == 'Panel':
         result = {}
         for stockcode in value.items:
             result[str(stockcode)] = _financial_records(value[stockcode])
@@ -572,24 +572,6 @@ class RawFinancialDataHandler(BaseHandler):
             raise HTTPError(500, "获取原始财务数据失败")
         self.write(json.dumps({"data": _financial_records(ret)}, ensure_ascii=False, default=str))
 
-
-# QMT 原生 get_etf_info() - 单 ETF 申赎清单及成分股（不依赖 xtdata）
-class NativeEtfInfoHandler(BaseHandler):
-    def post(self):
-        data = json.loads(self.request.body)
-        stock_list = data.get('stock_list', '')
-        stocks = [s.strip() for s in stock_list.split(',') if s.strip()]
-        if not stocks:
-            raise HTTPError(400, "need args stock_list")
-        native_func = globals().get('get_etf_info')
-        if not callable(native_func):
-            raise HTTPError(501, "当前QMT版本不支持原生get_etf_info")
-        result = {}
-        for stockcode in stocks:
-            info = safe_call(native_func, stockcode)
-            if info is not None:
-                result[stockcode] = info
-        self.write(json.dumps({"data": result}, ensure_ascii=False, default=str))
 
 # ============= xtdata 风格财务数据（与 miniQMT/xtquant 结构一致）=============
 # xtdata.get_financial_data() - 按报告期组织, 返回 {stock: {table: records}}
@@ -1757,7 +1739,6 @@ def make_app():
         (r"/api/data/option_undl_data", OptionUndlDataHandler),
         (r"/api/data/financial_data", FinancialDataHandler),
         (r"/api/data/raw_financial_data", RawFinancialDataHandler),
-        (r"/api/data/etf_info", NativeEtfInfoHandler),
         (r"/api/xtdata/financial_data", XtdataFinancialDataHandler),
         (r"/api/xtdata/download_financial_data", XtdataDownloadFinancialHandler),
         (r"/api/xtdata/sector_list", XtdataSectorListHandler),

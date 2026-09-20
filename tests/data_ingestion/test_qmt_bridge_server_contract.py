@@ -55,3 +55,4 @@ def test_context_data_replacements_use_data_routes_not_xtdata_routes():
         assert route in source
     assert "self.ctx().get_instrument_detail" in source
     assert "self.ctx().get_raw_financial_data" in source
+    assert "type(value).__name__ == 'Panel'" in source
