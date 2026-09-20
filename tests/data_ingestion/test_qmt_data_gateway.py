@@ -44,7 +44,7 @@ def test_market_data_restores_dataframe_index(monkeypatch):
     frame = gateway.get_market_data_ex(
         ["open", "close"], ["600519.SH"], "1d", "20250101", dividend_type="front"
     )["600519.SH"]
-    assert frame.index[0].strftime("%Y%m%d") == "20250102"
+    assert frame.index[0] == "20250102"
     assert frame.iloc[0]["close"] == 2.0
 
 
@@ -144,3 +144,20 @@ def test_sector_and_etf_refresh_contracts():
         "http://qmt/api/xtdata/download_etf_info",
         "http://qmt/api/xtdata/etf_info",
     ]
+
+
+def test_divid_factors_forwards_requested_window():
+    gateway = QMTDataGateway(base_url="http://qmt", token="test")
+    calls = []
+
+    def request(method, url, **kwargs):
+        calls.append(kwargs["json"])
+        return _Response({"factors": []})
+
+    gateway._session.request = request
+    gateway.get_divid_factors("600519.SH", "20250101", "20250131")
+    assert calls == [{
+        "stock_code": "600519.SH",
+        "start_time": "20250101",
+        "end_time": "20250131",
+    }]

@@ -65,7 +65,8 @@ TEST_MODE = False
 TEST_STOCK = '600519.SH'
 
 SECTOR = ['沪深A股', '沪深ETF']
-NUM_WORKERS = 8
+# The bridge is a single QMT-side service; keep requests serialized.
+NUM_WORKERS = 1
 DATA_START = '20150101'
 LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'log')
 _LOGGER_INIT_LOCK = threading.Lock()

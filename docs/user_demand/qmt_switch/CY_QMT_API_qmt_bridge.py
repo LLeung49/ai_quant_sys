@@ -1,4 +1,4 @@
-# -*- coding: gbk -*-
+# -*- coding: utf-8 -*-
 # Author：@跟陈博士学AI
 import json
 import locale
@@ -1585,9 +1585,12 @@ class XtdataDownloadSectorHandler(BaseHandler):
     def post(self):
         try:
             from xtquant import xtdata
-            ret = safe_call(xtdata.download_sector_data)
+            xtdata.download_sector_data()
         except ImportError:
             raise HTTPError(501, "QMT环境缺少xtquant包")
+        except Exception as exc:
+            logger.exception("download_sector_data failed")
+            raise HTTPError(500, f"download_sector_data failed: {exc}")
         self.write(json.dumps({"status": "success"}, ensure_ascii=False))
 
 
@@ -1595,9 +1598,12 @@ class XtdataDownloadEtfInfoHandler(BaseHandler):
     def post(self):
         try:
             from xtquant import xtdata
-            ret = safe_call(xtdata.download_etf_info)
+            xtdata.download_etf_info()
         except ImportError:
             raise HTTPError(501, "QMT环境缺少xtquant包")
+        except Exception as exc:
+            logger.exception("download_etf_info failed")
+            raise HTTPError(500, f"download_etf_info failed: {exc}")
         self.write(json.dumps({"status": "success"}, ensure_ascii=False))
 
 
@@ -1605,9 +1611,12 @@ class XtdataEtfInfoHandler(BaseHandler):
     def post(self):
         try:
             from xtquant import xtdata
-            raw = safe_call(xtdata.get_etf_info)
+            raw = xtdata.get_etf_info()
         except ImportError:
             raise HTTPError(501, "QMT环境缺少xtquant包")
+        except Exception as exc:
+            logger.exception("get_etf_info failed")
+            raise HTTPError(500, f"get_etf_info failed: {exc}")
         if raw is None:
             raise HTTPError(500, "ETF数据读取失败")
         self.write(json.dumps({"data": raw}, ensure_ascii=False, default=str))

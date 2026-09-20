@@ -20,3 +20,11 @@ def test_server_copy_declares_missing_xtdata_routes():
 def test_recorded_etf_response_is_mapping():
     payload = json.loads(ETF_FIXTURE.read_text(encoding="utf-8"))
     assert isinstance(payload["data"], dict)
+
+
+def test_refresh_handlers_propagate_qmt_errors():
+    source = SERVER_COPY.read_text(encoding="utf-8")
+    assert "safe_call(xtdata.download_sector_data)" not in source
+    assert "safe_call(xtdata.download_etf_info)" not in source
+    assert "xtdata.download_sector_data()" in source
+    assert "xtdata.download_etf_info()" in source

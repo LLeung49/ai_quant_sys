@@ -9,3 +9,8 @@ def test_market_copy_exists_without_direct_xtquant_import():
     source = PATH.read_text(encoding="utf-8")
     assert "from xtquant import xtdata" not in source
     assert "QMTDataGateway" in source
+
+
+def test_market_bridge_serializes_http_requests():
+    source = PATH.read_text(encoding="utf-8")
+    assert "NUM_WORKERS = 1" in source

@@ -92,7 +92,9 @@ class QMTDataGateway:
             records = list(records.values())
         frame = pd.DataFrame.from_records(records)
         if "time" in frame.columns:
-            frame.index = pd.to_datetime(frame.pop("time").astype(str), errors="raise")
+            raw_times = frame.pop("time").astype(str)
+            parsed = pd.to_datetime(raw_times, errors="raise")
+            frame.index = parsed.dt.strftime("%Y%m%d")
         return frame
 
     def download_history_data(
@@ -258,8 +260,16 @@ class QMTDataGateway:
                     result[code] = detail
         return result.get(stock_list, {}) if scalar else result
 
-    def get_divid_factors(self, stock_code: str) -> pd.DataFrame:
+    def get_divid_factors(
+        self, stock_code: str, start_time: str = "", end_time: str = ""
+    ) -> pd.DataFrame:
         body = self._request(
-            "POST", "/api/xtdata/divid_factors", {"stock_code": stock_code}
+            "POST",
+            "/api/xtdata/divid_factors",
+            {
+                "stock_code": stock_code,
+                "start_time": start_time,
+                "end_time": end_time,
+            },
         )
         return self._frame(body.get("factors", []))
