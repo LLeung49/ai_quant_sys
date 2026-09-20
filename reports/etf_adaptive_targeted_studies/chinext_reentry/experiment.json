@@ -1,0 +1,81 @@
+{
+  "experiment": {
+    "experiment_id": "chinext_reentry",
+    "target_codes": [
+      "159915.SZ"
+    ],
+    "strategy": {
+      "strategy_id": "full_adaptive",
+      "version": "1",
+      "config": {
+        "grid": {
+          "step_pct": 0.02,
+          "unit_pct": 0.1,
+          "initial_model": "fixed",
+          "fixed_initial_pct": 0.5,
+          "max_grid_per_day": 1,
+          "atr_stop_multiple": 3.0,
+          "cooldown_sessions": 5
+        },
+        "trend": {
+          "stop_n": 2.0,
+          "risk_per_unit": 0.005,
+          "add_n": 0.5,
+          "max_units": 4,
+          "require_macd_bullish": true,
+          "amount_ratio_min": null
+        },
+        "cost": {
+          "commission_rate": 0.0001,
+          "minimum_commission": 5.0,
+          "slippage_bps": 3.0,
+          "sell_tax_rate": 0.0,
+          "transfer_fee_rate": 0.0
+        }
+      },
+      "policy_id": "full_adaptive"
+    },
+    "benchmarks": [
+      {
+        "benchmark_id": "buy_and_hold",
+        "version": "1",
+        "rebalance_sessions": null,
+        "target_weight": 1.0
+      }
+    ],
+    "allowed_axes": {
+      "cooldown_sessions": [
+        0,
+        3,
+        5,
+        10
+      ],
+      "atr_stop_multiple": [
+        2.0,
+        3.0,
+        4.0
+      ],
+      "stop_n": [
+        1.5,
+        2.0,
+        2.5,
+        3.0
+      ],
+      "require_macd_bullish": [
+        false,
+        true
+      ],
+      "amount_ratio_min": [
+        null,
+        1.0,
+        1.2,
+        1.5
+      ]
+    },
+    "start_date": "2021-01-01",
+    "as_of_date": "2026-09-11"
+  },
+  "experiment_hash": "6f721bf8a905b5411da127bee4b8fdf0f386cdb3d71369075df7010c05a93bf2",
+  "research_only": true,
+  "trading_authorized": false
+}

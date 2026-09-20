@@ -1,0 +1,21 @@
+{
+  "as_of_date": "2026-09-11",
+  "stock_code": "513330.SH",
+  "status": "data_rejected",
+  "rejection_reason": "expected market session is missing from both price coordinates",
+  "decision": {
+    "conclusion": "do_not_trade",
+    "blockers": [
+      "data_valid",
+      "missing_research_evidence",
+      "strategy_metrics",
+      "benchmark_metrics",
+      "strategy_exposure",
+      "benchmark_exposure",
+      "expected market session is missing from both price coordinates",
+      "run_manifest",
+      "experiment_metadata"
+    ]
+  },
+  "experiment_hash": "d940e723f1ba1fa36fa356dd983d34b956357817819bf390b49e14c96d30ec02"
+}

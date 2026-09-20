@@ -1,0 +1,31 @@
+{
+  "as_of_date": "2026-09-17",
+  "run_mode": "research_diagnostic",
+  "research_only": true,
+  "trading_authorized": false,
+  "results": [
+    {
+      "exposure_id": "sp_500",
+      "stock_code": "513500.SH",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": 0.08533468053379645,
+      "benchmark_annual_return": 0.1798589354476312,
+      "strategy_max_drawdown": 0.13210505561857455,
+      "benchmark_max_drawdown": 0.24953534023014812,
+      "profile_id": "core_hold_rebalance",
+      "profile_version": "1",
+      "profile_hash": "3d23b18c8a3614be7b56c821bcbd22b50743036b6473fa2520a5bd6e0acbeff9",
+      "decision": {
+        "conclusion": "diagnostic_complete",
+        "blockers": []
+      },
+      "run_mode": "research_diagnostic",
+      "activation_eligible": false,
+      "shadow_run_eligible": false,
+      "trading_authorized": false,
+      "scope": "formal",
+      "available_from": null
+    }
+  ]
+}

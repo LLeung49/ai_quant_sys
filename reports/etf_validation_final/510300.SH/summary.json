@@ -1,0 +1,19 @@
+{
+  "activation_eligible": false,
+  "as_of_date": "2026-09-08",
+  "benchmark_annual_return": null,
+  "benchmark_max_drawdown": null,
+  "exposure_id": "csi_300",
+  "rejection_reason": "inconsistent raw/qfq OHLC ratio",
+  "scope": "formal",
+  "status": "data_rejected",
+  "stock_code": "510300.SH",
+  "strategy_annual_return": null,
+  "strategy_max_drawdown": null,
+  "sub_layer": "broad_domestic_core",
+  "window_distribution": {
+    "win_rate": 0.0,
+    "window_count": 0
+  },
+  "windows": []
+}

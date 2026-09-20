@@ -1,0 +1,47 @@
+[
+  {
+    "window_id": "wf_000",
+    "grid_return": 0.02727400036446369,
+    "trend_return": 0.0010250896444069027,
+    "transition_return": 0.0020651799156102824,
+    "cash_opportunity_cost": -0.02745219310321083,
+    "execution_cost": 155.14305,
+    "reconciliation_error": 3.469446951953614e-18
+  },
+  {
+    "window_id": "wf_001",
+    "grid_return": -0.08391723657438065,
+    "trend_return": -0.015929512991155463,
+    "transition_return": -0.18194118287024247,
+    "cash_opportunity_cost": -0.19760980059256883,
+    "execution_cost": 98.5301,
+    "reconciliation_error": -5.551115123125783e-17
+  },
+  {
+    "window_id": "wf_002",
+    "grid_return": 0.0018117515432506583,
+    "trend_return": -0.13935053830981795,
+    "transition_return": 0.0012035267953259383,
+    "cash_opportunity_cost": -0.00084408186778368,
+    "execution_cost": 195.56581,
+    "reconciliation_error": 8.326672684688674e-17
+  },
+  {
+    "window_id": "wf_003",
+    "grid_return": -0.052988146930532366,
+    "trend_return": -0.05538027165306391,
+    "transition_return": -0.011929237247010727,
+    "cash_opportunity_cost": 0.022119326797903585,
+    "execution_cost": 104.59175,
+    "reconciliation_error": 6.938893903907228e-17
+  },
+  {
+    "window_id": "wf_004",
+    "grid_return": 0.022038952395328708,
+    "trend_return": -0.19415596756912398,
+    "transition_return": -0.0006004022852506841,
+    "cash_opportunity_cost": -0.06805058460070076,
+    "execution_cost": 161.96304,
+    "reconciliation_error": 0.0
+  }
+]

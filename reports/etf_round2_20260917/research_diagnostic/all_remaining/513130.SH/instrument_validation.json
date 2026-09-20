@@ -1,0 +1,31 @@
+{
+  "as_of_date": "2026-09-17",
+  "run_mode": "research_diagnostic",
+  "research_only": true,
+  "trading_authorized": false,
+  "results": [
+    {
+      "exposure_id": "hang_seng_tech",
+      "stock_code": "513130.SH",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": 0.026068113268411963,
+      "benchmark_annual_return": 0.10694222598720904,
+      "strategy_max_drawdown": 0.10952234614079548,
+      "benchmark_max_drawdown": 0.3691546494163934,
+      "profile_id": "grid_plus_optional_trend",
+      "profile_version": "1",
+      "profile_hash": "f4f9eb95055b94fd1694c9f43501573cd2e7eb3f2e5590104fa2a83fd6ebf8b1",
+      "decision": {
+        "conclusion": "diagnostic_complete",
+        "blockers": []
+      },
+      "run_mode": "research_diagnostic",
+      "activation_eligible": false,
+      "shadow_run_eligible": false,
+      "trading_authorized": false,
+      "scope": "formal",
+      "available_from": null
+    }
+  ]
+}

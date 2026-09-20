@@ -1,0 +1,50 @@
+{
+  "activation_eligible": false,
+  "as_of_date": "2026-09-08",
+  "benchmark_annual_return": -0.03484819043226861,
+  "benchmark_max_drawdown": 0.16415047640514624,
+  "exposure_id": "csi_dividend",
+  "rejection_reason": null,
+  "scope": "formal",
+  "status": "failed",
+  "stock_code": "515080.SH",
+  "strategy_annual_return": -0.07027242875598816,
+  "strategy_max_drawdown": 0.04357059931138496,
+  "sub_layer": "defensive_dividend_etf",
+  "window_distribution": {
+    "best_excess_return": -0.018057034669436756,
+    "median_excess_return": -0.018057034669436756,
+    "win_rate": 0.0,
+    "window_count": 1,
+    "worst_excess_return": -0.018057034669436756
+  },
+  "windows": [
+    {
+      "benchmark_calmar": -0.2122941778509276,
+      "benchmark_cvar5": -0.02306710723818099,
+      "benchmark_max_drawdown": -0.16415047640514624,
+      "benchmark_recovery_sessions": 3,
+      "benchmark_return": -0.017440309830563105,
+      "benchmark_sharpe": -0.2074621590936421,
+      "benchmark_sortino": -0.3235773661051137,
+      "benchmark_total_cost": 10.0,
+      "benchmark_turnover": 101771.73280459743,
+      "benchmark_worst_126_session_return": -0.01744030983056466,
+      "config_hash": "65589c6175e1bf8344cf6f37756e8701380b01b33b00c4bfc595dd59b9f4de89",
+      "excess_return": -0.018057034669436756,
+      "strategy_calmar": -1.612840536201347,
+      "strategy_cvar5": -0.006537520083299368,
+      "strategy_max_drawdown": -0.04357059931138496,
+      "strategy_recovery_sessions": 23,
+      "strategy_return": -0.03549734449999986,
+      "strategy_sharpe": -2.0356563915070853,
+      "strategy_sortino": -1.8396077731208003,
+      "strategy_total_cost": 38.43,
+      "strategy_turnover": 307525.27244117466,
+      "strategy_worst_126_session_return": -0.03549734449999997,
+      "training_end": "2026-01-29",
+      "validation_start": "2026-01-30",
+      "window_id": "wf_000"
+    }
+  ]
+}

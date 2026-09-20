@@ -1,0 +1,16 @@
+{
+  "as_of_date": "2026-09-17",
+  "stock_code": "515080.SH",
+  "status": "failed",
+  "rejection_reason": null,
+  "decision": {
+    "conclusion": "diagnostic_complete",
+    "blockers": []
+  },
+  "experiment_hash": "61a477ca27bcbffd8354b19491428ec2b3f460b86bf4dcbae341a10e10c1fe5b",
+  "run_mode": "research_diagnostic",
+  "research_only": true,
+  "activation_eligible": false,
+  "shadow_run_eligible": false,
+  "trading_authorized": false
+}

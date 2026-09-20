@@ -1,0 +1,17 @@
+{
+  "as_of_date": "2026-09-08",
+  "results": [
+    {
+      "exposure_id": "hang_seng_internet_technology",
+      "stock_code": "513330.SH",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": 0.01092525408856626,
+      "benchmark_annual_return": -0.037253703372695735,
+      "strategy_max_drawdown": 0.20678387782956653,
+      "benchmark_max_drawdown": 0.37389684561734593,
+      "scope": "formal",
+      "available_from": null
+    }
+  ]
+}

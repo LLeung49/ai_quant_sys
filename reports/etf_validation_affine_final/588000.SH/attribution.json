@@ -1,0 +1,86 @@
+[
+  {
+    "window_id": "wf_000",
+    "trade_points": [
+      {
+        "event_date": "2026-04-28",
+        "kind": "fill",
+        "reason": "trend_entry",
+        "shares": 6000,
+        "raw_price": 1.5794736999999999
+      },
+      {
+        "event_date": "2026-05-06",
+        "kind": "fill",
+        "reason": "trend_add",
+        "shares": 4500,
+        "raw_price": 1.7195157
+      },
+      {
+        "event_date": "2026-05-08",
+        "kind": "fill",
+        "reason": "trend_add",
+        "shares": 4100,
+        "raw_price": 1.7445232
+      },
+      {
+        "event_date": "2026-06-01",
+        "kind": "fill",
+        "reason": "trend_stop",
+        "shares": 14600,
+        "raw_price": 1.8404477000000001
+      },
+      {
+        "event_date": "2026-06-22",
+        "kind": "fill",
+        "reason": "trend_entry",
+        "shares": 3200,
+        "raw_price": 2.0266078
+      },
+      {
+        "event_date": "2026-06-25",
+        "kind": "fill",
+        "reason": "trend_add",
+        "shares": 2900,
+        "raw_price": 2.1146342
+      },
+      {
+        "event_date": "2026-06-26",
+        "kind": "fill",
+        "reason": "trend_add",
+        "shares": 2700,
+        "raw_price": 2.1426426
+      },
+      {
+        "event_date": "2026-07-08",
+        "kind": "fill",
+        "reason": "trend_stop",
+        "shares": 8800,
+        "raw_price": 2.1413574
+      }
+    ],
+    "by_reason": {
+      "trend_entry": {
+        "reason": "trend_entry",
+        "fill_count": 2,
+        "shares": 9200,
+        "traded_value": "15961.9871599999994000"
+      },
+      "trend_add": {
+        "reason": "trend_add",
+        "fill_count": 4,
+        "shares": 14200,
+        "traded_value": "26807.9399700"
+      },
+      "trend_stop": {
+        "reason": "trend_stop",
+        "fill_count": 2,
+        "shares": 23400,
+        "traded_value": "45714.4815400000014600"
+      }
+    },
+    "invested_sessions": 33,
+    "cash_sessions": 93,
+    "rejected_order_count": 0
+  }
+]

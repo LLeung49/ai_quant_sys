@@ -1,0 +1,42 @@
+{
+  "as_of_date": "2026-09-17",
+  "run_mode": "research_diagnostic",
+  "research_only": true,
+  "trading_authorized": false,
+  "results": [
+    {
+      "exposure_id": "csi_a500",
+      "stock_code": "563360.SH",
+      "status": "data_rejected",
+      "rejection_reason": "insufficient history for walk-forward validation",
+      "strategy_annual_return": null,
+      "benchmark_annual_return": null,
+      "strategy_max_drawdown": null,
+      "benchmark_max_drawdown": null,
+      "profile_id": "grid_core",
+      "profile_version": "1",
+      "profile_hash": "53e04e2ebcde6b11cecadf28bd776455bbc733ecf2d4f5a2eececcacc0d3ff45",
+      "decision": {
+        "conclusion": "do_not_trade",
+        "blockers": [
+          "data_valid",
+          "missing_research_evidence",
+          "strategy_metrics",
+          "benchmark_metrics",
+          "strategy_exposure",
+          "benchmark_exposure",
+          "insufficient history for walk-forward validation",
+          "run_manifest",
+          "unexecuted_benchmark_evidence",
+          "experiment_metadata"
+        ]
+      },
+      "run_mode": "formal_validation",
+      "activation_eligible": false,
+      "shadow_run_eligible": null,
+      "trading_authorized": false,
+      "scope": "reference_only",
+      "available_from": "2024-10-15"
+    }
+  ]
+}

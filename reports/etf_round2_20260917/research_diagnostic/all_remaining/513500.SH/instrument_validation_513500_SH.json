@@ -1,0 +1,16 @@
+{
+  "as_of_date": "2026-09-17",
+  "stock_code": "513500.SH",
+  "status": "failed",
+  "rejection_reason": null,
+  "decision": {
+    "conclusion": "diagnostic_complete",
+    "blockers": []
+  },
+  "experiment_hash": "6c2ac2648f72af0af938608ca5ba2aca2c9857fef999b33b3c8d1ad15079687d",
+  "run_mode": "research_diagnostic",
+  "research_only": true,
+  "activation_eligible": false,
+  "shadow_run_eligible": false,
+  "trading_authorized": false
+}

@@ -1,0 +1,105 @@
+{
+  "as_of_date": "2026-09-08",
+  "results": [
+    {
+      "exposure_id": "sp_china_low_vol_dividend",
+      "stock_code": "515450.SH",
+      "status": "data_rejected",
+      "rejection_reason": "expected market session is missing from both price coordinates",
+      "strategy_annual_return": null,
+      "benchmark_annual_return": null,
+      "strategy_max_drawdown": null,
+      "benchmark_max_drawdown": null
+    },
+    {
+      "exposure_id": "csi_dividend",
+      "stock_code": "515080.SH",
+      "status": "data_rejected",
+      "rejection_reason": "expected market session is missing from both price coordinates",
+      "strategy_annual_return": null,
+      "benchmark_annual_return": null,
+      "strategy_max_drawdown": null,
+      "benchmark_max_drawdown": null
+    },
+    {
+      "exposure_id": "csi_300",
+      "stock_code": "510300.SH",
+      "status": "data_rejected",
+      "rejection_reason": "expected market session is missing from both price coordinates",
+      "strategy_annual_return": null,
+      "benchmark_annual_return": null,
+      "strategy_max_drawdown": null,
+      "benchmark_max_drawdown": null
+    },
+    {
+      "exposure_id": "csi_a500",
+      "stock_code": "563360.SH",
+      "status": "data_rejected",
+      "rejection_reason": "expected market session is missing from both price coordinates",
+      "strategy_annual_return": null,
+      "benchmark_annual_return": null,
+      "strategy_max_drawdown": null,
+      "benchmark_max_drawdown": null
+    },
+    {
+      "exposure_id": "chinext",
+      "stock_code": "159915.SZ",
+      "status": "data_rejected",
+      "rejection_reason": "expected market session is missing from both price coordinates",
+      "strategy_annual_return": null,
+      "benchmark_annual_return": null,
+      "strategy_max_drawdown": null,
+      "benchmark_max_drawdown": null
+    },
+    {
+      "exposure_id": "star_50",
+      "stock_code": "588000.SH",
+      "status": "data_rejected",
+      "rejection_reason": "expected market session is missing from both price coordinates",
+      "strategy_annual_return": null,
+      "benchmark_annual_return": null,
+      "strategy_max_drawdown": null,
+      "benchmark_max_drawdown": null
+    },
+    {
+      "exposure_id": "nasdaq_100",
+      "stock_code": "513100.SH",
+      "status": "data_rejected",
+      "rejection_reason": "expected market session is missing from both price coordinates",
+      "strategy_annual_return": null,
+      "benchmark_annual_return": null,
+      "strategy_max_drawdown": null,
+      "benchmark_max_drawdown": null
+    },
+    {
+      "exposure_id": "sp_500",
+      "stock_code": "513500.SH",
+      "status": "data_rejected",
+      "rejection_reason": "expected market session is missing from both price coordinates",
+      "strategy_annual_return": null,
+      "benchmark_annual_return": null,
+      "strategy_max_drawdown": null,
+      "benchmark_max_drawdown": null
+    },
+    {
+      "exposure_id": "hang_seng_tech",
+      "stock_code": "513130.SH",
+      "status": "data_rejected",
+      "rejection_reason": "expected market session is missing from both price coordinates",
+      "strategy_annual_return": null,
+      "benchmark_annual_return": null,
+      "strategy_max_drawdown": null,
+      "benchmark_max_drawdown": null
+    },
+    {
+      "exposure_id": "hang_seng_internet_technology",
+      "stock_code": "513330.SH",
+      "status": "data_rejected",
+      "rejection_reason": "expected market session is missing from both price coordinates",
+      "strategy_annual_return": null,
+      "benchmark_annual_return": null,
+      "strategy_max_drawdown": null,
+      "benchmark_max_drawdown": null
+    }
+  ]
+}

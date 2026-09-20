@@ -1,0 +1,6 @@
+{
+  "as_of_date": "2026-09-08",
+  "stock_code": "159915.SZ",
+  "status": "data_rejected",
+  "rejection_reason": "value -inf not part of axis amount_ratio_min"
+}

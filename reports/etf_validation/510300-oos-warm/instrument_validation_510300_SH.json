@@ -1,0 +1,6 @@
+{
+  "as_of_date": "2026-09-07",
+  "stock_code": "510300.SH",
+  "status": "data_rejected",
+  "rejection_reason": "inconsistent raw/qfq OHLC ratio"
+}

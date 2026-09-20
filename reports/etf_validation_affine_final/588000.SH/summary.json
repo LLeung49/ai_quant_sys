@@ -1,0 +1,50 @@
+{
+  "activation_eligible": false,
+  "as_of_date": "2026-09-08",
+  "benchmark_annual_return": 0.3383348598717426,
+  "benchmark_max_drawdown": 0.3020288206180143,
+  "exposure_id": "star_50",
+  "rejection_reason": null,
+  "scope": "formal",
+  "status": "failed",
+  "stock_code": "588000.SH",
+  "strategy_annual_return": 0.0594199488674807,
+  "strategy_max_drawdown": 0.022157073542273364,
+  "sub_layer": "broad_domestic_growth",
+  "window_distribution": {
+    "best_excess_return": -0.1264816055856497,
+    "median_excess_return": -0.1264816055856497,
+    "win_rate": 0.0,
+    "window_count": 1,
+    "worst_excess_return": -0.1264816055856497
+  },
+  "windows": [
+    {
+      "benchmark_calmar": 1.1202072013506479,
+      "benchmark_cvar5": -0.06280499446293263,
+      "benchmark_max_drawdown": -0.3020288206180143,
+      "benchmark_recovery_sessions": 54,
+      "benchmark_return": 0.15552714968564962,
+      "benchmark_sharpe": 0.6699263921378878,
+      "benchmark_sortino": 1.1176322782858155,
+      "benchmark_total_cost": 10.0,
+      "benchmark_turnover": 92711.78168726622,
+      "benchmark_worst_126_session_return": 0.15552714968564962,
+      "config_hash": "65589c6175e1bf8344cf6f37756e8701380b01b33b00c4bfc595dd59b9f4de89",
+      "excess_return": -0.1264816055856497,
+      "strategy_calmar": 2.6817597889953153,
+      "strategy_cvar5": -0.009728086462152211,
+      "strategy_max_drawdown": -0.022157073542273364,
+      "strategy_recovery_sessions": 57,
+      "strategy_return": 0.02904554409999993,
+      "strategy_sharpe": 1.0429281369872276,
+      "strategy_sortino": 0.8494015245522666,
+      "strategy_total_cost": 40.0,
+      "strategy_turnover": 87170.26712700148,
+      "strategy_worst_126_session_return": 0.02904554409999971,
+      "training_end": "2026-01-29",
+      "validation_start": "2026-01-30",
+      "window_id": "wf_000"
+    }
+  ]
+}

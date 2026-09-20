@@ -1,0 +1,50 @@
+{
+  "activation_eligible": true,
+  "as_of_date": "2026-09-08",
+  "benchmark_annual_return": -0.3236067686438995,
+  "benchmark_max_drawdown": 0.2752862793181049,
+  "exposure_id": "hang_seng_tech",
+  "rejection_reason": null,
+  "scope": "formal",
+  "status": "passed",
+  "stock_code": "513130.SH",
+  "strategy_annual_return": -0.0803229070464192,
+  "strategy_max_drawdown": 0.09226799123454155,
+  "sub_layer": "broad_hk_offshore",
+  "window_distribution": {
+    "best_excess_return": 0.13560837046725938,
+    "median_excess_return": 0.13560837046725938,
+    "win_rate": 1.0,
+    "window_count": 1,
+    "worst_excess_return": 0.13560837046725938
+  },
+  "windows": [
+    {
+      "benchmark_calmar": -1.1755281427228643,
+      "benchmark_cvar5": -0.03646337774993245,
+      "benchmark_max_drawdown": -0.2752862793181049,
+      "benchmark_recovery_sessions": 126,
+      "benchmark_return": -0.1762917059672593,
+      "benchmark_sharpe": -1.1323639973483208,
+      "benchmark_sortino": -1.9687484857989235,
+      "benchmark_total_cost": 9.99,
+      "benchmark_turnover": 119723.9134357191,
+      "benchmark_worst_126_session_return": -0.17629170596725918,
+      "config_hash": "65589c6175e1bf8344cf6f37756e8701380b01b33b00c4bfc595dd59b9f4de89",
+      "excess_return": 0.13560837046725938,
+      "strategy_calmar": -0.8705392408754362,
+      "strategy_cvar5": -0.014360531815480157,
+      "strategy_max_drawdown": -0.09226799123454155,
+      "strategy_recovery_sessions": 58,
+      "strategy_return": -0.04068333549999992,
+      "strategy_sharpe": -1.058222861019172,
+      "strategy_sortino": -0.9599215098222452,
+      "strategy_total_cost": 49.96,
+      "strategy_turnover": 345180.69580851035,
+      "strategy_worst_126_session_return": -0.040683335499999806,
+      "training_end": "2026-01-29",
+      "validation_start": "2026-01-30",
+      "window_id": "wf_000"
+    }
+  ]
+}

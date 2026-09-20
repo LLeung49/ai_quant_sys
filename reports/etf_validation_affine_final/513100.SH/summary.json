@@ -1,0 +1,50 @@
+{
+  "activation_eligible": false,
+  "as_of_date": "2026-09-08",
+  "benchmark_annual_return": 0.4487414317490759,
+  "benchmark_max_drawdown": 0.13691550622174264,
+  "exposure_id": "nasdaq_100",
+  "rejection_reason": null,
+  "scope": "formal",
+  "status": "failed",
+  "stock_code": "513100.SH",
+  "strategy_annual_return": 0.031384396662488045,
+  "strategy_max_drawdown": 0.040823468274044705,
+  "sub_layer": "broad_overseas_mature",
+  "window_distribution": {
+    "best_excess_return": -0.18642104697836515,
+    "median_excess_return": -0.18642104697836515,
+    "win_rate": 0.0,
+    "window_count": 1,
+    "worst_excess_return": -0.18642104697836515
+  },
+  "windows": [
+    {
+      "benchmark_calmar": 3.2775062820299765,
+      "benchmark_cvar5": -0.03227139620556746,
+      "benchmark_max_drawdown": -0.13691550622174264,
+      "benchmark_recovery_sessions": 47,
+      "benchmark_return": 0.20186748907836538,
+      "benchmark_sharpe": 1.6078819619424214,
+      "benchmark_sortino": 2.9513952825752585,
+      "benchmark_total_cost": 9.99,
+      "benchmark_turnover": 93790.51452382213,
+      "benchmark_worst_126_session_return": 0.20186748907836383,
+      "config_hash": "65589c6175e1bf8344cf6f37756e8701380b01b33b00c4bfc595dd59b9f4de89",
+      "excess_return": -0.18642104697836515,
+      "strategy_calmar": 0.7687832021475265,
+      "strategy_cvar5": -0.0077909821636037435,
+      "strategy_max_drawdown": -0.040823468274044705,
+      "strategy_recovery_sessions": 46,
+      "strategy_return": 0.015446442100000235,
+      "strategy_sharpe": 0.6964640920002985,
+      "strategy_sortino": 0.5799452111269645,
+      "strategy_total_cost": 46.08,
+      "strategy_turnover": 204283.65656016057,
+      "strategy_worst_126_session_return": 0.015446442100000679,
+      "training_end": "2026-01-29",
+      "validation_start": "2026-01-30",
+      "window_id": "wf_000"
+    }
+  ]
+}

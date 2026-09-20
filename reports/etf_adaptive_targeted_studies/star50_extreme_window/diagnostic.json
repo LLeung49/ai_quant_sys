@@ -1,0 +1,19 @@
+{
+  "experiment_hash": "5d4938b92e7ecd042148e509a8ee379b4265ed40b852c619037e5a41f4238405",
+  "stock_code": "588000.SH",
+  "source": "reports\\etf_validation_risk_adjusted_2026-09-11-evidence-gated\\588000.SH",
+  "source_hashes": {
+    "summary.json": "815c7126483c008a1a1a5979135a69d6364fb84f233a0e7429c029efec2be35d"
+  },
+  "window_id": "wf_003",
+  "largest_contributor": null,
+  "parameter_execution_allowed": false,
+  "research_only": true,
+  "activation_eligible": false,
+  "decision": "do_not_trade",
+  "blocker": "missing_largest_contributor_evidence",
+  "source_data_cutoff": "2026-09-10",
+  "excess_return": -0.5090572002217719,
+  "validation_start": "2024-08-22",
+  "detail": "[Errno 2] No such file or directory: 'reports\\\\etf_validation_risk_adjusted_2026-09-11-evidence-gated\\\\588000.SH\\\\excess_attribution.json'"
+}

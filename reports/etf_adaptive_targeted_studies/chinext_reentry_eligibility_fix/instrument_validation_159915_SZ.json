@@ -1,0 +1,22 @@
+{
+  "as_of_date": "2026-09-11",
+  "stock_code": "159915.SZ",
+  "status": "failed",
+  "rejection_reason": "no_stable_training_parameters",
+  "decision": {
+    "conclusion": "do_not_trade",
+    "blockers": [
+      "stable_parameter_region",
+      "missing_research_evidence",
+      "strategy_metrics",
+      "benchmark_metrics",
+      "strategy_exposure",
+      "benchmark_exposure",
+      "no_stable_training_parameters",
+      "run_manifest",
+      "selected_config",
+      "experiment_metadata"
+    ]
+  },
+  "experiment_hash": "6f721bf8a905b5411da127bee4b8fdf0f386cdb3d71369075df7010c05a93bf2"
+}

@@ -1,0 +1,16 @@
+{
+  "as_of_date": "2026-09-17",
+  "stock_code": "588000.SH",
+  "status": "failed",
+  "rejection_reason": null,
+  "decision": {
+    "conclusion": "diagnostic_complete",
+    "blockers": []
+  },
+  "experiment_hash": "c2fe1498a19696d9c4cacce76cbb199a97a2b3cf239541386b4b982c029c50bc",
+  "run_mode": "research_diagnostic",
+  "research_only": true,
+  "activation_eligible": false,
+  "shadow_run_eligible": false,
+  "trading_authorized": false
+}

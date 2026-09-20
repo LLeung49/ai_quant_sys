@@ -1,0 +1,17 @@
+{
+  "as_of_date": "2026-09-07",
+  "results": [
+    {
+      "exposure_id": "chinext",
+      "stock_code": "159915.SZ",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": 0.04941340846618569,
+      "benchmark_annual_return": 0.3543309311109588,
+      "strategy_max_drawdown": 0.07228024348277318,
+      "benchmark_max_drawdown": 0.3529355473506136,
+      "scope": "formal",
+      "available_from": null
+    }
+  ]
+}

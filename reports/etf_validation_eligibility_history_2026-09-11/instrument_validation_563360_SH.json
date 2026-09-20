@@ -1,0 +1,21 @@
+{
+  "as_of_date": "2026-09-11",
+  "stock_code": "563360.SH",
+  "status": "data_rejected",
+  "rejection_reason": "insufficient history for walk-forward validation",
+  "decision": {
+    "conclusion": "do_not_trade",
+    "blockers": [
+      "data_valid",
+      "missing_research_evidence",
+      "strategy_metrics",
+      "benchmark_metrics",
+      "strategy_exposure",
+      "benchmark_exposure",
+      "insufficient history for walk-forward validation",
+      "run_manifest",
+      "experiment_metadata"
+    ]
+  },
+  "experiment_hash": "7ca2f4adf70ad3730da272f986cbbf9b30decd724cd838fa2d0caabc70cdaa79"
+}

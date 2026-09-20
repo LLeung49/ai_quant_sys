@@ -1,0 +1,31 @@
+{
+  "as_of_date": "2026-09-17",
+  "run_mode": "research_diagnostic",
+  "research_only": true,
+  "trading_authorized": false,
+  "results": [
+    {
+      "exposure_id": "csi_dividend",
+      "stock_code": "515080.SH",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": 0.01698156013418073,
+      "benchmark_annual_return": 0.017417240742216622,
+      "strategy_max_drawdown": 0.044344503369918464,
+      "benchmark_max_drawdown": 0.1560893619773357,
+      "profile_id": "grid_core",
+      "profile_version": "1",
+      "profile_hash": "53e04e2ebcde6b11cecadf28bd776455bbc733ecf2d4f5a2eececcacc0d3ff45",
+      "decision": {
+        "conclusion": "diagnostic_complete",
+        "blockers": []
+      },
+      "run_mode": "research_diagnostic",
+      "activation_eligible": false,
+      "shadow_run_eligible": false,
+      "trading_authorized": false,
+      "scope": "formal",
+      "available_from": null
+    }
+  ]
+}

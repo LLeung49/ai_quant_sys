@@ -1,0 +1,31 @@
+{
+  "as_of_date": "2026-09-17",
+  "run_mode": "research_diagnostic",
+  "research_only": true,
+  "trading_authorized": false,
+  "results": [
+    {
+      "exposure_id": "sp_china_low_vol_dividend",
+      "stock_code": "515450.SH",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": -0.006158016376110909,
+      "benchmark_annual_return": 0.026119854335914017,
+      "strategy_max_drawdown": 0.07967888856450034,
+      "benchmark_max_drawdown": 0.13314428974995074,
+      "profile_id": "grid_core",
+      "profile_version": "1",
+      "profile_hash": "53e04e2ebcde6b11cecadf28bd776455bbc733ecf2d4f5a2eececcacc0d3ff45",
+      "decision": {
+        "conclusion": "diagnostic_complete",
+        "blockers": []
+      },
+      "run_mode": "research_diagnostic",
+      "activation_eligible": false,
+      "shadow_run_eligible": false,
+      "trading_authorized": false,
+      "scope": "formal",
+      "available_from": null
+    }
+  ]
+}

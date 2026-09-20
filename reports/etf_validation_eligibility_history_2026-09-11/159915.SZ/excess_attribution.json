@@ -1,0 +1,29 @@
+[
+  {
+    "window_id": "wf_000",
+    "grid_return": 0.01737772875759916,
+    "trend_return": 0.02053353227602953,
+    "transition_return": -0.019717167099698195,
+    "cash_opportunity_cost": 0.04432098720179166,
+    "execution_cost": 58.01654,
+    "reconciliation_error": -4.163336342344337e-17
+  },
+  {
+    "window_id": "wf_001",
+    "grid_return": -0.13753685091909487,
+    "trend_return": -0.1646610951646979,
+    "transition_return": -0.06150585364224895,
+    "cash_opportunity_cost": 0.03296285358906616,
+    "execution_cost": 106.31027,
+    "reconciliation_error": -2.220446049250313e-16
+  },
+  {
+    "window_id": "wf_002",
+    "grid_return": -0.019009021726139844,
+    "trend_return": -0.12428125816477577,
+    "transition_return": 0.010028938495020644,
+    "cash_opportunity_cost": -0.05153104267450026,
+    "execution_cost": 175.27896,
+    "reconciliation_error": 5.551115123125783e-17
+  }
+]

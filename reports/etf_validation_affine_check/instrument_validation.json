@@ -1,0 +1,17 @@
+{
+  "as_of_date": "2026-09-08",
+  "results": [
+    {
+      "exposure_id": "sp_china_low_vol_dividend",
+      "stock_code": "515450.SH",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": -0.06027759990999326,
+      "benchmark_annual_return": -0.01138147836866632,
+      "strategy_max_drawdown": 0.05106257202144626,
+      "benchmark_max_drawdown": 0.10634211323914666,
+      "scope": "formal",
+      "available_from": null
+    }
+  ]
+}

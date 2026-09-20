@@ -1,0 +1,17 @@
+{
+  "as_of_date": "2026-09-07",
+  "results": [
+    {
+      "exposure_id": "csi_300",
+      "stock_code": "510300.SH",
+      "status": "data_rejected",
+      "rejection_reason": "inconsistent raw/qfq OHLC ratio",
+      "strategy_annual_return": null,
+      "benchmark_annual_return": null,
+      "strategy_max_drawdown": null,
+      "benchmark_max_drawdown": null,
+      "scope": "formal",
+      "available_from": null
+    }
+  ]
+}

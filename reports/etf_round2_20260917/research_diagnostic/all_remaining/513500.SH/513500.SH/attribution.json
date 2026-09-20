@@ -1,0 +1,1962 @@
+[
+  {
+    "window_id": "wf_000",
+    "trade_points": [
+      {
+        "event_date": "2024-02-20",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 28700,
+        "raw_price": 1.7385214
+      },
+      {
+        "event_date": "2024-02-21",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.720516
+      },
+      {
+        "event_date": "2024-02-22",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.7295187
+      },
+      {
+        "event_date": "2024-02-23",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.7614714
+      },
+      {
+        "event_date": "2024-02-26",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 1.7634708000000001
+      },
+      {
+        "event_date": "2024-02-29",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 1.7764669
+      },
+      {
+        "event_date": "2024-03-11",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.789463
+      },
+      {
+        "event_date": "2024-03-18",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.7735318999999998
+      },
+      {
+        "event_date": "2024-03-22",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 300,
+        "raw_price": 1.8264519000000001
+      },
+      {
+        "event_date": "2024-03-25",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.8374486
+      },
+      {
+        "event_date": "2024-03-29",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 1.8674396000000002
+      },
+      {
+        "event_date": "2024-04-03",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.830549
+      },
+      {
+        "event_date": "2024-04-08",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 300,
+        "raw_price": 1.8075420999999998
+      },
+      {
+        "event_date": "2024-04-12",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.8015402999999999
+      },
+      {
+        "event_date": "2024-04-17",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 400,
+        "raw_price": 1.7425226
+      },
+      {
+        "event_date": "2024-04-19",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.710513
+      },
+      {
+        "event_date": "2024-04-22",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.7025105999999999
+      },
+      {
+        "event_date": "2024-04-25",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 300,
+        "raw_price": 1.7484753000000002
+      },
+      {
+        "event_date": "2024-04-26",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.7545262
+      },
+      {
+        "event_date": "2024-05-06",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.7574726
+      },
+      {
+        "event_date": "2024-05-08",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.7784663
+      },
+      {
+        "event_date": "2024-05-09",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.7854642
+      },
+      {
+        "event_date": "2024-05-13",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.8004597
+      },
+      {
+        "event_date": "2024-05-14",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.8004597
+      },
+      {
+        "event_date": "2024-05-16",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.8484453
+      },
+      {
+        "event_date": "2024-05-17",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 1.8434468000000002
+      },
+      {
+        "event_date": "2024-05-27",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 1.8295487
+      },
+      {
+        "event_date": "2024-05-28",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.8354492000000002
+      },
+      {
+        "event_date": "2024-05-31",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.7935378999999998
+      },
+      {
+        "event_date": "2024-06-04",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.8344495
+      },
+      {
+        "event_date": "2024-06-06",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.8734378000000003
+      },
+      {
+        "event_date": "2024-06-07",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 1.869439
+      },
+      {
+        "event_date": "2024-06-12",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.8954312
+      },
+      {
+        "event_date": "2024-06-14",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.9064279000000002
+      },
+      {
+        "event_date": "2024-06-21",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.9064279000000002
+      },
+      {
+        "event_date": "2024-06-27",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.9324201
+      },
+      {
+        "event_date": "2024-06-28",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.9544135
+      },
+      {
+        "event_date": "2024-07-01",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 1.9644105
+      },
+      {
+        "event_date": "2024-07-04",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 2.0173946
+      },
+      {
+        "event_date": "2024-07-05",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.9745922
+      },
+      {
+        "event_date": "2024-07-09",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.0003997
+      },
+      {
+        "event_date": "2024-07-15",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.9835949
+      },
+      {
+        "event_date": "2024-07-16",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 2.0283913
+      },
+      {
+        "event_date": "2024-07-17",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.0383883000000003
+      },
+      {
+        "event_date": "2024-07-18",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.0013994
+      },
+      {
+        "event_date": "2024-07-19",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.0106029999999997
+      },
+      {
+        "event_date": "2024-07-22",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 300,
+        "raw_price": 1.9555865000000001
+      },
+      {
+        "event_date": "2024-07-23",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.9795937000000001
+      },
+      {
+        "event_date": "2024-07-24",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.9744075
+      },
+      {
+        "event_date": "2024-07-26",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 500,
+        "raw_price": 1.9015703
+      },
+      {
+        "event_date": "2024-07-29",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.9474156
+      },
+      {
+        "event_date": "2024-07-30",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 300,
+        "raw_price": 1.9624111000000002
+      },
+      {
+        "event_date": "2024-08-01",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.9795937000000001
+      },
+      {
+        "event_date": "2024-08-02",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.9274216
+      },
+      {
+        "event_date": "2024-08-05",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 300,
+        "raw_price": 1.840552
+      },
+      {
+        "event_date": "2024-08-06",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 1000,
+        "raw_price": 1.8135439
+      },
+      {
+        "event_date": "2024-08-08",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.7924621
+      },
+      {
+        "event_date": "2024-08-12",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 1.8414474
+      },
+      {
+        "event_date": "2024-08-13",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 1.8614414000000001
+      },
+      {
+        "event_date": "2024-08-14",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 1.9134258
+      },
+      {
+        "event_date": "2024-08-15",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 1.9354192000000001
+      },
+      {
+        "event_date": "2024-08-16",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 1.9934018
+      },
+      {
+        "event_date": "2024-08-19",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 1.9774066000000001
+      },
+      {
+        "event_date": "2024-08-20",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.9685903999999999
+      }
+    ],
+    "by_reason": {
+      "grid_initialize": {
+        "reason": "grid_initialize",
+        "fill_count": 1,
+        "shares": 28700,
+        "traded_value": "49895.5641800"
+      },
+      "grid_buy": {
+        "reason": "grid_buy",
+        "fill_count": 22,
+        "shares": 4500,
+        "traded_value": "8279.6831599999998900"
+      },
+      "grid_sell": {
+        "reason": "grid_sell",
+        "fill_count": 41,
+        "shares": 6100,
+        "traded_value": "11489.7520400000004300"
+      }
+    },
+    "invested_sessions": 125,
+    "cash_sessions": 1,
+    "rejected_order_count": 0
+  },
+  {
+    "window_id": "wf_001",
+    "trade_points": [
+      {
+        "event_date": "2024-08-22",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 25200,
+        "raw_price": 1.9785933999999998
+      },
+      {
+        "event_date": "2024-08-23",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.9505849999999998
+      },
+      {
+        "event_date": "2024-08-29",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.9704087000000001
+      },
+      {
+        "event_date": "2024-09-05",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 400,
+        "raw_price": 1.9335799
+      },
+      {
+        "event_date": "2024-09-10",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.9205759999999998
+      },
+      {
+        "event_date": "2024-09-11",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.9085724
+      },
+      {
+        "event_date": "2024-09-13",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 1.9434168
+      },
+      {
+        "event_date": "2024-09-20",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 1.9854042
+      },
+      {
+        "event_date": "2024-09-24",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.9764069000000002
+      },
+      {
+        "event_date": "2024-09-26",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.9495847
+      },
+      {
+        "event_date": "2024-09-30",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 1.8935678999999999
+      },
+      {
+        "event_date": "2024-10-08",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.8865657999999998
+      },
+      {
+        "event_date": "2024-10-09",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.9145742
+      },
+      {
+        "event_date": "2024-10-10",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.9424171000000001
+      },
+      {
+        "event_date": "2024-10-11",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 1.9544135
+      },
+      {
+        "event_date": "2024-10-14",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.9834048
+      },
+      {
+        "event_date": "2024-10-15",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.0043984999999997
+      },
+      {
+        "event_date": "2024-10-16",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 400,
+        "raw_price": 2.0243925
+      },
+      {
+        "event_date": "2024-10-22",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.0156045000000002
+      },
+      {
+        "event_date": "2024-10-24",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.9865958
+      },
+      {
+        "event_date": "2024-11-04",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 1.9665898
+      },
+      {
+        "event_date": "2024-11-07",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 300,
+        "raw_price": 2.0643805
+      },
+      {
+        "event_date": "2024-11-08",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.0463859
+      },
+      {
+        "event_date": "2024-11-11",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.0643805
+      },
+      {
+        "event_date": "2024-11-12",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 2.0913724
+      },
+      {
+        "event_date": "2024-11-13",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.1083673000000003
+      },
+      {
+        "event_date": "2024-11-15",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.1033688
+      },
+      {
+        "event_date": "2024-11-18",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.0676201
+      },
+      {
+        "event_date": "2024-11-25",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.1403577
+      },
+      {
+        "event_date": "2024-11-26",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 300,
+        "raw_price": 2.1803457
+      },
+      {
+        "event_date": "2024-12-03",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.209337
+      },
+      {
+        "event_date": "2024-12-04",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.2193340000000004
+      },
+      {
+        "event_date": "2024-12-06",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.2273316000000003
+      },
+      {
+        "event_date": "2024-12-11",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.20066
+      },
+      {
+        "event_date": "2024-12-13",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.2253322
+      },
+      {
+        "event_date": "2024-12-17",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 2.5002497
+      },
+      {
+        "event_date": "2024-12-19",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 2.1496447
+      },
+      {
+        "event_date": "2024-12-20",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 400,
+        "raw_price": 2.1556464999999996
+      },
+      {
+        "event_date": "2024-12-24",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.2123361000000004
+      },
+      {
+        "event_date": "2024-12-26",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.1983403
+      },
+      {
+        "event_date": "2024-12-31",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.1516452999999998
+      },
+      {
+        "event_date": "2025-01-07",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.2193340000000004
+      },
+      {
+        "event_date": "2025-01-13",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.1526456
+      },
+      {
+        "event_date": "2025-01-14",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 2.1526456
+      },
+      {
+        "event_date": "2025-01-15",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.1603517
+      },
+      {
+        "event_date": "2025-01-17",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.1883433
+      },
+      {
+        "event_date": "2025-01-21",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.2013394
+      },
+      {
+        "event_date": "2025-01-23",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.2243325
+      },
+      {
+        "event_date": "2025-02-06",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.20066
+      },
+      {
+        "event_date": "2025-02-13",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.1796537
+      },
+      {
+        "event_date": "2025-02-24",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.1186353999999996
+      },
+      {
+        "event_date": "2025-02-25",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.110633
+      },
+      {
+        "event_date": "2025-02-26",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 2.0926276
+      },
+      {
+        "event_date": "2025-02-28",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.0506149999999996
+      },
+      {
+        "event_date": "2025-03-03",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 300,
+        "raw_price": 2.0526155999999998
+      },
+      {
+        "event_date": "2025-03-04",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.0333897999999997
+      }
+    ],
+    "by_reason": {
+      "grid_initialize": {
+        "reason": "grid_initialize",
+        "fill_count": 1,
+        "shares": 25200,
+        "traded_value": "49860.5536799999949600"
+      },
+      "grid_buy": {
+        "reason": "grid_buy",
+        "fill_count": 25,
+        "shares": 3800,
+        "traded_value": "7779.0330099999996200"
+      },
+      "grid_sell": {
+        "reason": "grid_sell",
+        "fill_count": 30,
+        "shares": 4200,
+        "traded_value": "8844.0459900000001600"
+      }
+    },
+    "invested_sessions": 125,
+    "cash_sessions": 1,
+    "rejected_order_count": 0
+  },
+  {
+    "window_id": "wf_002",
+    "trade_points": [
+      {
+        "event_date": "2025-03-06",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 24600,
+        "raw_price": 2.0316093
+      },
+      {
+        "event_date": "2025-03-10",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.9985994
+      },
+      {
+        "event_date": "2025-03-11",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.9375811
+      },
+      {
+        "event_date": "2025-03-12",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 300,
+        "raw_price": 1.9385814
+      },
+      {
+        "event_date": "2025-03-14",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.9205759999999998
+      },
+      {
+        "event_date": "2025-03-21",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 1.9784063
+      },
+      {
+        "event_date": "2025-03-25",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.0243925
+      },
+      {
+        "event_date": "2025-03-26",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.0273916
+      },
+      {
+        "event_date": "2025-03-28",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.9745922
+      },
+      {
+        "event_date": "2025-03-31",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.9105729999999999
+      },
+      {
+        "event_date": "2025-04-01",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 400,
+        "raw_price": 1.9175750999999999
+      },
+      {
+        "event_date": "2025-04-02",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.939418
+      },
+      {
+        "event_date": "2025-04-07",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.7075121
+      },
+      {
+        "event_date": "2025-04-08",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 1400,
+        "raw_price": 1.7375211000000002
+      },
+      {
+        "event_date": "2025-04-09",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 400,
+        "raw_price": 1.7064879000000002
+      },
+      {
+        "event_date": "2025-04-10",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 300,
+        "raw_price": 1.8815643
+      },
+      {
+        "event_date": "2025-04-11",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 1100,
+        "raw_price": 1.8064579
+      },
+      {
+        "event_date": "2025-04-14",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 1.8645592
+      },
+      {
+        "event_date": "2025-04-15",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.8674396000000002
+      },
+      {
+        "event_date": "2025-04-17",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.8315492999999998
+      },
+      {
+        "event_date": "2025-04-18",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.8265478
+      },
+      {
+        "event_date": "2025-04-22",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 1.7925376
+      },
+      {
+        "event_date": "2025-04-24",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 300,
+        "raw_price": 1.8544435000000001
+      },
+      {
+        "event_date": "2025-04-28",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 300,
+        "raw_price": 1.8914324
+      },
+      {
+        "event_date": "2025-05-07",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.919424
+      },
+      {
+        "event_date": "2025-05-09",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 1.939418
+      },
+      {
+        "event_date": "2025-05-13",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.9864039000000002
+      },
+      {
+        "event_date": "2025-05-14",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 1.9974006
+      },
+      {
+        "event_date": "2025-05-15",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 2.0063979
+      },
+      {
+        "event_date": "2025-05-21",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.0183943
+      },
+      {
+        "event_date": "2025-05-23",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 1.9875961
+      },
+      {
+        "event_date": "2025-05-30",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.0003997
+      },
+      {
+        "event_date": "2025-06-10",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.0413874
+      },
+      {
+        "event_date": "2025-06-25",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.0613813999999997
+      },
+      {
+        "event_date": "2025-06-27",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.0793760000000003
+      },
+      {
+        "event_date": "2025-06-30",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.1013694
+      },
+      {
+        "event_date": "2025-07-01",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.1013694
+      },
+      {
+        "event_date": "2025-07-07",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.1203637
+      },
+      {
+        "event_date": "2025-07-21",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.1413574
+      },
+      {
+        "event_date": "2025-07-28",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.1753472
+      },
+      {
+        "event_date": "2025-07-29",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.1823451
+      },
+      {
+        "event_date": "2025-08-01",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.169349
+      },
+      {
+        "event_date": "2025-08-05",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 2.1716512999999997
+      },
+      {
+        "event_date": "2025-08-06",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.1663498999999997
+      },
+      {
+        "event_date": "2025-08-12",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.1873436
+      },
+      {
+        "event_date": "2025-08-18",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.2083373
+      },
+      {
+        "event_date": "2025-08-21",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.1776531
+      },
+      {
+        "event_date": "2025-08-25",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.1976591
+      },
+      {
+        "event_date": "2025-08-26",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.189343
+      }
+    ],
+    "by_reason": {
+      "grid_initialize": {
+        "reason": "grid_initialize",
+        "fill_count": 1,
+        "shares": 24600,
+        "traded_value": "49977.5887800"
+      },
+      "grid_buy": {
+        "reason": "grid_buy",
+        "fill_count": 18,
+        "shares": 4100,
+        "traded_value": "7658.3968300000001300"
+      },
+      "grid_sell": {
+        "reason": "grid_sell",
+        "fill_count": 30,
+        "shares": 5000,
+        "traded_value": "9748.8744600000001200"
+      }
+    },
+    "invested_sessions": 125,
+    "cash_sessions": 1,
+    "rejected_order_count": 0
+  },
+  {
+    "window_id": "wf_003",
+    "trade_points": [
+      {
+        "event_date": "2025-09-05",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 22600,
+        "raw_price": 2.210663
+      },
+      {
+        "event_date": "2025-09-17",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.2343295
+      },
+      {
+        "event_date": "2025-09-23",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.2823151
+      },
+      {
+        "event_date": "2025-09-24",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.2743175
+      },
+      {
+        "event_date": "2025-10-10",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 2.3203037
+      },
+      {
+        "event_date": "2025-10-14",
+        "kind": "rejected_order",
+        "reason": "insufficient lot size",
+        "shares": null,
+        "raw_price": null
+      },
+      {
+        "event_date": "2025-10-15",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 2.2786834
+      },
+      {
+        "event_date": "2025-10-21",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 2.3412974
+      },
+      {
+        "event_date": "2025-10-23",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.3472956
+      },
+      {
+        "event_date": "2025-10-27",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.3822851000000003
+      },
+      {
+        "event_date": "2025-10-28",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 2.4322700999999998
+      },
+      {
+        "event_date": "2025-10-30",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 2.4682593
+      },
+      {
+        "event_date": "2025-10-31",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.469259
+      },
+      {
+        "event_date": "2025-11-05",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 2.3767128
+      },
+      {
+        "event_date": "2025-11-06",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.4007199999999997
+      },
+      {
+        "event_date": "2025-11-11",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.4502647
+      },
+      {
+        "event_date": "2025-11-13",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.4672596
+      },
+      {
+        "event_date": "2025-11-14",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.4462659
+      },
+      {
+        "event_date": "2025-11-19",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 300,
+        "raw_price": 2.3887164
+      },
+      {
+        "event_date": "2025-11-20",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.3997197
+      },
+      {
+        "event_date": "2025-11-21",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.3652902
+      },
+      {
+        "event_date": "2025-11-24",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 2.3827146
+      },
+      {
+        "event_date": "2025-11-25",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.4342695
+      },
+      {
+        "event_date": "2025-11-26",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.4232728
+      },
+      {
+        "event_date": "2025-11-27",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 2.459262
+      },
+      {
+        "event_date": "2025-12-04",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.4732578000000003
+      },
+      {
+        "event_date": "2025-12-09",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.4407319999999997
+      },
+      {
+        "event_date": "2025-12-10",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.4207259999999997
+      },
+      {
+        "event_date": "2025-12-15",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.4362689
+      },
+      {
+        "event_date": "2025-12-17",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.4217262999999996
+      },
+      {
+        "event_date": "2025-12-22",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.469259
+      },
+      {
+        "event_date": "2026-01-06",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.469259
+      },
+      {
+        "event_date": "2026-01-20",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.4407319999999997
+      },
+      {
+        "event_date": "2026-01-27",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.4227266000000003
+      },
+      {
+        "event_date": "2026-02-03",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 2.3997197
+      },
+      {
+        "event_date": "2026-02-09",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 2.3717113
+      },
+      {
+        "event_date": "2026-02-10",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 2.3832847999999998
+      },
+      {
+        "event_date": "2026-03-05",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.350705
+      },
+      {
+        "event_date": "2026-03-10",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 2.320696
+      },
+      {
+        "event_date": "2026-03-16",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.2846851999999997
+      }
+    ],
+    "by_reason": {
+      "grid_initialize": {
+        "reason": "grid_initialize",
+        "fill_count": 1,
+        "shares": 22600,
+        "traded_value": "49960.983800"
+      },
+      "grid_sell": {
+        "reason": "grid_sell",
+        "fill_count": 22,
+        "shares": 2800,
+        "traded_value": "6723.3823799999999800"
+      },
+      "grid_buy": {
+        "reason": "grid_buy",
+        "fill_count": 16,
+        "shares": 2400,
+        "traded_value": "5700.9097599999998400"
+      }
+    },
+    "invested_sessions": 125,
+    "cash_sessions": 1,
+    "rejected_order_count": 1
+  },
+  {
+    "window_id": "wf_004",
+    "trade_points": [
+      {
+        "event_date": "2026-03-20",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 22100,
+        "raw_price": 2.2586774
+      },
+      {
+        "event_date": "2026-03-23",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.2256675
+      },
+      {
+        "event_date": "2026-03-24",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 400,
+        "raw_price": 2.1716512999999997
+      },
+      {
+        "event_date": "2026-03-25",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.1983403
+      },
+      {
+        "event_date": "2026-03-26",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.2213334000000002
+      },
+      {
+        "event_date": "2026-03-31",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.1686504
+      },
+      {
+        "event_date": "2026-04-01",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.2176651
+      },
+      {
+        "event_date": "2026-04-02",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 300,
+        "raw_price": 2.2403277000000004
+      },
+      {
+        "event_date": "2026-04-09",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 300,
+        "raw_price": 2.2633208
+      },
+      {
+        "event_date": "2026-04-15",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.3332998000000003
+      },
+      {
+        "event_date": "2026-04-16",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.3612914000000003
+      },
+      {
+        "event_date": "2026-04-17",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.3642905
+      },
+      {
+        "event_date": "2026-04-23",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.3772866
+      },
+      {
+        "event_date": "2026-04-29",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.39928
+      },
+      {
+        "event_date": "2026-05-06",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.4542635
+      },
+      {
+        "event_date": "2026-05-07",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.4682593
+      },
+      {
+        "event_date": "2026-05-08",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.4782563
+      },
+      {
+        "event_date": "2026-05-12",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.4902527
+      },
+      {
+        "event_date": "2026-05-19",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.4417323
+      },
+      {
+        "event_date": "2026-05-21",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.4547362
+      },
+      {
+        "event_date": "2026-05-25",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.5302407000000002
+      },
+      {
+        "event_date": "2026-05-26",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 300,
+        "raw_price": 2.5452361999999997
+      },
+      {
+        "event_date": "2026-06-02",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 300,
+        "raw_price": 2.6352092000000003
+      },
+      {
+        "event_date": "2026-06-05",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.5697707
+      },
+      {
+        "event_date": "2026-06-09",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 2.5227565999999997
+      },
+      {
+        "event_date": "2026-06-12",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.5507649999999997
+      },
+      {
+        "event_date": "2026-06-16",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 2.5802257
+      },
+      {
+        "event_date": "2026-06-17",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.5802257
+      },
+      {
+        "event_date": "2026-06-24",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 300,
+        "raw_price": 2.5017503
+      },
+      {
+        "event_date": "2026-06-29",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.4927476
+      },
+      {
+        "event_date": "2026-07-07",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.519244
+      },
+      {
+        "event_date": "2026-07-15",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.5422371000000004
+      },
+      {
+        "event_date": "2026-07-16",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.5632308
+      },
+      {
+        "event_date": "2026-07-20",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 2.5037509
+      },
+      {
+        "event_date": "2026-07-29",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.4957485
+      },
+      {
+        "event_date": "2026-07-30",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.489253
+      },
+      {
+        "event_date": "2026-07-31",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.5227565999999997
+      },
+      {
+        "event_date": "2026-08-03",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.5212434
+      },
+      {
+        "event_date": "2026-08-04",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.5622311000000004
+      },
+      {
+        "event_date": "2026-08-05",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 2.6312104
+      },
+      {
+        "event_date": "2026-08-06",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 300,
+        "raw_price": 2.6572026
+      },
+      {
+        "event_date": "2026-08-07",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.6811954
+      },
+      {
+        "event_date": "2026-08-12",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.7041885000000003
+      },
+      {
+        "event_date": "2026-08-17",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 200,
+        "raw_price": 2.7771666
+      },
+      {
+        "event_date": "2026-08-19",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 2.6547962
+      },
+      {
+        "event_date": "2026-08-20",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 2.6657995
+      },
+      {
+        "event_date": "2026-08-26",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.6941915
+      },
+      {
+        "event_date": "2026-08-31",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.7021891
+      },
+      {
+        "event_date": "2026-09-03",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 200,
+        "raw_price": 2.6547962
+      },
+      {
+        "event_date": "2026-09-07",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 100,
+        "raw_price": 2.6921921
+      },
+      {
+        "event_date": "2026-09-15",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 100,
+        "raw_price": 2.6587973999999996
+      }
+    ],
+    "by_reason": {
+      "grid_initialize": {
+        "reason": "grid_initialize",
+        "fill_count": 1,
+        "shares": 22100,
+        "traded_value": "49916.7705400"
+      },
+      "grid_buy": {
+        "reason": "grid_buy",
+        "fill_count": 18,
+        "shares": 2800,
+        "traded_value": "6899.4692199999997200"
+      },
+      "grid_sell": {
+        "reason": "grid_sell",
+        "fill_count": 32,
+        "shares": 4500,
+        "traded_value": "11292.9111100000003300"
+      }
+    },
+    "invested_sessions": 125,
+    "cash_sessions": 1,
+    "rejected_order_count": 0
+  }
+]

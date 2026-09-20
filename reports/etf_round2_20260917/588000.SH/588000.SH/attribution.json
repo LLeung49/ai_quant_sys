@@ -1,0 +1,242 @@
+[
+  {
+    "window_id": "wf_000",
+    "trade_points": [
+      {
+        "event_date": "2024-02-28",
+        "kind": "fill",
+        "reason": "trend_entry",
+        "shares": 10400,
+        "raw_price": 0.8362508
+      },
+      {
+        "event_date": "2024-03-04",
+        "kind": "fill",
+        "reason": "trend_add",
+        "shares": 9000,
+        "raw_price": 0.8572571
+      },
+      {
+        "event_date": "2024-03-22",
+        "kind": "fill",
+        "reason": "trend_stop",
+        "shares": 19400,
+        "raw_price": 0.8417474
+      },
+      {
+        "event_date": "2024-04-29",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 63200,
+        "raw_price": 0.790237
+      },
+      {
+        "event_date": "2024-05-27",
+        "kind": "fill",
+        "reason": "grid_stop",
+        "shares": 63200,
+        "raw_price": 0.759772
+      },
+      {
+        "event_date": "2024-06-05",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 62100,
+        "raw_price": 0.7882364000000001
+      },
+      {
+        "event_date": "2024-06-26",
+        "kind": "fill",
+        "reason": "grid_stop",
+        "shares": 62100,
+        "raw_price": 0.7507747
+      },
+      {
+        "event_date": "2024-07-23",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 60800,
+        "raw_price": 0.7862358
+      },
+      {
+        "event_date": "2024-07-25",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 18700,
+        "raw_price": 0.7432229
+      },
+      {
+        "event_date": "2024-08-06",
+        "kind": "fill",
+        "reason": "grid_stop",
+        "shares": 79500,
+        "raw_price": 0.7467759
+      }
+    ],
+    "by_reason": {
+      "trend_entry": {
+        "reason": "trend_entry",
+        "fill_count": 1,
+        "shares": 10400,
+        "traded_value": "8697.0083200"
+      },
+      "trend_add": {
+        "reason": "trend_add",
+        "fill_count": 1,
+        "shares": 9000,
+        "traded_value": "7715.3139000"
+      },
+      "trend_stop": {
+        "reason": "trend_stop",
+        "fill_count": 1,
+        "shares": 19400,
+        "traded_value": "16329.8995600"
+      },
+      "grid_initialize": {
+        "reason": "grid_initialize",
+        "fill_count": 3,
+        "shares": 186100,
+        "traded_value": "146695.5954800000062100"
+      },
+      "grid_stop": {
+        "reason": "grid_stop",
+        "fill_count": 3,
+        "shares": 204800,
+        "traded_value": "154009.3833200"
+      },
+      "grid_buy": {
+        "reason": "grid_buy",
+        "fill_count": 1,
+        "shares": 18700,
+        "traded_value": "13898.2682300"
+      }
+    },
+    "invested_sessions": 58,
+    "cash_sessions": 68,
+    "rejected_order_count": 0
+  },
+  {
+    "window_id": "wf_001",
+    "trade_points": [
+      {
+        "event_date": "2024-09-30",
+        "kind": "fill",
+        "reason": "trend_entry",
+        "shares": 13200,
+        "raw_price": 0.850255
+      },
+      {
+        "event_date": "2024-10-08",
+        "kind": "fill",
+        "reason": "trend_add",
+        "shares": 4800,
+        "raw_price": 1.140342
+      },
+      {
+        "event_date": "2024-10-11",
+        "kind": "fill",
+        "reason": "trend_stop",
+        "shares": 18000,
+        "raw_price": 0.9997
+      },
+      {
+        "event_date": "2025-01-15",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 49100,
+        "raw_price": 1.0313093
+      },
+      {
+        "event_date": "2025-02-07",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 14400,
+        "raw_price": 1.0666799
+      },
+      {
+        "event_date": "2025-02-11",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 14200,
+        "raw_price": 1.0926721
+      },
+      {
+        "event_date": "2025-02-24",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 13600,
+        "raw_price": 1.1546535
+      },
+      {
+        "event_date": "2025-02-26",
+        "kind": "fill",
+        "reason": "grid_to_trend_rebalance",
+        "shares": 1500,
+        "raw_price": 1.1643492
+      },
+      {
+        "event_date": "2025-02-27",
+        "kind": "fill",
+        "reason": "trend_add",
+        "shares": 8100,
+        "raw_price": 1.1853555
+      },
+      {
+        "event_date": "2025-03-04",
+        "kind": "fill",
+        "reason": "trend_stop",
+        "shares": 16500,
+        "raw_price": 1.1096670000000002
+      }
+    ],
+    "by_reason": {
+      "trend_entry": {
+        "reason": "trend_entry",
+        "fill_count": 1,
+        "shares": 13200,
+        "traded_value": "11223.366000"
+      },
+      "trend_add": {
+        "reason": "trend_add",
+        "fill_count": 2,
+        "shares": 12900,
+        "traded_value": "15075.0211500"
+      },
+      "trend_stop": {
+        "reason": "trend_stop",
+        "fill_count": 2,
+        "shares": 34500,
+        "traded_value": "36304.1055000000033000"
+      },
+      "grid_initialize": {
+        "reason": "grid_initialize",
+        "fill_count": 1,
+        "shares": 49100,
+        "traded_value": "50637.2866300"
+      },
+      "grid_sell": {
+        "reason": "grid_sell",
+        "fill_count": 3,
+        "shares": 42200,
+        "traded_value": "46579.4219800"
+      },
+      "grid_to_trend_rebalance": {
+        "reason": "grid_to_trend_rebalance",
+        "fill_count": 1,
+        "shares": 1500,
+        "traded_value": "1746.5238000"
+      }
+    },
+    "invested_sessions": 32,
+    "cash_sessions": 94,
+    "rejected_order_count": 0
+  },
+  {
+    "window_id": "wf_002",
+    "trade_points": [],
+    "by_reason": {},
+    "invested_sessions": 0,
+    "cash_sessions": 0,
+    "rejected_order_count": 0
+  }
+]

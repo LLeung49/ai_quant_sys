@@ -1,0 +1,37 @@
+{
+  "as_of_date": "2026-09-17",
+  "results": [
+    {
+      "exposure_id": "star_50",
+      "stock_code": "588000.SH",
+      "status": "failed",
+      "rejection_reason": "no_stable_grid_training_parameters",
+      "strategy_annual_return": null,
+      "benchmark_annual_return": null,
+      "strategy_max_drawdown": null,
+      "benchmark_max_drawdown": null,
+      "profile_id": "grid_plus_optional_trend",
+      "profile_version": "1",
+      "profile_hash": "f4f9eb95055b94fd1694c9f43501573cd2e7eb3f2e5590104fa2a83fd6ebf8b1",
+      "decision": {
+        "conclusion": "do_not_trade",
+        "blockers": [
+          "stable_parameter_region",
+          "missing_research_evidence",
+          "strategy_metrics",
+          "benchmark_metrics",
+          "strategy_exposure",
+          "benchmark_exposure",
+          "no_stable_grid_training_parameters",
+          "run_manifest",
+          "selected_config",
+          "unexecuted_benchmark_evidence",
+          "experiment_metadata"
+        ]
+      },
+      "activation_eligible": false,
+      "scope": "formal",
+      "available_from": null
+    }
+  ]
+}

@@ -1,0 +1,15581 @@
+# 风险调整后 ETF 样本外验证决策报告
+
+## 决策
+
+- 结论：`diagnostic_complete`
+- 建议：Diagnostic research only; no authorization.
+- 阻断项：无
+
+## 策略与买入持有比较
+
+| 指标 | 策略 | 买入持有 | 差异（策略－买入持有） |
+| --- | ---: | ---: | ---: |
+| annual_return | -0.006158 | 0.026120 | -0.032278 |
+| sharpe | -0.102963 | 0.178969 | -0.281932 |
+| Sortino | -0.105659 | 0.218331 | -0.323990 |
+| calmar | -0.077285 | 0.196177 | -0.273462 |
+| cvar5 | -0.009593 | -0.021912 | 0.012320 |
+| max_drawdown | -0.079679 | -0.133144 | 0.053465 |
+| turnover | 19.386895 | 4.653683 | 14.733212 |
+| total_cost | 906.882060 | 199.765860 | 707.116200 |
+
+## OOS 分布
+
+{
+  "window_count": 5,
+  "win_rate": 0.2,
+  "median_excess_return": -0.004242560599999945,
+  "best_excess_return": 0.012468701900000156,
+  "worst_excess_return": -0.06276208769999991
+}
+
+## 执行、换手与成本
+
+{
+  "strategy": {
+    "invested_sessions": 465,
+    "cash_sessions": 165,
+    "exposure_ratio": 0.7380952380952381,
+    "turnover": 19.38689478984527,
+    "total_cost": 906.88206,
+    "cost_drag": 0.009068820600000001
+  },
+  "buy_and_hold": {
+    "invested_sessions": 625,
+    "cash_sessions": 5,
+    "exposure_ratio": 0.9920634920634921,
+    "turnover": 4.65368251239892,
+    "total_cost": 199.76586,
+    "cost_drag": 0.0019976586
+  }
+}
+
+## 数据边界、配置与训练曲面
+
+{
+  "data_cutoff": "2026-09-17",
+  "config_hashes": [
+    "236aa65a294576dabeaac13b57e2808511cc1d554b7e66a07c0f94bd058785d0",
+    "3e3aaa870da79fe388e0f5499d4a129f4b6c59a25e2961548c78263e4269df10",
+    "60e882c4a0702e0d30ea46270dffa260f60f745dd4a32acc9fdb1e1a63724c5a",
+    "a543650991e385a828bf83ebe323ba2a8ab48da8f617c95c59457cd22277ec61",
+    "ac3b358b2e80557d5ba9620b510472a2109a6c52328ab769e429cd068464f5b6"
+  ],
+  "training_surface": [
+    {
+      "window_id": "wf_000",
+      "grid": [
+        {
+          "config_hash": "815b8196c744b75fe4f851240badeee093c72d4372769ddc31ba9ac4888a5b95",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.0059073841999999765,
+            0.023076220800000047,
+            -0.1267128782,
+            0.02601038409999997
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "4ba27c22874b9850f961a064b0c0cbec006c1e2e752fea8169985499d494e6d6",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.01527679399999999,
+            0.021590500600000097,
+            -0.13649501269999992,
+            0.019656908499999987
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.018743041700000008,
+            0.015871890600000105,
+            -0.16344378589999997,
+            0.013106053999999992
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "63376a956e83a815918270479af18ab8fb5019bae65d97baabf0a96d55444f49",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.014277502700000038,
+            0.016647522700000104,
+            -0.16429772050000002,
+            0.008815304600000004
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "ff4c177908f78482ba254405d5ee9378b5c7c63fe77102b4d0f56fa68a165555",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.007489206599999961,
+            0.024358369800000022,
+            -0.12942428500000003,
+            0.02713785949999998
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "ac3b358b2e80557d5ba9620b510472a2109a6c52328ab769e429cd068464f5b6",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.018021063599999967,
+            0.03153823780000004,
+            -0.1476981839,
+            0.021625656099999988
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "60e882c4a0702e0d30ea46270dffa260f60f745dd4a32acc9fdb1e1a63724c5a",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.02849950149999997,
+            0.026629635600000066,
+            -0.1712409565,
+            0.016059057900000007
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "a543650991e385a828bf83ebe323ba2a8ab48da8f617c95c59457cd22277ec61",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.03766699079999997,
+            0.026349480600000086,
+            -0.16689015680000002,
+            0.012484344900000027
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "d00e7a413dc0c16a28bc70ddeb8ed350aba95d73b88409a428dae37317de70ab",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.004031047999999968,
+            0.02493206720000001,
+            -0.12584650590000007,
+            0.027741408399999973
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.01031512159999998,
+            0.032425618800000014,
+            -0.14079612320000004,
+            0.022584992199999987
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "9dddf7f3ef757a9f18f5973a3ccd6687dea654db95fef784d949d02fe0b0b1d4",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.016473110199999995,
+            0.027719326200000026,
+            -0.15195527010000004,
+            0.017634460899999996
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "18c5a21197f2189444ba1135f516edecee9d9c93675fc7529ec8de19bac61906",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.019784419400000006,
+            0.027706476300000036,
+            -0.15724971890000006,
+            0.01253391420000001
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "795d4515ee57febfc68b17037832ce285e1c07a1a03cb8b0c584d4a2f05f48a1",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.0052379923999999675,
+            0.023647094200000014,
+            -0.12511400150000007,
+            0.034900876199999965
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "236aa65a294576dabeaac13b57e2808511cc1d554b7e66a07c0f94bd058785d0",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.012713042199999972,
+            0.029700671300000026,
+            -0.13955795060000006,
+            0.03692734589999997
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "c22fc03cd43444f15b9fa2dd23bf8602189645c775c284729fe85029e6278aa0",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.02017949109999998,
+            0.02854978030000004,
+            -0.15016259290000006,
+            0.03916019679999998
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "c694ca450c44b0dacd6d87c1d7ab2d6ee91d5aef8797f99ca0430ee15c9b6229",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.02764338839999999,
+            0.025719104600000053,
+            -0.15205548300000007,
+            0.04123814349999998
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "e74ce674edaa94759d1e3c22d8c43922a1d508a2e32210d2851de073af103c10",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.004983531599999966,
+            0.023481820500000018,
+            -0.12319154230000007,
+            0.033734901699999965
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "41996ce3e781e343c04fe477e4151bad9651a096eb9cc56cab77a37ec868b692",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.012149107099999973,
+            0.029389747400000034,
+            -0.13106057670000004,
+            0.03455048699999997
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.01928582359999998,
+            0.03530799000000005,
+            -0.14335083920000005,
+            0.03535107679999998
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "7a7f7daceec6466e9fa6ede7cb8d5dd3835dc8f28a5c320307ce4b922cf162ae",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.02643898279999999,
+            0.031465468500000066,
+            -0.15136512600000007,
+            0.036166662099999976
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "20a225c8b4f7b1dbf23a6281ddefea729a454968ff707bcd45cec7519d6b1933",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.00371016709999996,
+            0.025570697500000013,
+            -0.12566533830000007,
+            0.03391670109999997
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "c7607fa3377f5d7bd313e8cda5f431908f3677e29e9f7f7cf563e74dfbe744d1",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.009349745499999958,
+            0.033380700300000024,
+            -0.13624936660000006,
+            0.03486746919999997
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "68ba01cc5f3024790b7fc6f92f93ebea8627b919d60db7c8ffff5e7b697ac400",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.014854900399999958,
+            0.04134442910000004,
+            -0.15126637990000005,
+            0.035764253499999975
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "154f190c593cef61c84037b4896c73d6edec942d651987a9a82419300110c76d",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.020344245199999958,
+            0.03955812820000005,
+            -0.15431879860000008,
+            0.03671502159999998
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "ac22899e9617405640d32f4ea94925626d4ff8952dbc8d5acda5ffc217b263b5",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.00371016709999996,
+            0.022282620300000007,
+            -0.12248751570000006,
+            0.03391670109999997
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "260007e81996db708e0f60bf89f59c975331ae2ee41e0c73c0f0ad5b37b08064",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.009349745499999958,
+            0.02690884240000001,
+            -0.12997778110000005,
+            0.03486746919999997
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "65a89d08421d9718b4d5d94154a5fbd388473d11abcc90846531fe6a35e69f67",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.014854900399999958,
+            0.03147325080000001,
+            -0.14300671910000007,
+            0.035764253499999975
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "b0c85931f2fb0bd085e1c63c008a54df8336e8cfe9e6a0b704f73422a7459608",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.020344245199999958,
+            0.03602813870000002,
+            -0.14658049250000005,
+            0.03671502159999998
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "c3afbaa8629a17f9e075e8f41158433942f6e9f2ef346831553f5480549d54a7",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.0003433860999999608,
+            0.0225083326,
+            -0.12252650400000006,
+            0.03220956719999996
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "dde17bdbb2efd257e236db81049bdd82ccd8407c5124cf5a18fef6cdd5d02c03",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.002291786999999955,
+            0.027260948,
+            -0.13005475800000005,
+            0.031381592299999955
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "b78084f5ae17ca8e23076e38631dc7f558179058dab59d39f57c7365776caab9",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.004240187899999956,
+            0.0320014092,
+            -0.14300671910000007,
+            0.030553617399999955
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "ba114a375a5d23a98d66aa984159766e18746bae30a020eb4780b379d0663e6e",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.006176877499999959,
+            0.0367363511,
+            -0.14658049250000005,
+            0.02970326479999995
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "99b6d40d50073ff10c74eb62acc384f9811a82c4e00eb39ee822839d93d239b5",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.000967198899999959,
+            0.021115292399999996,
+            -0.12025176850000006,
+            0.03220956719999996
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "bf26a9f270d4bdbd9d5604c0563fc4880c262e0cd82c324937f1dbc4f7d8c6bc",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.0035554077999999587,
+            0.024396414499999994,
+            -0.12561699820000005,
+            0.031381592299999955
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "6bf23257f219baaf0f6815e84907344eaf777106f445281d02103bb38096fa13",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.006054928499999959,
+            0.027662987599999987,
+            -0.13518666940000007,
+            0.030553617399999955
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "0f8f8b4cd1c09f2045d0160fbe14f5a75f2748c86767f302e8ddeb2c3aab837e",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.008632433599999958,
+            0.030910566399999985,
+            -0.14234784780000007,
+            0.02970326479999995
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "1dbd81a06797a95bf524a061383ad8055a466926ebfd98fdc83bb09ea9722e6a",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.000967198899999959,
+            0.021115292399999996,
+            -0.11913295790000007,
+            0.03254246729999996
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "3e3aaa870da79fe388e0f5499d4a129f4b6c59a25e2961548c78263e4269df10",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.0035554077999999587,
+            0.024396414499999994,
+            -0.12348802680000008,
+            0.032047392499999966
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "cd21492cb520c0db2078f74ce5fcd788aed8129adeefb6e2796bb19fa3f4adb3",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.006054928499999959,
+            0.027662987599999987,
+            -0.13541806410000007,
+            0.031552317699999964
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "cf314bcdacfc470a9f2a63b4a35d7ff814c7d7399eb328a184039ab11568cd03",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.008632433599999958,
+            0.030910566399999985,
+            -0.14278459130000007,
+            0.031057242899999962
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "d5fd8ca1850d97fc16771fcade6477228a22d1c3279a1ad789f69bc7001850c0",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.000967198899999959,
+            0.021115292399999996,
+            -0.11892262370000008,
+            0.03254246729999996
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "46976a746afc445d6867c17f5ca795f32b9f1ffc7a5664fb767aebab14118380",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.0035554077999999587,
+            0.024396414499999994,
+            -0.12281372380000008,
+            0.032047392499999966
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "76a66eb3271a1346cfc7e2ff79f6a550dccc258fdcca3a03d4b82eed5b8cf59a",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.006054928499999959,
+            0.027662987599999987,
+            -0.12685386890000008,
+            0.031552317699999964
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "2cff3bff54bcad3695deb6c5c45e20262b5a02bb4d1b31cf41aa9465801dbd4a",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.008632433599999958,
+            0.030910566399999985,
+            -0.13569035030000007,
+            0.031057242899999962
+          ],
+          "positive_window_share": 0.75
+        }
+      ],
+      "trend": []
+    },
+    {
+      "window_id": "wf_001",
+      "grid": [
+        {
+          "config_hash": "815b8196c744b75fe4f851240badeee093c72d4372769ddc31ba9ac4888a5b95",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.023938322200000133,
+            -0.1267128782,
+            0.02601038409999997,
+            -0.0009774064999999521
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "4ba27c22874b9850f961a064b0c0cbec006c1e2e752fea8169985499d494e6d6",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.02240670680000018,
+            -0.13649501269999992,
+            0.019656908499999987,
+            -0.0026183200999999458
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.01670154610000019,
+            -0.16344378589999997,
+            0.013106053999999992,
+            -0.0006440702999999572
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "63376a956e83a815918270479af18ab8fb5019bae65d97baabf0a96d55444f49",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            true
+          ],
+          "oos_returns": [
+            0.01751706850000019,
+            -0.16429772050000002,
+            0.008815304600000004,
+            0.003655870000000062
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "ff4c177908f78482ba254405d5ee9378b5c7c63fe77102b4d0f56fa68a165555",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.024873318000000106,
+            -0.12942428500000003,
+            0.02713785949999998,
+            -0.00040464929999993416
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "ac3b358b2e80557d5ba9620b510472a2109a6c52328ab769e429cd068464f5b6",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            true
+          ],
+          "oos_returns": [
+            0.031610281700000124,
+            -0.1476981839,
+            0.021625656099999988,
+            0.006495360500000054
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "60e882c4a0702e0d30ea46270dffa260f60f745dd4a32acc9fdb1e1a63724c5a",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            true
+          ],
+          "oos_returns": [
+            0.02627091440000015,
+            -0.1712409565,
+            0.016059057900000007,
+            0.006259533900000055
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "a543650991e385a828bf83ebe323ba2a8ab48da8f617c95c59457cd22277ec61",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            true
+          ],
+          "oos_returns": [
+            0.02552642990000017,
+            -0.16689015680000002,
+            0.012484344900000027,
+            0.008000228300000047
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "d00e7a413dc0c16a28bc70ddeb8ed350aba95d73b88409a428dae37317de70ab",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.025290319800000093,
+            -0.12584650590000007,
+            0.027741408399999973,
+            -0.004838982499999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.032265473600000094,
+            -0.14079612320000004,
+            0.022584992199999987,
+            -0.0028334874999999225
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "9dddf7f3ef757a9f18f5973a3ccd6687dea654db95fef784d949d02fe0b0b1d4",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.0270407832000001,
+            -0.15195527010000004,
+            0.017634460899999996,
+            -0.0008543049999999225
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "18c5a21197f2189444ba1135f516edecee9d9c93675fc7529ec8de19bac61906",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.026533422300000106,
+            -0.15724971890000006,
+            0.01253391420000001,
+            -0.0021741161999999227
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "795d4515ee57febfc68b17037832ce285e1c07a1a03cb8b0c584d4a2f05f48a1",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.0245091956000001,
+            -0.12511400150000007,
+            0.034900876199999965,
+            -0.0026925203999999267
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "236aa65a294576dabeaac13b57e2808511cc1d554b7e66a07c0f94bd058785d0",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            true
+          ],
+          "oos_returns": [
+            0.030575428300000113,
+            -0.13955795060000006,
+            0.03692734589999997,
+            0.0014237334000000703
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "c22fc03cd43444f15b9fa2dd23bf8602189645c775c284729fe85029e6278aa0",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            true
+          ],
+          "oos_returns": [
+            0.029411881700000125,
+            -0.15016259290000006,
+            0.03916019679999998,
+            0.005567752800000067
+          ],
+          "positive_window_share": 0.75
+        },
+        {
+          "config_hash": "c694ca450c44b0dacd6d87c1d7ab2d6ee91d5aef8797f99ca0430ee15c9b6229",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.02656665700000014,
+            -0.15205548300000007,
+            0.04123814349999998,
+            -0.0015736858999999379
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "e74ce674edaa94759d1e3c22d8c43922a1d508a2e32210d2851de073af103c10",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.024335015600000103,
+            -0.12319154230000007,
+            0.033734901699999965,
+            -0.005898655399999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "41996ce3e781e343c04fe477e4151bad9651a096eb9cc56cab77a37ec868b692",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.03023729980000012,
+            -0.13106057670000004,
+            0.03455048699999997,
+            -0.005214860599999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.036155542400000136,
+            -0.14335083920000005,
+            0.03535107679999998,
+            -0.004598064399999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "7a7f7daceec6466e9fa6ede7cb8d5dd3835dc8f28a5c320307ce4b922cf162ae",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.032308879300000155,
+            -0.15136512600000007,
+            0.036166662099999976,
+            -0.003910660199999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "20a225c8b4f7b1dbf23a6281ddefea729a454968ff707bcd45cec7519d6b1933",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.0264182499000001,
+            -0.12566533830000007,
+            0.03391670109999997,
+            -0.005898655399999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "c7607fa3377f5d7bd313e8cda5f431908f3677e29e9f7f7cf563e74dfbe744d1",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.034312780700000114,
+            -0.13624936660000006,
+            0.03486746919999997,
+            -0.005214860599999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "68ba01cc5f3024790b7fc6f92f93ebea8627b919d60db7c8ffff5e7b697ac400",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.04224164100000013,
+            -0.15126637990000005,
+            0.035764253499999975,
+            -0.004598064399999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "154f190c593cef61c84037b4896c73d6edec942d651987a9a82419300110c76d",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.04047187350000014,
+            -0.15431879860000008,
+            0.03671502159999998,
+            -0.003910660199999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "ac22899e9617405640d32f4ea94925626d4ff8952dbc8d5acda5ffc217b263b5",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.0250741149000001,
+            -0.12248751570000006,
+            0.03391670109999997,
+            -0.005898655399999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "260007e81996db708e0f60bf89f59c975331ae2ee41e0c73c0f0ad5b37b08064",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.03158050890000011,
+            -0.12997778110000005,
+            0.03486746919999997,
+            -0.005214860599999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "65a89d08421d9718b4d5d94154a5fbd388473d11abcc90846531fe6a35e69f67",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.038124566000000124,
+            -0.14300671910000007,
+            0.035764253499999975,
+            -0.004598064399999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "b0c85931f2fb0bd085e1c63c008a54df8336e8cfe9e6a0b704f73422a7459608",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.04465517150000014,
+            -0.14658049250000005,
+            0.03671502159999998,
+            -0.003910660199999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "c3afbaa8629a17f9e075e8f41158433942f6e9f2ef346831553f5480549d54a7",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.023441172200000086,
+            -0.12252650400000006,
+            0.03220956719999996,
+            -0.005898655399999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "dde17bdbb2efd257e236db81049bdd82ccd8407c5124cf5a18fef6cdd5d02c03",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.028137002400000086,
+            -0.13005475800000005,
+            0.031381592299999955,
+            -0.005214860599999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "b78084f5ae17ca8e23076e38631dc7f558179058dab59d39f57c7365776caab9",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.03287626620000009,
+            -0.14300671910000007,
+            0.030553617399999955,
+            -0.004598064399999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "ba114a375a5d23a98d66aa984159766e18746bae30a020eb4780b379d0663e6e",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.037669190700000084,
+            -0.14658049250000005,
+            0.02970326479999995,
+            -0.003910660199999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "99b6d40d50073ff10c74eb62acc384f9811a82c4e00eb39ee822839d93d239b5",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.022062681000000084,
+            -0.12025176850000006,
+            0.03220956719999996,
+            -0.005750699799999927
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "bf26a9f270d4bdbd9d5604c0563fc4880c262e0cd82c324937f1dbc4f7d8c6bc",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.025271271500000077,
+            -0.12561699820000005,
+            0.031381592299999955,
+            -0.00496395459999993
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "6bf23257f219baaf0f6815e84907344eaf777106f445281d02103bb38096fa13",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.028537844600000074,
+            -0.13518666940000007,
+            0.030553617399999955,
+            -0.004146589399999934
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "0f8f8b4cd1c09f2045d0160fbe14f5a75f2748c86767f302e8ddeb2c3aab837e",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.03179997240000007,
+            -0.14234784780000007,
+            0.02970326479999995,
+            -0.0033108401999999383
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "1dbd81a06797a95bf524a061383ad8055a466926ebfd98fdc83bb09ea9722e6a",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.022062681000000084,
+            -0.11913295790000007,
+            0.03254246729999996,
+            -0.005380810799999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "3e3aaa870da79fe388e0f5499d4a129f4b6c59a25e2961548c78263e4269df10",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.025271271500000077,
+            -0.12348802680000008,
+            0.032047392499999966,
+            -0.004242560599999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "cd21492cb520c0db2078f74ce5fcd788aed8129adeefb6e2796bb19fa3f4adb3",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.028537844600000074,
+            -0.13541806410000007,
+            0.031552317699999964,
+            -0.003026925399999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "cf314bcdacfc470a9f2a63b4a35d7ff814c7d7399eb328a184039ab11568cd03",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.03179997240000007,
+            -0.14278459130000007,
+            0.031057242899999962,
+            -0.001892184599999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "d5fd8ca1850d97fc16771fcade6477228a22d1c3279a1ad789f69bc7001850c0",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.022062681000000084,
+            -0.11892262370000008,
+            0.03254246729999996,
+            -0.005380810799999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "46976a746afc445d6867c17f5ca795f32b9f1ffc7a5664fb767aebab14118380",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.025271271500000077,
+            -0.12281372380000008,
+            0.032047392499999966,
+            -0.004242560599999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "76a66eb3271a1346cfc7e2ff79f6a550dccc258fdcca3a03d4b82eed5b8cf59a",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.028537844600000074,
+            -0.12685386890000008,
+            0.031552317699999964,
+            -0.003026925399999923
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "2cff3bff54bcad3695deb6c5c45e20262b5a02bb4d1b31cf41aa9465801dbd4a",
+          "positive_windows": [
+            true,
+            false,
+            true,
+            false
+          ],
+          "oos_returns": [
+            0.03179997240000007,
+            -0.13569035030000007,
+            0.031057242899999962,
+            -0.001892184599999923
+          ],
+          "positive_window_share": 0.5
+        }
+      ],
+      "trend": []
+    },
+    {
+      "window_id": "wf_002",
+      "grid": [
+        {
+          "config_hash": "815b8196c744b75fe4f851240badeee093c72d4372769ddc31ba9ac4888a5b95",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.10787736099999999,
+            0.02601038409999997,
+            -0.0009774064999999521,
+            -0.06424524909999998
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "4ba27c22874b9850f961a064b0c0cbec006c1e2e752fea8169985499d494e6d6",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.10577819029999991,
+            0.019656908499999987,
+            -0.0026183200999999458,
+            -0.05085480679999994
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.14206000859999995,
+            0.013106053999999992,
+            -0.0006440702999999572,
+            -0.03760410559999988
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "63376a956e83a815918270479af18ab8fb5019bae65d97baabf0a96d55444f49",
+          "positive_windows": [
+            false,
+            true,
+            true,
+            false
+          ],
+          "oos_returns": [
+            -0.13696449689999995,
+            0.008815304600000004,
+            0.003655870000000062,
+            -0.025984751099999835
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "ff4c177908f78482ba254405d5ee9378b5c7c63fe77102b4d0f56fa68a165555",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.10976888030000002,
+            0.02713785949999998,
+            -0.00040464929999993416,
+            -0.06336566119999999
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "ac3b358b2e80557d5ba9620b510472a2109a6c52328ab769e429cd068464f5b6",
+          "positive_windows": [
+            false,
+            true,
+            true,
+            false
+          ],
+          "oos_returns": [
+            -0.11071983579999997,
+            0.021625656099999988,
+            0.006495360500000054,
+            -0.049653996199999946
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "60e882c4a0702e0d30ea46270dffa260f60f745dd4a32acc9fdb1e1a63724c5a",
+          "positive_windows": [
+            false,
+            true,
+            true,
+            false
+          ],
+          "oos_returns": [
+            -0.1420519993,
+            0.016059057900000007,
+            0.006259533900000055,
+            -0.0359834652999999
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "a543650991e385a828bf83ebe323ba2a8ab48da8f617c95c59457cd22277ec61",
+          "positive_windows": [
+            false,
+            true,
+            true,
+            false
+          ],
+          "oos_returns": [
+            -0.13969033239999995,
+            0.012484344900000027,
+            0.008000228300000047,
+            -0.03207802859999988
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "d00e7a413dc0c16a28bc70ddeb8ed350aba95d73b88409a428dae37317de70ab",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.11463017240000005,
+            0.027741408399999973,
+            -0.004838982499999923,
+            -0.070125295
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.12606459220000005,
+            0.022584992199999987,
+            -0.0028334874999999225,
+            -0.06393643189999998
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "9dddf7f3ef757a9f18f5973a3ccd6687dea654db95fef784d949d02fe0b0b1d4",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.13313328090000004,
+            0.017634460899999996,
+            -0.0008543049999999225,
+            -0.05780382929999994
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "18c5a21197f2189444ba1135f516edecee9d9c93675fc7529ec8de19bac61906",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.13164909800000002,
+            0.01253391420000001,
+            -0.0021741161999999227,
+            -0.05165412499999991
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "795d4515ee57febfc68b17037832ce285e1c07a1a03cb8b0c584d4a2f05f48a1",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.11690295530000006,
+            0.034900876199999965,
+            -0.0026925203999999267,
+            -0.06950570690000002
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "236aa65a294576dabeaac13b57e2808511cc1d554b7e66a07c0f94bd058785d0",
+          "positive_windows": [
+            false,
+            true,
+            true,
+            false
+          ],
+          "oos_returns": [
+            -0.13079698810000007,
+            0.03692734589999997,
+            0.0014237334000000703,
+            -0.06276208769999998
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "c22fc03cd43444f15b9fa2dd23bf8602189645c775c284729fe85029e6278aa0",
+          "positive_windows": [
+            false,
+            true,
+            true,
+            false
+          ],
+          "oos_returns": [
+            -0.14015186470000007,
+            0.03916019679999998,
+            0.005567752800000067,
+            -0.056250140799999966
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "c694ca450c44b0dacd6d87c1d7ab2d6ee91d5aef8797f99ca0430ee15c9b6229",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.14096396820000007,
+            0.04123814349999998,
+            -0.0015736858999999379,
+            -0.04962170659999994
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "e74ce674edaa94759d1e3c22d8c43922a1d508a2e32210d2851de073af103c10",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.11774379950000005,
+            0.033734901699999965,
+            -0.005898655399999923,
+            -0.0672067942
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "41996ce3e781e343c04fe477e4151bad9651a096eb9cc56cab77a37ec868b692",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.13040340430000005,
+            0.03455048699999997,
+            -0.005214860599999923,
+            -0.058147375799999984
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.13753821160000004,
+            0.03535107679999998,
+            -0.004598064399999923,
+            -0.049135777299999954
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "7a7f7daceec6466e9fa6ede7cb8d5dd3835dc8f28a5c320307ce4b922cf162ae",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.13573134020000002,
+            0.036166662099999976,
+            -0.003910660199999923,
+            -0.04013913799999992
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "20a225c8b4f7b1dbf23a6281ddefea729a454968ff707bcd45cec7519d6b1933",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.11090275260000006,
+            0.03391670109999997,
+            -0.005898655399999923,
+            -0.06965379780000003
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "c7607fa3377f5d7bd313e8cda5f431908f3677e29e9f7f7cf563e74dfbe744d1",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.11355544080000003,
+            0.03486746919999997,
+            -0.005214860599999923,
+            -0.06321323910000001
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "68ba01cc5f3024790b7fc6f92f93ebea8627b919d60db7c8ffff5e7b697ac400",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.12072806720000004,
+            0.035764253499999975,
+            -0.004598064399999923,
+            -0.0569283336
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "154f190c593cef61c84037b4896c73d6edec942d651987a9a82419300110c76d",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.12542046390000003,
+            0.03671502159999998,
+            -0.003910660199999923,
+            -0.05064968159999998
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "ac22899e9617405640d32f4ea94925626d4ff8952dbc8d5acda5ffc217b263b5",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.10905602590000006,
+            0.03391670109999997,
+            -0.005898655399999923,
+            -0.06656460160000002
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "260007e81996db708e0f60bf89f59c975331ae2ee41e0c73c0f0ad5b37b08064",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.10974455030000005,
+            0.03486746919999997,
+            -0.005214860599999923,
+            -0.0568089267
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "65a89d08421d9718b4d5d94154a5fbd388473d11abcc90846531fe6a35e69f67",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.11512528220000007,
+            0.035764253499999975,
+            -0.004598064399999923,
+            -0.047183461099999977
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "b0c85931f2fb0bd085e1c63c008a54df8336e8cfe9e6a0b704f73422a7459608",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.11793592130000007,
+            0.03671502159999998,
+            -0.003910660199999923,
+            -0.03746876889999995
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "c3afbaa8629a17f9e075e8f41158433942f6e9f2ef346831553f5480549d54a7",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.10913200310000006,
+            0.03220956719999996,
+            -0.005898655399999923,
+            -0.07016633830000002
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "dde17bdbb2efd257e236db81049bdd82ccd8407c5124cf5a18fef6cdd5d02c03",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.10989650470000005,
+            0.031381592299999955,
+            -0.005214860599999923,
+            -0.0645125646
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "b78084f5ae17ca8e23076e38631dc7f558179058dab59d39f57c7365776caab9",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.11535321380000005,
+            0.030553617399999955,
+            -0.004598064399999923,
+            -0.058992484599999985
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "ba114a375a5d23a98d66aa984159766e18746bae30a020eb4780b379d0663e6e",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.11823783070000005,
+            0.02970326479999995,
+            -0.003910660199999923,
+            -0.053434049199999965
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "99b6d40d50073ff10c74eb62acc384f9811a82c4e00eb39ee822839d93d239b5",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.11382680990000008,
+            0.03220956719999996,
+            -0.005750699799999927,
+            -0.07016633830000002
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "bf26a9f270d4bdbd9d5604c0563fc4880c262e0cd82c324937f1dbc4f7d8c6bc",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.11981369950000006,
+            0.031381592299999955,
+            -0.00496395459999993,
+            -0.0645125646
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "6bf23257f219baaf0f6815e84907344eaf777106f445281d02103bb38096fa13",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.12998251710000008,
+            0.030553617399999955,
+            -0.004146589399999934,
+            -0.058992484599999985
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "0f8f8b4cd1c09f2045d0160fbe14f5a75f2748c86767f302e8ddeb2c3aab837e",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.13489601140000007,
+            0.02970326479999995,
+            -0.0033108401999999383,
+            -0.053434049199999965
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "1dbd81a06797a95bf524a061383ad8055a466926ebfd98fdc83bb09ea9722e6a",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.11063236310000008,
+            0.03254246729999996,
+            -0.005380810799999923,
+            -0.07208543350000003
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "3e3aaa870da79fe388e0f5499d4a129f4b6c59a25e2961548c78263e4269df10",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.11331253450000008,
+            0.032047392499999966,
+            -0.004242560599999923,
+            -0.06818619420000002
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "cd21492cb520c0db2078f74ce5fcd788aed8129adeefb6e2796bb19fa3f4adb3",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.12391074860000008,
+            0.031552317699999964,
+            -0.003026925399999923,
+            -0.06444971520000001
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "cf314bcdacfc470a9f2a63b4a35d7ff814c7d7399eb328a184039ab11568cd03",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.13116811880000007,
+            0.031057242899999962,
+            -0.001892184599999923,
+            -0.0606115129
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "d5fd8ca1850d97fc16771fcade6477228a22d1c3279a1ad789f69bc7001850c0",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.11092576260000007,
+            0.03254246729999996,
+            -0.005380810799999923,
+            -0.07208543350000003
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "46976a746afc445d6867c17f5ca795f32b9f1ffc7a5664fb767aebab14118380",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.11391335930000007,
+            0.032047392499999966,
+            -0.004242560599999923,
+            -0.06818619420000002
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "76a66eb3271a1346cfc7e2ff79f6a550dccc258fdcca3a03d4b82eed5b8cf59a",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.11699691210000006,
+            0.031552317699999964,
+            -0.003026925399999923,
+            -0.06444971520000001
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "2cff3bff54bcad3695deb6c5c45e20262b5a02bb4d1b31cf41aa9465801dbd4a",
+          "positive_windows": [
+            false,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            -0.12494149680000007,
+            0.031057242899999962,
+            -0.001892184599999923,
+            -0.0606115129
+          ],
+          "positive_window_share": 0.25
+        }
+      ],
+      "trend": []
+    },
+    {
+      "window_id": "wf_003",
+      "grid": [
+        {
+          "config_hash": "815b8196c744b75fe4f851240badeee093c72d4372769ddc31ba9ac4888a5b95",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.02601038409999997,
+            -0.0009774064999999521,
+            -0.06424524909999998,
+            -0.024917857999999925
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "4ba27c22874b9850f961a064b0c0cbec006c1e2e752fea8169985499d494e6d6",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.019656908499999987,
+            -0.0026183200999999458,
+            -0.05085480679999994,
+            -0.025596011699999942
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.013106053999999992,
+            -0.0006440702999999572,
+            -0.03760410559999988,
+            -0.025730246499999946
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "63376a956e83a815918270479af18ab8fb5019bae65d97baabf0a96d55444f49",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.008815304600000004,
+            0.003655870000000062,
+            -0.025984751099999835,
+            -0.022794857699999956
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "ff4c177908f78482ba254405d5ee9378b5c7c63fe77102b4d0f56fa68a165555",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.02713785949999998,
+            -0.00040464929999993416,
+            -0.06336566119999999,
+            -0.027134727599999915
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "ac3b358b2e80557d5ba9620b510472a2109a6c52328ab769e429cd068464f5b6",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.021625656099999988,
+            0.006495360500000054,
+            -0.049653996199999946,
+            -0.0242382028999999
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "60e882c4a0702e0d30ea46270dffa260f60f745dd4a32acc9fdb1e1a63724c5a",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.016059057900000007,
+            0.006259533900000055,
+            -0.0359834652999999,
+            -0.025291455499999917
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "a543650991e385a828bf83ebe323ba2a8ab48da8f617c95c59457cd22277ec61",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.012484344900000027,
+            0.008000228300000047,
+            -0.03207802859999988,
+            -0.02511982739999994
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "d00e7a413dc0c16a28bc70ddeb8ed350aba95d73b88409a428dae37317de70ab",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.027340301999999976,
+            -0.004838982499999923,
+            -0.070125295,
+            -0.02773060209999991
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.02194291999999999,
+            -0.0028334874999999225,
+            -0.06393643189999998,
+            -0.0255872628999999
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "9dddf7f3ef757a9f18f5973a3ccd6687dea654db95fef784d949d02fe0b0b1d4",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.016494147599999995,
+            -0.0008543049999999225,
+            -0.05780382929999994,
+            -0.023505820099999887
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "18c5a21197f2189444ba1135f516edecee9d9c93675fc7529ec8de19bac61906",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.010871027600000013,
+            -0.0021741161999999227,
+            -0.05165412499999991,
+            -0.026845481499999914
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "795d4515ee57febfc68b17037832ce285e1c07a1a03cb8b0c584d4a2f05f48a1",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.034900876199999965,
+            -0.0026925203999999267,
+            -0.06950570690000002,
+            -0.026077445199999924
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "236aa65a294576dabeaac13b57e2808511cc1d554b7e66a07c0f94bd058785d0",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.03692734589999997,
+            0.0014237334000000703,
+            -0.06276208769999998,
+            -0.02233834929999992
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "c22fc03cd43444f15b9fa2dd23bf8602189645c775c284729fe85029e6278aa0",
+          "positive_windows": [
+            true,
+            true,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.03916019679999998,
+            0.005567752800000067,
+            -0.056250140799999966,
+            -0.018615877999999916
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "c694ca450c44b0dacd6d87c1d7ab2d6ee91d5aef8797f99ca0430ee15c9b6229",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.04123814349999998,
+            -0.0015736858999999379,
+            -0.04962170659999994,
+            -0.022099246299999913
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "e74ce674edaa94759d1e3c22d8c43922a1d508a2e32210d2851de073af103c10",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.033734901699999965,
+            -0.005898655399999923,
+            -0.0672067942,
+            -0.02708805479999992
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "41996ce3e781e343c04fe477e4151bad9651a096eb9cc56cab77a37ec868b692",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.03455048699999997,
+            -0.005214860599999923,
+            -0.058147375799999984,
+            -0.02442592579999992
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.03535107679999998,
+            -0.004598064399999923,
+            -0.049135777299999954,
+            -0.021740513699999915
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "7a7f7daceec6466e9fa6ede7cb8d5dd3835dc8f28a5c320307ce4b922cf162ae",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.036166662099999976,
+            -0.003910660199999923,
+            -0.04013913799999992,
+            -0.019045504599999916
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "20a225c8b4f7b1dbf23a6281ddefea729a454968ff707bcd45cec7519d6b1933",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.03391670109999997,
+            -0.005898655399999923,
+            -0.06965379780000003,
+            -0.028374743699999927
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "c7607fa3377f5d7bd313e8cda5f431908f3677e29e9f7f7cf563e74dfbe744d1",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.03486746919999997,
+            -0.005214860599999923,
+            -0.06321323910000001,
+            -0.027039214199999925
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "68ba01cc5f3024790b7fc6f92f93ebea8627b919d60db7c8ffff5e7b697ac400",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.035764253499999975,
+            -0.004598064399999923,
+            -0.0569283336,
+            -0.025720681999999925
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "154f190c593cef61c84037b4896c73d6edec942d651987a9a82419300110c76d",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.03671502159999998,
+            -0.003910660199999923,
+            -0.05064968159999998,
+            -0.024409075599999927
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "ac22899e9617405640d32f4ea94925626d4ff8952dbc8d5acda5ffc217b263b5",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.03391670109999997,
+            -0.005898655399999923,
+            -0.06656460160000002,
+            -0.029545405299999918
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "260007e81996db708e0f60bf89f59c975331ae2ee41e0c73c0f0ad5b37b08064",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.03486746919999997,
+            -0.005214860599999923,
+            -0.0568089267,
+            -0.029440436799999914
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "65a89d08421d9718b4d5d94154a5fbd388473d11abcc90846531fe6a35e69f67",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.035764253499999975,
+            -0.004598064399999923,
+            -0.047183461099999977,
+            -0.029335468299999903
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "b0c85931f2fb0bd085e1c63c008a54df8336e8cfe9e6a0b704f73422a7459608",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.03671502159999998,
+            -0.003910660199999923,
+            -0.03746876889999995,
+            -0.029233498899999898
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "c3afbaa8629a17f9e075e8f41158433942f6e9f2ef346831553f5480549d54a7",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.03220956719999996,
+            -0.005898655399999923,
+            -0.07016633830000002,
+            -0.029477425699999928
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "dde17bdbb2efd257e236db81049bdd82ccd8407c5124cf5a18fef6cdd5d02c03",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.031381592299999955,
+            -0.005214860599999923,
+            -0.0645125646,
+            -0.029302478199999926
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "b78084f5ae17ca8e23076e38631dc7f558179058dab59d39f57c7365776caab9",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.030553617399999955,
+            -0.004598064399999923,
+            -0.058992484599999985,
+            -0.029132529199999927
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "ba114a375a5d23a98d66aa984159766e18746bae30a020eb4780b379d0663e6e",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.02970326479999995,
+            -0.003910660199999923,
+            -0.053434049199999965,
+            -0.028994542699999924
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "99b6d40d50073ff10c74eb62acc384f9811a82c4e00eb39ee822839d93d239b5",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.03220956719999996,
+            -0.005750699799999927,
+            -0.07016633830000002,
+            -0.029137527699999922
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "bf26a9f270d4bdbd9d5604c0563fc4880c262e0cd82c324937f1dbc4f7d8c6bc",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.031381592299999955,
+            -0.00496395459999993,
+            -0.0645125646,
+            -0.02864964619999992
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "6bf23257f219baaf0f6815e84907344eaf777106f445281d02103bb38096fa13",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.030553617399999955,
+            -0.004146589399999934,
+            -0.058992484599999985,
+            -0.028139799199999916
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "0f8f8b4cd1c09f2045d0160fbe14f5a75f2748c86767f302e8ddeb2c3aab837e",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.02970326479999995,
+            -0.0033108401999999383,
+            -0.053434049199999965,
+            -0.027614956699999915
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "1dbd81a06797a95bf524a061383ad8055a466926ebfd98fdc83bb09ea9722e6a",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.03254246729999996,
+            -0.005380810799999923,
+            -0.07208543350000003,
+            -0.02900156849999993
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "3e3aaa870da79fe388e0f5499d4a129f4b6c59a25e2961548c78263e4269df10",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.032047392499999966,
+            -0.004242560599999923,
+            -0.06818619420000002,
+            -0.028392723299999926
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "cd21492cb520c0db2078f74ce5fcd788aed8129adeefb6e2796bb19fa3f4adb3",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.031552317699999964,
+            -0.003026925399999923,
+            -0.06444971520000001,
+            -0.027727922799999926
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "cf314bcdacfc470a9f2a63b4a35d7ff814c7d7399eb328a184039ab11568cd03",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.031057242899999962,
+            -0.001892184599999923,
+            -0.0606115129,
+            -0.027102180299999924
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "d5fd8ca1850d97fc16771fcade6477228a22d1c3279a1ad789f69bc7001850c0",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.03254246729999996,
+            -0.005380810799999923,
+            -0.07208543350000003,
+            -0.028698631499999926
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "46976a746afc445d6867c17f5ca795f32b9f1ffc7a5664fb767aebab14118380",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.032047392499999966,
+            -0.004242560599999923,
+            -0.06818619420000002,
+            -0.02771292729999992
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "76a66eb3271a1346cfc7e2ff79f6a550dccc258fdcca3a03d4b82eed5b8cf59a",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.031552317699999964,
+            -0.003026925399999923,
+            -0.06444971520000001,
+            -0.026718295499999916
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "2cff3bff54bcad3695deb6c5c45e20262b5a02bb4d1b31cf41aa9465801dbd4a",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.031057242899999962,
+            -0.001892184599999923,
+            -0.0606115129,
+            -0.02576965229999991
+          ],
+          "positive_window_share": 0.25
+        }
+      ],
+      "trend": []
+    },
+    {
+      "window_id": "wf_004",
+      "grid": [
+        {
+          "config_hash": "815b8196c744b75fe4f851240badeee093c72d4372769ddc31ba9ac4888a5b95",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.0037025358999999377,
+            -0.06424524909999998,
+            -0.024917857999999925,
+            0.004367715300000036
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "4ba27c22874b9850f961a064b0c0cbec006c1e2e752fea8169985499d494e6d6",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.003245178200000069,
+            -0.05085480679999994,
+            -0.025596011699999942,
+            0.006622540800000045
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.00010487160000008768,
+            -0.03760410559999988,
+            -0.025730246499999946,
+            0.006373758700000048
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "63376a956e83a815918270479af18ab8fb5019bae65d97baabf0a96d55444f49",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.0012450297000000908,
+            -0.025984751099999835,
+            -0.022794857699999956,
+            0.006733239100000048
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "ff4c177908f78482ba254405d5ee9378b5c7c63fe77102b4d0f56fa68a165555",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.0041984729999999275,
+            -0.06336566119999999,
+            -0.027134727599999915,
+            0.0017177816000000373
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "ac3b358b2e80557d5ba9620b510472a2109a6c52328ab769e429cd068464f5b6",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.003374624200000069,
+            -0.049653996199999946,
+            -0.0242382028999999,
+            0.0009572762000000408
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "60e882c4a0702e0d30ea46270dffa260f60f745dd4a32acc9fdb1e1a63724c5a",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.009050409900000077,
+            -0.0359834652999999,
+            -0.025291455499999917,
+            0.0001943343000000465
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "a543650991e385a828bf83ebe323ba2a8ab48da8f617c95c59457cd22277ec61",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            false
+          ],
+          "oos_returns": [
+            0.008576505500000076,
+            -0.03207802859999988,
+            -0.02511982739999994,
+            -0.0034430126999999526
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "d00e7a413dc0c16a28bc70ddeb8ed350aba95d73b88409a428dae37317de70ab",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.009437012899999923,
+            -0.070125295,
+            -0.02773060209999991,
+            0.0025533742000000345
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.007925697199999924,
+            -0.06393643189999998,
+            -0.0255872628999999,
+            0.002571325400000036
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "9dddf7f3ef757a9f18f5973a3ccd6687dea654db95fef784d949d02fe0b0b1d4",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.006371684399999924,
+            -0.05780382929999994,
+            -0.023505820099999887,
+            0.002565283800000033
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "18c5a21197f2189444ba1135f516edecee9d9c93675fc7529ec8de19bac61906",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.004860468699999923,
+            -0.05165412499999991,
+            -0.026845481499999914,
+            0.002604665800000034
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "795d4515ee57febfc68b17037832ce285e1c07a1a03cb8b0c584d4a2f05f48a1",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.007501016799999924,
+            -0.06950570690000002,
+            -0.026077445199999924,
+            0.003409435400000032
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "236aa65a294576dabeaac13b57e2808511cc1d554b7e66a07c0f94bd058785d0",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.003952486199999924,
+            -0.06276208769999998,
+            -0.02233834929999992,
+            0.004306819100000036
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "c22fc03cd43444f15b9fa2dd23bf8602189645c775c284729fe85029e6278aa0",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.0003574799999999231,
+            -0.056250140799999966,
+            -0.018615877999999916,
+            0.005128269500000036
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "c694ca450c44b0dacd6d87c1d7ab2d6ee91d5aef8797f99ca0430ee15c9b6229",
+          "positive_windows": [
+            true,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            0.0031336332000000775,
+            -0.04962170659999994,
+            -0.022099246299999913,
+            0.0059372864000000365
+          ],
+          "positive_window_share": 0.5
+        },
+        {
+          "config_hash": "e74ce674edaa94759d1e3c22d8c43922a1d508a2e32210d2851de073af103c10",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.010183057399999924,
+            -0.0672067942,
+            -0.02708805479999992,
+            0.0026886667000000364
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "41996ce3e781e343c04fe477e4151bad9651a096eb9cc56cab77a37ec868b692",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.009513647799999924,
+            -0.058147375799999984,
+            -0.02442592579999992,
+            0.002743347200000041
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.008829852999999924,
+            -0.049135777299999954,
+            -0.021740513699999915,
+            0.002795591200000048
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "7a7f7daceec6466e9fa6ede7cb8d5dd3835dc8f28a5c320307ce4b922cf162ae",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.008164052799999924,
+            -0.04013913799999992,
+            -0.019045504599999916,
+            0.002850271700000049
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "20a225c8b4f7b1dbf23a6281ddefea729a454968ff707bcd45cec7519d6b1933",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.010183057399999924,
+            -0.06965379780000003,
+            -0.028374743699999927,
+            0.003030564100000039
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "c7607fa3377f5d7bd313e8cda5f431908f3677e29e9f7f7cf563e74dfbe744d1",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.009513647799999924,
+            -0.06321323910000001,
+            -0.027039214199999925,
+            0.00343513960000005
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "68ba01cc5f3024790b7fc6f92f93ebea8627b919d60db7c8ffff5e7b697ac400",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.008829852999999924,
+            -0.0569283336,
+            -0.025720681999999925,
+            0.0038392780000000536
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "154f190c593cef61c84037b4896c73d6edec942d651987a9a82419300110c76d",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.008164052799999924,
+            -0.05064968159999998,
+            -0.024409075599999927,
+            0.0042438535000000645
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "ac22899e9617405640d32f4ea94925626d4ff8952dbc8d5acda5ffc217b263b5",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.010035101799999929,
+            -0.06656460160000002,
+            -0.029545405299999918,
+            0.003343470200000035
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "260007e81996db708e0f60bf89f59c975331ae2ee41e0c73c0f0ad5b37b08064",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.009217736599999932,
+            -0.0568089267,
+            -0.029440436799999914,
+            0.004062951200000036
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "65a89d08421d9718b4d5d94154a5fbd388473d11abcc90846531fe6a35e69f67",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.008381987399999935,
+            -0.047183461099999977,
+            -0.029335468299999903,
+            0.0047889930000000365
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "b0c85931f2fb0bd085e1c63c008a54df8336e8cfe9e6a0b704f73422a7459608",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.007617135599999939,
+            -0.03746876889999995,
+            -0.029233498899999898,
+            0.0055084740000000375
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "c3afbaa8629a17f9e075e8f41158433942f6e9f2ef346831553f5480549d54a7",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.009661603399999923,
+            -0.07016633830000002,
+            -0.029477425699999928,
+            0.003503740200000032
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "dde17bdbb2efd257e236db81049bdd82ccd8407c5124cf5a18fef6cdd5d02c03",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.008477958599999924,
+            -0.0645125646,
+            -0.029302478199999926,
+            0.004343488200000033
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "b78084f5ae17ca8e23076e38631dc7f558179058dab59d39f57c7365776caab9",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.007343217799999924,
+            -0.058992484599999985,
+            -0.029132529199999927,
+            0.005233614400000034
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "ba114a375a5d23a98d66aa984159766e18746bae30a020eb4780b379d0663e6e",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.006123973199999924,
+            -0.053434049199999965,
+            -0.028994542699999924,
+            0.006073362400000035
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "99b6d40d50073ff10c74eb62acc384f9811a82c4e00eb39ee822839d93d239b5",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.009661603399999923,
+            -0.07016633830000002,
+            -0.029137527699999922,
+            0.003979597400000038
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "bf26a9f270d4bdbd9d5604c0563fc4880c262e0cd82c324937f1dbc4f7d8c6bc",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.008477958599999924,
+            -0.0645125646,
+            -0.02864964619999992,
+            0.005359576600000037
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "6bf23257f219baaf0f6815e84907344eaf777106f445281d02103bb38096fa13",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.007343217799999924,
+            -0.058992484599999985,
+            -0.028139799199999916,
+            0.006651189000000033
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "0f8f8b4cd1c09f2045d0160fbe14f5a75f2748c86767f302e8ddeb2c3aab837e",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.006123973199999924,
+            -0.053434049199999965,
+            -0.027614956699999915,
+            0.008031268200000035
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "1dbd81a06797a95bf524a061383ad8055a466926ebfd98fdc83bb09ea9722e6a",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.009661603399999923,
+            -0.07208543350000003,
+            -0.02900156849999993,
+            0.003979597400000038
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "3e3aaa870da79fe388e0f5499d4a129f4b6c59a25e2961548c78263e4269df10",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.008477958599999924,
+            -0.06818619420000002,
+            -0.028392723299999926,
+            0.005359576600000037
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "cd21492cb520c0db2078f74ce5fcd788aed8129adeefb6e2796bb19fa3f4adb3",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.007343217799999924,
+            -0.06444971520000001,
+            -0.027727922799999926,
+            0.006651189000000033
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "cf314bcdacfc470a9f2a63b4a35d7ff814c7d7399eb328a184039ab11568cd03",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.006123973199999924,
+            -0.0606115129,
+            -0.027102180299999924,
+            0.008031268200000035
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "d5fd8ca1850d97fc16771fcade6477228a22d1c3279a1ad789f69bc7001850c0",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.00892182539999993,
+            -0.07208543350000003,
+            -0.028698631499999926,
+            0.002736685000000034
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "46976a746afc445d6867c17f5ca795f32b9f1ffc7a5664fb767aebab14118380",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.007043697199999938,
+            -0.06818619420000002,
+            -0.02771292729999992,
+            0.002736685000000034
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "76a66eb3271a1346cfc7e2ff79f6a550dccc258fdcca3a03d4b82eed5b8cf59a",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.005169278399999946,
+            -0.06444971520000001,
+            -0.026718295499999916,
+            0.002736685000000034
+          ],
+          "positive_window_share": 0.25
+        },
+        {
+          "config_hash": "2cff3bff54bcad3695deb6c5c45e20262b5a02bb4d1b31cf41aa9465801dbd4a",
+          "positive_windows": [
+            false,
+            false,
+            false,
+            true
+          ],
+          "oos_returns": [
+            -0.0032422461999999535,
+            -0.0606115129,
+            -0.02576965229999991,
+            0.002736685000000034
+          ],
+          "positive_window_share": 0.25
+        }
+      ],
+      "trend": []
+    }
+  ],
+  "run_manifest": {
+    "schema_version": 1,
+    "runner": "run_instrument_validation",
+    "source_provider": "ValidationMarketDataProvider",
+    "data_cutoff": "2026-09-17",
+    "requested_start": "2021-01-04",
+    "data_fingerprint": "ee04fbec1afbbc2b01e6c7eb666b521640c0c19d4bf0c1613407f2b82cd6820b",
+    "run_mode": "research_diagnostic",
+    "research_only": true,
+    "activation_eligible": false,
+    "shadow_run_eligible": false,
+    "trading_authorized": false,
+    "target": {
+      "exposure_id": "sp_china_low_vol_dividend",
+      "stock_code": "515450.SH",
+      "sub_layer": "defensive_dividend_etf",
+      "scope": "formal"
+    },
+    "selected_configs": [
+      {
+        "window_id": "wf_000",
+        "config_hash": "3e3aaa870da79fe388e0f5499d4a129f4b6c59a25e2961548c78263e4269df10",
+        "config": {
+          "grid": {
+            "step_pct": 0.055,
+            "unit_pct": 0.1,
+            "initial_model": "fixed",
+            "fixed_initial_pct": 0.5,
+            "max_grid_per_day": 1,
+            "atr_stop_multiple": 3.0,
+            "cooldown_sessions": 5
+          },
+          "trend": {
+            "stop_n": 2.0,
+            "risk_per_unit": 0.005,
+            "add_n": 0.5,
+            "max_units": 4,
+            "require_macd_bullish": true,
+            "amount_ratio_min": null
+          },
+          "cost": {
+            "commission_rate": 0.0001,
+            "minimum_commission": 5.0,
+            "slippage_bps": 3.0,
+            "sell_tax_rate": 0.0,
+            "transfer_fee_rate": 0.0
+          }
+        }
+      },
+      {
+        "window_id": "wf_001",
+        "config_hash": "236aa65a294576dabeaac13b57e2808511cc1d554b7e66a07c0f94bd058785d0",
+        "config": {
+          "grid": {
+            "step_pct": 0.025,
+            "unit_pct": 0.1,
+            "initial_model": "fixed",
+            "fixed_initial_pct": 0.5,
+            "max_grid_per_day": 1,
+            "atr_stop_multiple": 3.0,
+            "cooldown_sessions": 5
+          },
+          "trend": {
+            "stop_n": 2.0,
+            "risk_per_unit": 0.005,
+            "add_n": 0.5,
+            "max_units": 4,
+            "require_macd_bullish": true,
+            "amount_ratio_min": null
+          },
+          "cost": {
+            "commission_rate": 0.0001,
+            "minimum_commission": 5.0,
+            "slippage_bps": 3.0,
+            "sell_tax_rate": 0.0,
+            "transfer_fee_rate": 0.0
+          }
+        }
+      },
+      {
+        "window_id": "wf_002",
+        "config_hash": "ac3b358b2e80557d5ba9620b510472a2109a6c52328ab769e429cd068464f5b6",
+        "config": {
+          "grid": {
+            "step_pct": 0.015,
+            "unit_pct": 0.1,
+            "initial_model": "fixed",
+            "fixed_initial_pct": 0.5,
+            "max_grid_per_day": 1,
+            "atr_stop_multiple": 3.0,
+            "cooldown_sessions": 5
+          },
+          "trend": {
+            "stop_n": 2.0,
+            "risk_per_unit": 0.005,
+            "add_n": 0.5,
+            "max_units": 4,
+            "require_macd_bullish": true,
+            "amount_ratio_min": null
+          },
+          "cost": {
+            "commission_rate": 0.0001,
+            "minimum_commission": 5.0,
+            "slippage_bps": 3.0,
+            "sell_tax_rate": 0.0,
+            "transfer_fee_rate": 0.0
+          }
+        }
+      },
+      {
+        "window_id": "wf_003",
+        "config_hash": "a543650991e385a828bf83ebe323ba2a8ab48da8f617c95c59457cd22277ec61",
+        "config": {
+          "grid": {
+            "step_pct": 0.015,
+            "unit_pct": 0.2,
+            "initial_model": "fixed",
+            "fixed_initial_pct": 0.5,
+            "max_grid_per_day": 1,
+            "atr_stop_multiple": 3.0,
+            "cooldown_sessions": 5
+          },
+          "trend": {
+            "stop_n": 2.0,
+            "risk_per_unit": 0.005,
+            "add_n": 0.5,
+            "max_units": 4,
+            "require_macd_bullish": true,
+            "amount_ratio_min": null
+          },
+          "cost": {
+            "commission_rate": 0.0001,
+            "minimum_commission": 5.0,
+            "slippage_bps": 3.0,
+            "sell_tax_rate": 0.0,
+            "transfer_fee_rate": 0.0
+          }
+        }
+      },
+      {
+        "window_id": "wf_004",
+        "config_hash": "60e882c4a0702e0d30ea46270dffa260f60f745dd4a32acc9fdb1e1a63724c5a",
+        "config": {
+          "grid": {
+            "step_pct": 0.015,
+            "unit_pct": 0.15,
+            "initial_model": "fixed",
+            "fixed_initial_pct": 0.5,
+            "max_grid_per_day": 1,
+            "atr_stop_multiple": 3.0,
+            "cooldown_sessions": 5
+          },
+          "trend": {
+            "stop_n": 2.0,
+            "risk_per_unit": 0.005,
+            "add_n": 0.5,
+            "max_units": 4,
+            "require_macd_bullish": true,
+            "amount_ratio_min": null
+          },
+          "cost": {
+            "commission_rate": 0.0001,
+            "minimum_commission": 5.0,
+            "slippage_bps": 3.0,
+            "sell_tax_rate": 0.0,
+            "transfer_fee_rate": 0.0
+          }
+        }
+      }
+    ],
+    "screened_axes": {
+      "grid": [
+        "step_pct",
+        "unit_pct"
+      ],
+      "trend": []
+    },
+    "profile_id": "grid_core",
+    "profile_hash": "53e04e2ebcde6b11cecadf28bd776455bbc733ecf2d4f5a2eececcacc0d3ff45",
+    "execution_windows": [
+      {
+        "window_id": "wf_000",
+        "profile_id": "grid_core",
+        "execution_config": {
+          "grid": {
+            "step_pct": 0.055,
+            "unit_pct": 0.1,
+            "initial_model": "fixed",
+            "fixed_initial_pct": 0.5,
+            "max_grid_per_day": 1,
+            "atr_stop_multiple": 3.0,
+            "cooldown_sessions": 5
+          },
+          "trend": {
+            "stop_n": 2.0,
+            "risk_per_unit": 0.005,
+            "add_n": 0.5,
+            "max_units": 4,
+            "require_macd_bullish": true,
+            "amount_ratio_min": null
+          },
+          "cost": {
+            "commission_rate": 0.0001,
+            "minimum_commission": 5.0,
+            "slippage_bps": 3.0,
+            "sell_tax_rate": 0.0,
+            "transfer_fee_rate": 0.0
+          }
+        },
+        "reference_benchmark_id": "buy_and_hold",
+        "strategy_spec": {
+          "strategy_id": "grid_only",
+          "version": "1",
+          "config": {
+            "grid": {
+              "step_pct": 0.055,
+              "unit_pct": 0.1,
+              "initial_model": "fixed",
+              "fixed_initial_pct": 0.5,
+              "max_grid_per_day": 1,
+              "atr_stop_multiple": 3.0,
+              "cooldown_sessions": 5
+            },
+            "trend": {
+              "stop_n": 2.0,
+              "risk_per_unit": 0.005,
+              "add_n": 0.5,
+              "max_units": 4,
+              "require_macd_bullish": true,
+              "amount_ratio_min": null
+            },
+            "cost": {
+              "commission_rate": 0.0001,
+              "minimum_commission": 5.0,
+              "slippage_bps": 3.0,
+              "sell_tax_rate": 0.0,
+              "transfer_fee_rate": 0.0
+            }
+          },
+          "policy_id": "grid_only",
+          "spec_hash": "7e94dbba88e14a2e9bcaaa94165aa3aed0d48f62da2e3a6aa24e66f56451be44"
+        },
+        "benchmarks": [
+          {
+            "benchmark_id": "buy_and_hold",
+            "version": "1",
+            "rebalance_sessions": null,
+            "target_weight": 1.0,
+            "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+            "provenance_hash": "5a713f6c2d762b315e672f1641cde2a164c8bac964e131d322199b548baa26c5",
+            "validation_start": "2024-02-19",
+            "validation_end": "2024-08-20",
+            "nav_sessions": 126,
+            "metrics": {
+              "annual_return": 0.006947866600333086,
+              "annual_volatility": 0.1217456902738952,
+              "sharpe": 0.05706868624837763,
+              "sortino": 0.06298059242724018,
+              "calmar": 0.0910146243297338,
+              "worst_126_session_return": 0.003440349600001058,
+              "cvar5": -0.020803257495229027,
+              "win_rate": 0.52,
+              "payoff_ratio": 0.8170687828446813,
+              "profit_factor": 1.0213359785558516,
+              "turnover": 0.9724974350401012,
+              "minimum_commission_share": 0.0,
+              "unfilled_share": 0.0,
+              "slippage_degradation": 3.0005045045045042,
+              "max_drawdown": -0.07633791439013027,
+              "recovery_sessions": 1,
+              "total_cost": 39.96504
+            }
+          },
+          {
+            "benchmark_id": "fixed_half_hold",
+            "version": "1",
+            "rebalance_sessions": 1,
+            "target_weight": 0.5,
+            "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+            "provenance_hash": "b09f91f6f71249593eba3a7a46985b870fdd9c91238261a9c832d390c20f533a",
+            "validation_start": "2024-02-19",
+            "validation_end": "2024-08-20",
+            "nav_sessions": 126,
+            "metrics": {
+              "annual_return": -3.759433238825771e-06,
+              "annual_volatility": 0.060819595318561036,
+              "sharpe": -6.18128617780931e-05,
+              "sortino": -6.863383174930991e-05,
+              "calmar": -9.560067211621246e-05,
+              "worst_126_session_return": -1.864799999085065e-06,
+              "cvar5": -0.010417110347997471,
+              "win_rate": 0.52,
+              "payoff_ratio": 0.850771134266922,
+              "profit_factor": 1.005456795042726,
+              "turnover": 0.5987207239758474,
+              "minimum_commission_share": 1.0,
+              "unfilled_share": 0.0,
+              "slippage_degradation": 0.06613265454545454,
+              "max_drawdown": -0.03932433899895382,
+              "recovery_sessions": 1,
+              "total_cost": 293.18648
+            }
+          }
+        ]
+      },
+      {
+        "window_id": "wf_001",
+        "profile_id": "grid_core",
+        "execution_config": {
+          "grid": {
+            "step_pct": 0.025,
+            "unit_pct": 0.1,
+            "initial_model": "fixed",
+            "fixed_initial_pct": 0.5,
+            "max_grid_per_day": 1,
+            "atr_stop_multiple": 3.0,
+            "cooldown_sessions": 5
+          },
+          "trend": {
+            "stop_n": 2.0,
+            "risk_per_unit": 0.005,
+            "add_n": 0.5,
+            "max_units": 4,
+            "require_macd_bullish": true,
+            "amount_ratio_min": null
+          },
+          "cost": {
+            "commission_rate": 0.0001,
+            "minimum_commission": 5.0,
+            "slippage_bps": 3.0,
+            "sell_tax_rate": 0.0,
+            "transfer_fee_rate": 0.0
+          }
+        },
+        "reference_benchmark_id": "buy_and_hold",
+        "strategy_spec": {
+          "strategy_id": "grid_only",
+          "version": "1",
+          "config": {
+            "grid": {
+              "step_pct": 0.025,
+              "unit_pct": 0.1,
+              "initial_model": "fixed",
+              "fixed_initial_pct": 0.5,
+              "max_grid_per_day": 1,
+              "atr_stop_multiple": 3.0,
+              "cooldown_sessions": 5
+            },
+            "trend": {
+              "stop_n": 2.0,
+              "risk_per_unit": 0.005,
+              "add_n": 0.5,
+              "max_units": 4,
+              "require_macd_bullish": true,
+              "amount_ratio_min": null
+            },
+            "cost": {
+              "commission_rate": 0.0001,
+              "minimum_commission": 5.0,
+              "slippage_bps": 3.0,
+              "sell_tax_rate": 0.0,
+              "transfer_fee_rate": 0.0
+            }
+          },
+          "policy_id": "grid_only",
+          "spec_hash": "de51ddee1d69ee6f0eb61236e582cbd967c176d20ada44a34d0eaff45596f014"
+        },
+        "benchmarks": [
+          {
+            "benchmark_id": "buy_and_hold",
+            "version": "1",
+            "rebalance_sessions": null,
+            "target_weight": 1.0,
+            "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+            "provenance_hash": "4537d5d91dde838df4f8f614436abbaca9469d62626c6fa412ce7a16a7dcefdb",
+            "validation_start": "2024-08-21",
+            "validation_end": "2025-03-04",
+            "nav_sessions": 126,
+            "metrics": {
+              "annual_return": 0.12375501974095693,
+              "annual_volatility": 0.22571904878150817,
+              "sharpe": 0.5482701633248042,
+              "sortino": 0.6809229908813905,
+              "calmar": 1.3054154527793085,
+              "worst_126_session_return": 0.05958242069999997,
+              "cvar5": -0.031877183022792334,
+              "win_rate": 0.496,
+              "payoff_ratio": 1.0280279622300819,
+              "profit_factor": 1.138173815326162,
+              "turnover": 0.9394676763969374,
+              "minimum_commission_share": 0.0,
+              "unfilled_share": 0.0,
+              "slippage_degradation": 2.9997927927927925,
+              "max_drawdown": -0.09480125233501335,
+              "recovery_sessions": 1,
+              "total_cost": 39.95793
+            }
+          },
+          {
+            "benchmark_id": "fixed_half_hold",
+            "version": "1",
+            "rebalance_sessions": 1,
+            "target_weight": 0.5,
+            "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+            "provenance_hash": "18c7a612ddf1ec233fed47eb2798406d6af2b45f940bb0a898df3f5e9ef77921",
+            "validation_start": "2024-08-21",
+            "validation_end": "2025-03-04",
+            "nav_sessions": 126,
+            "metrics": {
+              "annual_return": 0.06286641693028816,
+              "annual_volatility": 0.11332313737707024,
+              "sharpe": 0.5547535868258491,
+              "sortino": 0.6992414545669678,
+              "calmar": 1.2871693332513594,
+              "worst_126_session_return": 0.03070472830000015,
+              "cvar5": -0.015994759931788227,
+              "win_rate": 0.496,
+              "payoff_ratio": 1.0935810500418466,
+              "profit_factor": 1.1300337517099084,
+              "turnover": 0.7015040555137271,
+              "minimum_commission_share": 1.0,
+              "unfilled_share": 0.0,
+              "slippage_degradation": 0.06297730434782609,
+              "max_drawdown": -0.04884082871325801,
+              "recovery_sessions": 1,
+              "total_cost": 366.72717
+            }
+          }
+        ]
+      },
+      {
+        "window_id": "wf_002",
+        "profile_id": "grid_core",
+        "execution_config": {
+          "grid": {
+            "step_pct": 0.015,
+            "unit_pct": 0.1,
+            "initial_model": "fixed",
+            "fixed_initial_pct": 0.5,
+            "max_grid_per_day": 1,
+            "atr_stop_multiple": 3.0,
+            "cooldown_sessions": 5
+          },
+          "trend": {
+            "stop_n": 2.0,
+            "risk_per_unit": 0.005,
+            "add_n": 0.5,
+            "max_units": 4,
+            "require_macd_bullish": true,
+            "amount_ratio_min": null
+          },
+          "cost": {
+            "commission_rate": 0.0001,
+            "minimum_commission": 5.0,
+            "slippage_bps": 3.0,
+            "sell_tax_rate": 0.0,
+            "transfer_fee_rate": 0.0
+          }
+        },
+        "reference_benchmark_id": "buy_and_hold",
+        "strategy_spec": {
+          "strategy_id": "grid_only",
+          "version": "1",
+          "config": {
+            "grid": {
+              "step_pct": 0.015,
+              "unit_pct": 0.1,
+              "initial_model": "fixed",
+              "fixed_initial_pct": 0.5,
+              "max_grid_per_day": 1,
+              "atr_stop_multiple": 3.0,
+              "cooldown_sessions": 5
+            },
+            "trend": {
+              "stop_n": 2.0,
+              "risk_per_unit": 0.005,
+              "add_n": 0.5,
+              "max_units": 4,
+              "require_macd_bullish": true,
+              "amount_ratio_min": null
+            },
+            "cost": {
+              "commission_rate": 0.0001,
+              "minimum_commission": 5.0,
+              "slippage_bps": 3.0,
+              "sell_tax_rate": 0.0,
+              "transfer_fee_rate": 0.0
+            }
+          },
+          "policy_id": "grid_only",
+          "spec_hash": "970c1ec32bd80612eba814e65d4e816076880aef16c7c6b0463e0cf79c86cdce"
+        },
+        "benchmarks": [
+          {
+            "benchmark_id": "buy_and_hold",
+            "version": "1",
+            "rebalance_sessions": null,
+            "target_weight": 1.0,
+            "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+            "provenance_hash": "5620d861d7727f0d533e7f88179340e24751b6d2b84d170771e5083cb66ab83e",
+            "validation_start": "2025-03-05",
+            "validation_end": "2025-09-03",
+            "nav_sessions": 126,
+            "metrics": {
+              "annual_return": 0.038812509799897255,
+              "annual_volatility": 0.11828351008787505,
+              "sharpe": 0.3281311974176511,
+              "sortino": 0.3199805961654091,
+              "calmar": 0.604358190647136,
+              "worst_126_session_return": 0.01906752449999982,
+              "cvar5": -0.02176776344748166,
+              "win_rate": 0.536,
+              "payoff_ratio": 0.8189251583032999,
+              "profit_factor": 1.0758428550259036,
+              "turnover": 0.9647632310503379,
+              "minimum_commission_share": 0.0,
+              "unfilled_share": 0.0,
+              "slippage_degradation": 2.998753753753754,
+              "max_drawdown": -0.06422103712756422,
+              "recovery_sessions": 7,
+              "total_cost": 39.94755
+            }
+          },
+          {
+            "benchmark_id": "fixed_half_hold",
+            "version": "1",
+            "rebalance_sessions": 1,
+            "target_weight": 0.5,
+            "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+            "provenance_hash": "bcc817f7db1e9a38d0c91b89f1971d72e86d3658b95fa72b2fe79c5588a363c5",
+            "validation_start": "2025-03-05",
+            "validation_end": "2025-09-03",
+            "nav_sessions": 126,
+            "metrics": {
+              "annual_return": 0.01618746934185955,
+              "annual_volatility": 0.05922894604870409,
+              "sharpe": 0.27330334948976737,
+              "sortino": 0.27038085877751417,
+              "calmar": 0.4879658468425405,
+              "worst_126_session_return": 0.007997009600001714,
+              "cvar5": -0.010903279200798274,
+              "win_rate": 0.536,
+              "payoff_ratio": 0.8537299958981288,
+              "profit_factor": 1.0592575875032337,
+              "turnover": 0.5803645637496125,
+              "minimum_commission_share": 1.0,
+              "unfilled_share": 0.0,
+              "slippage_degradation": 0.07695234782608695,
+              "max_drawdown": -0.033173365403753374,
+              "recovery_sessions": 7,
+              "total_cost": 247.69904
+            }
+          }
+        ]
+      },
+      {
+        "window_id": "wf_003",
+        "profile_id": "grid_core",
+        "execution_config": {
+          "grid": {
+            "step_pct": 0.015,
+            "unit_pct": 0.2,
+            "initial_model": "fixed",
+            "fixed_initial_pct": 0.5,
+            "max_grid_per_day": 1,
+            "atr_stop_multiple": 3.0,
+            "cooldown_sessions": 5
+          },
+          "trend": {
+            "stop_n": 2.0,
+            "risk_per_unit": 0.005,
+            "add_n": 0.5,
+            "max_units": 4,
+            "require_macd_bullish": true,
+            "amount_ratio_min": null
+          },
+          "cost": {
+            "commission_rate": 0.0001,
+            "minimum_commission": 5.0,
+            "slippage_bps": 3.0,
+            "sell_tax_rate": 0.0,
+            "transfer_fee_rate": 0.0
+          }
+        },
+        "reference_benchmark_id": "buy_and_hold",
+        "strategy_spec": {
+          "strategy_id": "grid_only",
+          "version": "1",
+          "config": {
+            "grid": {
+              "step_pct": 0.015,
+              "unit_pct": 0.2,
+              "initial_model": "fixed",
+              "fixed_initial_pct": 0.5,
+              "max_grid_per_day": 1,
+              "atr_stop_multiple": 3.0,
+              "cooldown_sessions": 5
+            },
+            "trend": {
+              "stop_n": 2.0,
+              "risk_per_unit": 0.005,
+              "add_n": 0.5,
+              "max_units": 4,
+              "require_macd_bullish": true,
+              "amount_ratio_min": null
+            },
+            "cost": {
+              "commission_rate": 0.0001,
+              "minimum_commission": 5.0,
+              "slippage_bps": 3.0,
+              "sell_tax_rate": 0.0,
+              "transfer_fee_rate": 0.0
+            }
+          },
+          "policy_id": "grid_only",
+          "spec_hash": "cc00abb09e1788472dcb337deebafcaaa2910da7ab66b37a1b48d613bdef69ea"
+        },
+        "benchmarks": [
+          {
+            "benchmark_id": "buy_and_hold",
+            "version": "1",
+            "rebalance_sessions": null,
+            "target_weight": 1.0,
+            "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+            "provenance_hash": "3274e19422069735d2b29879bfd6d749ea2c0e1aef5687971ae4d05922309926",
+            "validation_start": "2025-09-04",
+            "validation_end": "2026-03-18",
+            "nav_sessions": 126,
+            "metrics": {
+              "annual_return": 0.058299623330333894,
+              "annual_volatility": 0.09719079388813161,
+              "sharpe": 0.5998471768574896,
+              "sortino": 1.0428530596639014,
+              "calmar": 0.8697564644356492,
+              "worst_126_session_return": 0.0285056159999999,
+              "cvar5": -0.012718266098676878,
+              "win_rate": 0.512,
+              "payoff_ratio": 1.03446752201123,
+              "profit_factor": 1.1034320234786457,
+              "turnover": 0.9919018824438306,
+              "minimum_commission_share": 0.0,
+              "unfilled_share": 0.0,
+              "slippage_degradation": 2.997837837837838,
+              "max_drawdown": -0.06702982468565177,
+              "recovery_sessions": 2,
+              "total_cost": 39.9384
+            }
+          },
+          {
+            "benchmark_id": "fixed_half_hold",
+            "version": "1",
+            "rebalance_sessions": 1,
+            "target_weight": 0.5,
+            "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+            "provenance_hash": "34d1bbf0b5d64c261e0ab422e7dea8f250893e1a2af8fd493720da2286ef93a2",
+            "validation_start": "2025-09-04",
+            "validation_end": "2026-03-18",
+            "nav_sessions": 126,
+            "metrics": {
+              "annual_return": 0.02461227645975117,
+              "annual_volatility": 0.048674400894018546,
+              "sharpe": 0.5056513487108107,
+              "sortino": 0.8784345325471968,
+              "calmar": 0.7066089241379439,
+              "worst_126_session_return": 0.01213367480000005,
+              "cvar5": -0.006391623862446498,
+              "win_rate": 0.512,
+              "payoff_ratio": 1.0172503822302639,
+              "profit_factor": 1.0850670743789481,
+              "turnover": 0.5898313697444405,
+              "minimum_commission_share": 1.0,
+              "unfilled_share": 0.0,
+              "slippage_degradation": 0.06953929411764706,
+              "max_drawdown": -0.03483153922769644,
+              "recovery_sessions": 2,
+              "total_cost": 272.73252
+            }
+          }
+        ]
+      },
+      {
+        "window_id": "wf_004",
+        "profile_id": "grid_core",
+        "execution_config": {
+          "grid": {
+            "step_pct": 0.015,
+            "unit_pct": 0.15,
+            "initial_model": "fixed",
+            "fixed_initial_pct": 0.5,
+            "max_grid_per_day": 1,
+            "atr_stop_multiple": 3.0,
+            "cooldown_sessions": 5
+          },
+          "trend": {
+            "stop_n": 2.0,
+            "risk_per_unit": 0.005,
+            "add_n": 0.5,
+            "max_units": 4,
+            "require_macd_bullish": true,
+            "amount_ratio_min": null
+          },
+          "cost": {
+            "commission_rate": 0.0001,
+            "minimum_commission": 5.0,
+            "slippage_bps": 3.0,
+            "sell_tax_rate": 0.0,
+            "transfer_fee_rate": 0.0
+          }
+        },
+        "reference_benchmark_id": "buy_and_hold",
+        "strategy_spec": {
+          "strategy_id": "grid_only",
+          "version": "1",
+          "config": {
+            "grid": {
+              "step_pct": 0.015,
+              "unit_pct": 0.15,
+              "initial_model": "fixed",
+              "fixed_initial_pct": 0.5,
+              "max_grid_per_day": 1,
+              "atr_stop_multiple": 3.0,
+              "cooldown_sessions": 5
+            },
+            "trend": {
+              "stop_n": 2.0,
+              "risk_per_unit": 0.005,
+              "add_n": 0.5,
+              "max_units": 4,
+              "require_macd_bullish": true,
+              "amount_ratio_min": null
+            },
+            "cost": {
+              "commission_rate": 0.0001,
+              "minimum_commission": 5.0,
+              "slippage_bps": 3.0,
+              "sell_tax_rate": 0.0,
+              "transfer_fee_rate": 0.0
+            }
+          },
+          "policy_id": "grid_only",
+          "spec_hash": "cbce994ee4fb630f0fd340d354641f8f541eedb6680558fc474c707bffb3e7b7"
+        },
+        "benchmarks": [
+          {
+            "benchmark_id": "buy_and_hold",
+            "version": "1",
+            "rebalance_sessions": null,
+            "target_weight": 1.0,
+            "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+            "provenance_hash": "7e39c96e7edfdc38b4071eecc6af933b1bf2d0218cb202dd9bdc10f04067b3f5",
+            "validation_start": "2026-03-19",
+            "validation_end": "2026-09-17",
+            "nav_sessions": 126,
+            "metrics": {
+              "annual_return": -0.08478242831588079,
+              "annual_volatility": 0.13368729070046745,
+              "sharpe": -0.6341846548886965,
+              "sortino": -0.9942147987216993,
+              "calmar": -0.8535639080672068,
+              "worst_126_session_return": -0.04299356940000043,
+              "cvar5": -0.019298184243241607,
+              "win_rate": 0.456,
+              "payoff_ratio": 0.9702994782799083,
+              "profit_factor": 0.9066732829828651,
+              "turnover": 1.0305613243277283,
+              "minimum_commission_share": 0.0,
+              "unfilled_share": 0.0,
+              "slippage_degradation": 2.9996936936936938,
+              "max_drawdown": -0.09932756940000009,
+              "recovery_sessions": 90,
+              "total_cost": 39.95694
+            }
+          },
+          {
+            "benchmark_id": "fixed_half_hold",
+            "version": "1",
+            "rebalance_sessions": 1,
+            "target_weight": 0.5,
+            "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+            "provenance_hash": "0cba29d4cc4757dd9a3b1df65e4fa00a46c8005a9cb44d22fa82d2d6534430ff",
+            "validation_start": "2026-03-19",
+            "validation_end": "2026-09-17",
+            "nav_sessions": 126,
+            "metrics": {
+              "annual_return": -0.04705257501598603,
+              "annual_volatility": 0.0669647616451159,
+              "sharpe": -0.7026467930304031,
+              "sortino": -1.094386224506722,
+              "calmar": -0.9067228918429308,
+              "worst_126_session_return": -0.023623022999999854,
+              "cvar5": -0.009688312283900805,
+              "win_rate": 0.456,
+              "payoff_ratio": 0.9716724653216132,
+              "profit_factor": 0.8933117826343864,
+              "turnover": 0.6338791480554881,
+              "minimum_commission_share": 1.0,
+              "unfilled_share": 0.0,
+              "slippage_degradation": 0.06449068965517242,
+              "max_drawdown": -0.05189300440000011,
+              "recovery_sessions": 90,
+              "total_cost": 308.7023
+            }
+          }
+        ]
+      }
+    ],
+    "benchmark_specs": [
+      {
+        "benchmark_id": "buy_and_hold",
+        "rebalance_sessions": null,
+        "target_weight": 1.0,
+        "version": "1"
+      },
+      {
+        "benchmark_id": "fixed_half_hold",
+        "rebalance_sessions": 1,
+        "target_weight": 0.5,
+        "version": "1"
+      }
+    ],
+    "experiment": {
+      "allowed_axes": {
+        "step_pct": [
+          0.01,
+          0.015,
+          0.02,
+          0.025,
+          0.03,
+          0.035,
+          0.04,
+          0.045,
+          0.05,
+          0.055,
+          0.06
+        ],
+        "unit_pct": [
+          0.05,
+          0.1,
+          0.15,
+          0.2
+        ]
+      },
+      "as_of_date": "2026-09-17",
+      "experiment_id": "round2-lowvol-20260917",
+      "profile": {
+        "benchmarks": [
+          {
+            "benchmark_id": "buy_and_hold",
+            "rebalance_sessions": null,
+            "target_weight": 1.0,
+            "version": "1"
+          },
+          {
+            "benchmark_id": "fixed_half_hold",
+            "rebalance_sessions": 1,
+            "target_weight": 0.5,
+            "version": "1"
+          }
+        ],
+        "profile_id": "grid_core",
+        "required_evidence": [
+          "execution",
+          "integrated_oos",
+          "provenance"
+        ],
+        "selection_families": [
+          "grid_only"
+        ],
+        "strategy": {
+          "config": {
+            "cost": {
+              "commission_rate": 0.0001,
+              "minimum_commission": 5.0,
+              "sell_tax_rate": 0.0,
+              "slippage_bps": 3.0,
+              "transfer_fee_rate": 0.0
+            },
+            "grid": {
+              "atr_stop_multiple": 3.0,
+              "cooldown_sessions": 5,
+              "fixed_initial_pct": 0.5,
+              "initial_model": "fixed",
+              "max_grid_per_day": 1,
+              "step_pct": 0.02,
+              "unit_pct": 0.1
+            },
+            "trend": {
+              "add_n": 0.5,
+              "amount_ratio_min": null,
+              "max_units": 4,
+              "require_macd_bullish": true,
+              "risk_per_unit": 0.005,
+              "stop_n": 2.0
+            }
+          },
+          "policy_id": "grid_only",
+          "strategy_id": "grid_only",
+          "version": "1"
+        },
+        "version": "1"
+      },
+      "profile_hash": "53e04e2ebcde6b11cecadf28bd776455bbc733ecf2d4f5a2eececcacc0d3ff45",
+      "start_date": "2021-01-01",
+      "target_codes": [
+        "515450.SH"
+      ]
+    },
+    "experiment_hash": "dee16047763a6c467af2c14bef7b309e11c4f47e019e0347da7496a31c2aef21",
+    "experiment_windows": [
+      {
+        "benchmark_specs": [
+          {
+            "benchmark_id": "buy_and_hold",
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "provenance_hash": "5a713f6c2d762b315e672f1641cde2a164c8bac964e131d322199b548baa26c5",
+            "rebalance_sessions": null,
+            "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+            "target_weight": 1.0,
+            "version": "1"
+          },
+          {
+            "benchmark_id": "fixed_half_hold",
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "provenance_hash": "b09f91f6f71249593eba3a7a46985b870fdd9c91238261a9c832d390c20f533a",
+            "rebalance_sessions": 1,
+            "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+            "target_weight": 0.5,
+            "version": "1"
+          }
+        ],
+        "candidate_scores": [
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "0f8f8b4cd1c09f2045d0160fbe14f5a75f2748c86767f302e8ddeb2c3aab837e",
+            "cost_drag": 0.001396011525,
+            "cvar5_improvement": 0.015591708973963938,
+            "drawdown_improvement": 0.07470600713913711,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.1314754570505396,
+            "sortino_excess": -0.4080161059278461,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "154f190c593cef61c84037b4896c73d6edec942d651987a9a82419300110c76d",
+            "cost_drag": 0.0015589666749999999,
+            "cvar5_improvement": 0.01611451079655154,
+            "drawdown_improvement": 0.0770829737871854,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.02087046321476381,
+            "sortino_excess": -0.3581125882179032,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "18c5a21197f2189444ba1135f516edecee9d9c93675fc7529ec8de19bac61906",
+            "cost_drag": 0.002148093025,
+            "cvar5_improvement": 0.014891491490593647,
+            "drawdown_improvement": 0.0696027024117255,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.20526791144259038,
+            "sortino_excess": -0.6541447949882603,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "1dbd81a06797a95bf524a061383ad8055a466926ebfd98fdc83bb09ea9722e6a",
+            "cost_drag": 0.0013993656,
+            "cvar5_improvement": 0.014776683461479636,
+            "drawdown_improvement": 0.06671103473902099,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.22506669134210727,
+            "sortino_excess": -0.3426934208745455,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd",
+            "cost_drag": 0.003440815675,
+            "cvar5_improvement": 0.014276653881826418,
+            "drawdown_improvement": 0.06968673664112016,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.4751929165475857,
+            "sortino_excess": -0.9310332135804216,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "20a225c8b4f7b1dbf23a6281ddefea729a454968ff707bcd45cec7519d6b1933",
+            "cost_drag": 0.0015400589250000002,
+            "cvar5_improvement": 0.015056990622096495,
+            "drawdown_improvement": 0.06862090125562975,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.17999592473031067,
+            "sortino_excess": -0.35151088268995306,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "236aa65a294576dabeaac13b57e2808511cc1d554b7e66a07c0f94bd058785d0",
+            "cost_drag": 0.001979838575,
+            "cvar5_improvement": 0.015770223256677495,
+            "drawdown_improvement": 0.07569653291885756,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": null,
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.029048131844030975,
+            "sortino_excess": -0.3545315520037421,
+            "stable": true
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "260007e81996db708e0f60bf89f59c975331ae2ee41e0c73c0f0ad5b37b08064",
+            "cost_drag": 0.001552296775,
+            "cvar5_improvement": 0.01544434214322806,
+            "drawdown_improvement": 0.07423469432410798,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": null,
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.09389098374408078,
+            "sortino_excess": -0.279341110028814,
+            "stable": true
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "2cff3bff54bcad3695deb6c5c45e20262b5a02bb4d1b31cf41aa9465801dbd4a",
+            "cost_drag": 0.001396892625,
+            "cvar5_improvement": 0.015594794059210784,
+            "drawdown_improvement": 0.07467505468992627,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.08415194423649953,
+            "sortino_excess": -0.27440738411396504,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "3e3aaa870da79fe388e0f5499d4a129f4b6c59a25e2961548c78263e4269df10",
+            "cost_drag": 0.0014220687749999998,
+            "cvar5_improvement": 0.015107011853810503,
+            "drawdown_improvement": 0.07105616466885656,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": null,
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.14202656597679506,
+            "sortino_excess": -0.24921985994267679,
+            "stable": true
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "41996ce3e781e343c04fe477e4151bad9651a096eb9cc56cab77a37ec868b692",
+            "cost_drag": 0.001787174575,
+            "cvar5_improvement": 0.015662681319902037,
+            "drawdown_improvement": 0.0742126034085929,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": null,
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.014596510841093549,
+            "sortino_excess": -0.26378429592169156,
+            "stable": true
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "46976a746afc445d6867c17f5ca795f32b9f1ffc7a5664fb767aebab14118380",
+            "cost_drag": 0.001381493025,
+            "cvar5_improvement": 0.0151052245977216,
+            "drawdown_improvement": 0.06984909820921342,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.15950208358985515,
+            "sortino_excess": -0.2791549201077289,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "4ba27c22874b9850f961a064b0c0cbec006c1e2e752fea8169985499d494e6d6",
+            "cost_drag": 0.0038753181749999997,
+            "cvar5_improvement": 0.014764769543476677,
+            "drawdown_improvement": 0.07165181608601179,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.19895356248648888,
+            "sortino_excess": -0.5558308905085911,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7",
+            "cost_drag": 0.001805852975,
+            "cvar5_improvement": 0.01607615972282258,
+            "drawdown_improvement": 0.07628211064646767,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": null,
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.05122397612134434,
+            "sortino_excess": -0.27913641255841326,
+            "stable": true
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "60e882c4a0702e0d30ea46270dffa260f60f745dd4a32acc9fdb1e1a63724c5a",
+            "cost_drag": 0.00274355615,
+            "cvar5_improvement": 0.01462181254071437,
+            "drawdown_improvement": 0.07071468127006775,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": null,
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.29658647387581094,
+            "sortino_excess": -0.7768286392072316,
+            "stable": true
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "63376a956e83a815918270479af18ab8fb5019bae65d97baabf0a96d55444f49",
+            "cost_drag": 0.0031532133999999995,
+            "cvar5_improvement": 0.013668350999826903,
+            "drawdown_improvement": 0.0654237672198015,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.5335476829501145,
+            "sortino_excess": -0.9788145337009677,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "65a89d08421d9718b4d5d94154a5fbd388473d11abcc90846531fe6a35e69f67",
+            "cost_drag": 0.001527944375,
+            "cvar5_improvement": 0.015802020446067377,
+            "drawdown_improvement": 0.07671789012754707,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": null,
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.08809306294657111,
+            "sortino_excess": -0.3662355428045113,
+            "stable": true
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "68ba01cc5f3024790b7fc6f92f93ebea8627b919d60db7c8ffff5e7b697ac400",
+            "cost_drag": 0.001553315,
+            "cvar5_improvement": 0.016118115404127678,
+            "drawdown_improvement": 0.07787732799570066,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": null,
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.016052878678265062,
+            "sortino_excess": -0.3376540183841136,
+            "stable": true
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "6bf23257f219baaf0f6815e84907344eaf777106f445281d02103bb38096fa13",
+            "cost_drag": 0.00139439975,
+            "cvar5_improvement": 0.015351482918671501,
+            "drawdown_improvement": 0.07363641975333474,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": null,
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.14003859880871156,
+            "sortino_excess": -0.3794978895695029,
+            "stable": true
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "76a66eb3271a1346cfc7e2ff79f6a550dccc258fdcca3a03d4b82eed5b8cf59a",
+            "cost_drag": 0.00139602455,
+            "cvar5_improvement": 0.015353500123732943,
+            "drawdown_improvement": 0.07360211414517387,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.08905645537211454,
+            "sortino_excess": -0.2324759235703632,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "795d4515ee57febfc68b17037832ce285e1c07a1a03cb8b0c584d4a2f05f48a1",
+            "cost_drag": 0.00191062545,
+            "cvar5_improvement": 0.015203525333541565,
+            "drawdown_improvement": 0.07020196779992821,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.1343385752562764,
+            "sortino_excess": -0.2926577717942769,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "7a7f7daceec6466e9fa6ede7cb8d5dd3835dc8f28a5c320307ce4b922cf162ae",
+            "cost_drag": 0.0017961189250000002,
+            "cvar5_improvement": 0.016066323717408713,
+            "drawdown_improvement": 0.07509011143721575,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.008990131704112114,
+            "sortino_excess": -0.38612548860088325,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "815b8196c744b75fe4f851240badeee093c72d4372769ddc31ba9ac4888a5b95",
+            "cost_drag": 0.00341783805,
+            "cvar5_improvement": 0.014982155829694027,
+            "drawdown_improvement": 0.06883230197017426,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.20884788436318763,
+            "sortino_excess": -0.44507603404852947,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+            "cost_drag": 0.002147213425,
+            "cvar5_improvement": 0.01542124560002528,
+            "drawdown_improvement": 0.07481452044597309,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": null,
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.05119119109006781,
+            "sortino_excess": -0.4107451617525927,
+            "stable": true
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "99b6d40d50073ff10c74eb62acc384f9811a82c4e00eb39ee822839d93d239b5",
+            "cost_drag": 0.001399543275,
+            "cvar5_improvement": 0.01477612111430544,
+            "drawdown_improvement": 0.06643832199818603,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.23279837837152928,
+            "sortino_excess": -0.3602358274199803,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "9dddf7f3ef757a9f18f5973a3ccd6687dea654db95fef784d949d02fe0b0b1d4",
+            "cost_drag": 0.0021962089750000003,
+            "cvar5_improvement": 0.015234348332829939,
+            "drawdown_improvement": 0.07256168499046309,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": null,
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.16256873507290415,
+            "sortino_excess": -0.5950904681181756,
+            "stable": true
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "a543650991e385a828bf83ebe323ba2a8ab48da8f617c95c59457cd22277ec61",
+            "cost_drag": 0.0028549509,
+            "cvar5_improvement": 0.01420907941075541,
+            "drawdown_improvement": 0.06710436646605739,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.1869812308361719,
+            "sortino_excess": -0.6516148199558319,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ac22899e9617405640d32f4ea94925626d4ff8952dbc8d5acda5ffc217b263b5",
+            "cost_drag": 0.0015148725749999999,
+            "cvar5_improvement": 0.014951703043109008,
+            "drawdown_improvement": 0.06824016434764615,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.19784365523179645,
+            "sortino_excess": -0.31688078339672965,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ac3b358b2e80557d5ba9620b510472a2109a6c52328ab769e429cd068464f5b6",
+            "cost_drag": 0.002906922375,
+            "cvar5_improvement": 0.015049652715574357,
+            "drawdown_improvement": 0.0729669877009548,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": null,
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.09985326679949764,
+            "sortino_excess": -0.5182598072350166,
+            "stable": true
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "b0c85931f2fb0bd085e1c63c008a54df8336e8cfe9e6a0b704f73422a7459608",
+            "cost_drag": 0.001546387525,
+            "cvar5_improvement": 0.016091193909117146,
+            "drawdown_improvement": 0.07781382079948257,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.008503637123246963,
+            "sortino_excess": -0.2832170850249955,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "b78084f5ae17ca8e23076e38631dc7f558179058dab59d39f57c7365776caab9",
+            "cost_drag": 0.0014874919249999998,
+            "cvar5_improvement": 0.015328233175802375,
+            "drawdown_improvement": 0.07326011094285226,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": null,
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.17696982254102728,
+            "sortino_excess": -0.4771888822405187,
+            "stable": true
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ba114a375a5d23a98d66aa984159766e18746bae30a020eb4780b379d0663e6e",
+            "cost_drag": 0.0015048655500000002,
+            "cvar5_improvement": 0.015498111876364972,
+            "drawdown_improvement": 0.07441195826089561,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.1333924373339993,
+            "sortino_excess": -0.4371411821063744,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "bf26a9f270d4bdbd9d5604c0563fc4880c262e0cd82c324937f1dbc4f7d8c6bc",
+            "cost_drag": 0.0014217616749999998,
+            "cvar5_improvement": 0.015109383546799948,
+            "drawdown_improvement": 0.07050645521030482,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": null,
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.15680079607947986,
+            "sortino_excess": -0.2808226977995949,
+            "stable": true
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c22fc03cd43444f15b9fa2dd23bf8602189645c775c284729fe85029e6278aa0",
+            "cost_drag": 0.00200814695,
+            "cvar5_improvement": 0.01593549944884588,
+            "drawdown_improvement": 0.07599160362905302,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": null,
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.044654862077559185,
+            "sortino_excess": -0.44943503786594374,
+            "stable": true
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c3afbaa8629a17f9e075e8f41158433942f6e9f2ef346831553f5480549d54a7",
+            "cost_drag": 0.0014764203,
+            "cvar5_improvement": 0.014821818736662173,
+            "drawdown_improvement": 0.06690040885408077,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.22507501980869343,
+            "sortino_excess": -0.3524336630222818,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c694ca450c44b0dacd6d87c1d7ab2d6ee91d5aef8797f99ca0430ee15c9b6229",
+            "cost_drag": 0.0020358274,
+            "cvar5_improvement": 0.015872933147056546,
+            "drawdown_improvement": 0.07410709019568795,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.03318395550875142,
+            "sortino_excess": -0.43217183326662784,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c7607fa3377f5d7bd313e8cda5f431908f3677e29e9f7f7cf563e74dfbe744d1",
+            "cost_drag": 0.0015777286750000002,
+            "cvar5_improvement": 0.015649350093341143,
+            "drawdown_improvement": 0.07497788101248973,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": null,
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.05628399663352773,
+            "sortino_excess": -0.32044910840841034,
+            "stable": true
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "cd21492cb520c0db2078f74ce5fcd788aed8129adeefb6e2796bb19fa3f4adb3",
+            "cost_drag": 0.00139407335,
+            "cvar5_improvement": 0.015352839225937383,
+            "drawdown_improvement": 0.07363957377458172,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": null,
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.15020215032278855,
+            "sortino_excess": -0.3734117278838207,
+            "stable": true
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "cf314bcdacfc470a9f2a63b4a35d7ff814c7d7399eb328a184039ab11568cd03",
+            "cost_drag": 0.001395452875,
+            "cvar5_improvement": 0.015592103866763334,
+            "drawdown_improvement": 0.07471958634642537,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.14211642930274698,
+            "sortino_excess": -0.39636212667176507,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "d00e7a413dc0c16a28bc70ddeb8ed350aba95d73b88409a428dae37317de70ab",
+            "cost_drag": 0.00206436135,
+            "cvar5_improvement": 0.015093555813739792,
+            "drawdown_improvement": 0.06945589423347082,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.14842566335581894,
+            "sortino_excess": -0.3261860956950995,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "d5fd8ca1850d97fc16771fcade6477228a22d1c3279a1ad789f69bc7001850c0",
+            "cost_drag": 0.00136678205,
+            "cvar5_improvement": 0.014696091372585162,
+            "drawdown_improvement": 0.06613289134058734,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.2361773244348911,
+            "sortino_excess": -0.3919299855491873,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "dde17bdbb2efd257e236db81049bdd82ccd8407c5124cf5a18fef6cdd5d02c03",
+            "cost_drag": 0.00151297345,
+            "cvar5_improvement": 0.015142795988780888,
+            "drawdown_improvement": 0.0714488849609555,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": null,
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.1529438057730718,
+            "sortino_excess": -0.34950968826130846,
+            "stable": true
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "e74ce674edaa94759d1e3c22d8c43922a1d508a2e32210d2851de073af103c10",
+            "cost_drag": 0.0017064379,
+            "cvar5_improvement": 0.015064745732245827,
+            "drawdown_improvement": 0.06851270659531941,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.16529826192657826,
+            "sortino_excess": -0.32316575504099027,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ff4c177908f78482ba254405d5ee9378b5c7c63fe77102b4d0f56fa68a165555",
+            "cost_drag": 0.00262232805,
+            "cvar5_improvement": 0.014936436384089504,
+            "drawdown_improvement": 0.06881551716922485,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.17849932522381462,
+            "sortino_excess": -0.4291966928386294,
+            "stable": false
+          }
+        ],
+        "excess_attribution": {
+          "cash_opportunity_cost": -0.007497768157451791,
+          "execution_cost": 105.4211,
+          "grid_return": 0.00030557650600833604,
+          "reconciliation_error": 4.336808689942018e-18,
+          "transition_return": 0.0,
+          "trend_return": 0.0
+        },
+        "execution_cost_config": {
+          "commission_rate": 0.0001,
+          "minimum_commission": 5.0,
+          "sell_tax_rate": 0.0,
+          "slippage_bps": 3.0,
+          "transfer_fee_rate": 0.0
+        },
+        "screened_axes": {
+          "grid_only": [
+            [
+              "step_pct",
+              "unit_pct"
+            ]
+          ]
+        },
+        "selected_scores": {
+          "grid_only": {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "3e3aaa870da79fe388e0f5499d4a129f4b6c59a25e2961548c78263e4269df10",
+            "cost_drag": 0.0014220687749999998,
+            "cvar5_improvement": 0.015107011853810503,
+            "drawdown_improvement": 0.07105616466885656,
+            "exposure_ratio": 0.7242063492063492,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": null,
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.14202656597679506,
+            "sortino_excess": -0.24921985994267679,
+            "stable": true
+          }
+        },
+        "strategy_spec": {
+          "config": {
+            "cost": {
+              "commission_rate": 0.0001,
+              "minimum_commission": 5.0,
+              "sell_tax_rate": 0.0,
+              "slippage_bps": 3.0,
+              "transfer_fee_rate": 0.0
+            },
+            "grid": {
+              "atr_stop_multiple": 3.0,
+              "cooldown_sessions": 5,
+              "fixed_initial_pct": 0.5,
+              "initial_model": "fixed",
+              "max_grid_per_day": 1,
+              "step_pct": 0.055,
+              "unit_pct": 0.1
+            },
+            "trend": {
+              "add_n": 0.5,
+              "amount_ratio_min": null,
+              "max_units": 4,
+              "require_macd_bullish": true,
+              "risk_per_unit": 0.005,
+              "stop_n": 2.0
+            }
+          },
+          "config_hash": "3e3aaa870da79fe388e0f5499d4a129f4b6c59a25e2961548c78263e4269df10",
+          "policy_id": "grid_only",
+          "spec_hash": "7e94dbba88e14a2e9bcaaa94165aa3aed0d48f62da2e3a6aa24e66f56451be44",
+          "strategy_id": "grid_only",
+          "version": "1"
+        },
+        "window_id": "wf_000"
+      },
+      {
+        "benchmark_specs": [
+          {
+            "benchmark_id": "buy_and_hold",
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "provenance_hash": "4537d5d91dde838df4f8f614436abbaca9469d62626c6fa412ce7a16a7dcefdb",
+            "rebalance_sessions": null,
+            "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+            "target_weight": 1.0,
+            "version": "1"
+          },
+          {
+            "benchmark_id": "fixed_half_hold",
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "provenance_hash": "18c7a612ddf1ec233fed47eb2798406d6af2b45f940bb0a898df3f5e9ef77921",
+            "rebalance_sessions": 1,
+            "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+            "target_weight": 0.5,
+            "version": "1"
+          }
+        ],
+        "candidate_scores": [
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "0f8f8b4cd1c09f2045d0160fbe14f5a75f2748c86767f302e8ddeb2c3aab837e",
+            "cost_drag": 0.001212259075,
+            "cvar5_improvement": 0.014286335802263989,
+            "drawdown_improvement": 0.06568294089572613,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.00840314584936235,
+            "sortino_excess": -0.26752492468427835,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "154f190c593cef61c84037b4896c73d6edec942d651987a9a82419300110c76d",
+            "cost_drag": 0.0013475372999999999,
+            "cvar5_improvement": 0.014464697556865927,
+            "drawdown_improvement": 0.06621355433681006,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.023713316472093227,
+            "sortino_excess": -0.33471586054934904,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "18c5a21197f2189444ba1135f516edecee9d9c93675fc7529ec8de19bac61906",
+            "cost_drag": 0.001848021025,
+            "cvar5_improvement": 0.013519510768762202,
+            "drawdown_improvement": 0.060582397939140664,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.1562286022772575,
+            "sortino_excess": -0.6237740750356285,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "1dbd81a06797a95bf524a061383ad8055a466926ebfd98fdc83bb09ea9722e6a",
+            "cost_drag": 0.0012385514750000001,
+            "cvar5_improvement": 0.013205736580618077,
+            "drawdown_improvement": 0.05797202124326983,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.0749376339079571,
+            "sortino_excess": -0.1497774898685543,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd",
+            "cost_drag": 0.0027039603999999997,
+            "cvar5_improvement": 0.013951522892799783,
+            "drawdown_improvement": 0.06140114338003741,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.35288028196457183,
+            "sortino_excess": -0.8765763114764042,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "20a225c8b4f7b1dbf23a6281ddefea729a454968ff707bcd45cec7519d6b1933",
+            "cost_drag": 0.00135315705,
+            "cvar5_improvement": 0.013420377888166399,
+            "drawdown_improvement": 0.059153674281350876,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.04801427144981048,
+            "sortino_excess": -0.18565729588975619,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "236aa65a294576dabeaac13b57e2808511cc1d554b7e66a07c0f94bd058785d0",
+            "cost_drag": 0.0017435071250000002,
+            "cvar5_improvement": 0.014513150521468102,
+            "drawdown_improvement": 0.06762727992989997,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.11817771200246138,
+            "sortino_excess": -0.1976124837082378,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "260007e81996db708e0f60bf89f59c975331ae2ee41e0c73c0f0ad5b37b08064",
+            "cost_drag": 0.001370812275,
+            "cvar5_improvement": 0.013901338738285808,
+            "drawdown_improvement": 0.06379520499990682,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.05590199968996259,
+            "sortino_excess": -0.1003225455517504,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "2cff3bff54bcad3695deb6c5c45e20262b5a02bb4d1b31cf41aa9465801dbd4a",
+            "cost_drag": 0.0012134762749999998,
+            "cvar5_improvement": 0.01428666201247537,
+            "drawdown_improvement": 0.0656386689856624,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.052538924782392096,
+            "sortino_excess": -0.12160345442068585,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "3e3aaa870da79fe388e0f5499d4a129f4b6c59a25e2961548c78263e4269df10",
+            "cost_drag": 0.001253877225,
+            "cvar5_improvement": 0.013615343174025431,
+            "drawdown_improvement": 0.062109007938994126,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.0030853979446711297,
+            "sortino_excess": -0.06758222552493606,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "41996ce3e781e343c04fe477e4151bad9651a096eb9cc56cab77a37ec868b692",
+            "cost_drag": 0.001483559,
+            "cvar5_improvement": 0.014014057651550787,
+            "drawdown_improvement": 0.06442687201240388,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.0644831962009049,
+            "sortino_excess": -0.1610121433428309,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "46976a746afc445d6867c17f5ca795f32b9f1ffc7a5664fb767aebab14118380",
+            "cost_drag": 0.001213301475,
+            "cvar5_improvement": 0.013613555917936528,
+            "drawdown_improvement": 0.06090194147935099,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.014390119668388969,
+            "sortino_excess": -0.09751728568998816,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "4ba27c22874b9850f961a064b0c0cbec006c1e2e752fea8169985499d494e6d6",
+            "cost_drag": 0.00324907575,
+            "cvar5_improvement": 0.014125842180114112,
+            "drawdown_improvement": 0.06239941187895387,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.0855858033393946,
+            "sortino_excess": -0.486456869415047,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7",
+            "cost_drag": 0.001470467475,
+            "cvar5_improvement": 0.01444031488780077,
+            "drawdown_improvement": 0.06697106710256154,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.08661675315072516,
+            "sortino_excess": -0.24267678523810104,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "60e882c4a0702e0d30ea46270dffa260f60f745dd4a32acc9fdb1e1a63724c5a",
+            "cost_drag": 0.00219200895,
+            "cvar5_improvement": 0.01394294153314729,
+            "drawdown_improvement": 0.06397857599297863,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.1858012016984691,
+            "sortino_excess": -0.7373873992780045,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "63376a956e83a815918270479af18ab8fb5019bae65d97baabf0a96d55444f49",
+            "cost_drag": 0.002637015725,
+            "cvar5_improvement": 0.013561067084919384,
+            "drawdown_improvement": 0.05830256043078108,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.2874547553597262,
+            "sortino_excess": -0.8184003434052728,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "65a89d08421d9718b4d5d94154a5fbd388473d11abcc90846531fe6a35e69f67",
+            "cost_drag": 0.0013386373750000002,
+            "cvar5_improvement": 0.014294795119482173,
+            "drawdown_improvement": 0.06585387656906933,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.06359350946958416,
+            "sortino_excess": -0.17365017796519072,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "68ba01cc5f3024790b7fc6f92f93ebea8627b919d60db7c8ffff5e7b697ac400",
+            "cost_drag": 0.0013502838249999998,
+            "cvar5_improvement": 0.014438617289212197,
+            "drawdown_improvement": 0.06700708426222016,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.062446791222644585,
+            "sortino_excess": -0.26441746918665704,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "6bf23257f219baaf0f6815e84907344eaf777106f445281d02103bb38096fa13",
+            "cost_drag": 0.001218345575,
+            "cvar5_improvement": 0.013953828442606555,
+            "drawdown_improvement": 0.06452373709499365,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.008883685877039492,
+            "sortino_excess": -0.21997043816591244,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "76a66eb3271a1346cfc7e2ff79f6a550dccc258fdcca3a03d4b82eed5b8cf59a",
+            "cost_drag": 0.001220054375,
+            "cvar5_improvement": 0.013957595862721541,
+            "drawdown_improvement": 0.06449786980187924,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.052658004144296916,
+            "sortino_excess": -0.06334229480899514,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "795d4515ee57febfc68b17037832ce285e1c07a1a03cb8b0c584d4a2f05f48a1",
+            "cost_drag": 0.0016970089000000002,
+            "cvar5_improvement": 0.013792776341415755,
+            "drawdown_improvement": 0.061608899045923815,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.01592359925061303,
+            "sortino_excess": -0.10692986191652087,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "7a7f7daceec6466e9fa6ede7cb8d5dd3835dc8f28a5c320307ce4b922cf162ae",
+            "cost_drag": 0.001428957575,
+            "cvar5_improvement": 0.01447068841853647,
+            "drawdown_improvement": 0.06625313756141668,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.02329917207498673,
+            "sortino_excess": -0.42016294628063533,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "815b8196c744b75fe4f851240badeee093c72d4372769ddc31ba9ac4888a5b95",
+            "cost_drag": 0.003048040975,
+            "cvar5_improvement": 0.014006147898258464,
+            "drawdown_improvement": 0.06091079947528255,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.02120410150004144,
+            "sortino_excess": -0.26280343198240713,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+            "cost_drag": 0.0018966826,
+            "cvar5_improvement": 0.014041695273083396,
+            "drawdown_improvement": 0.06533909015503028,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.07017637208505609,
+            "sortino_excess": -0.27607563836788884,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "99b6d40d50073ff10c74eb62acc384f9811a82c4e00eb39ee822839d93d239b5",
+            "cost_drag": 0.0012387014,
+            "cvar5_improvement": 0.013204530302085576,
+            "drawdown_improvement": 0.05769620654487309,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.08600895126062477,
+            "sortino_excess": -0.17034072171217096,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "9dddf7f3ef757a9f18f5973a3ccd6687dea654db95fef784d949d02fe0b0b1d4",
+            "cost_drag": 0.0019214791250000002,
+            "cvar5_improvement": 0.013855515212919686,
+            "drawdown_improvement": 0.06373504758660775,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.06912772643741652,
+            "sortino_excess": -0.5138373073058937,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "a543650991e385a828bf83ebe323ba2a8ab48da8f617c95c59457cd22277ec61",
+            "cost_drag": 0.0022739348000000003,
+            "cvar5_improvement": 0.013751445988520771,
+            "drawdown_improvement": 0.060880395117714065,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.1168239567157972,
+            "sortino_excess": -0.6657145818468164,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ac22899e9617405640d32f4ea94925626d4ff8952dbc8d5acda5ffc217b263b5",
+            "cost_drag": 0.00134098515,
+            "cvar5_improvement": 0.013371784148122887,
+            "drawdown_improvement": 0.05877907813267208,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.04677111735174165,
+            "sortino_excess": -0.12984548796952602,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ac3b358b2e80557d5ba9620b510472a2109a6c52328ab769e429cd068464f5b6",
+            "cost_drag": 0.002520867775,
+            "cvar5_improvement": 0.01419029362723781,
+            "drawdown_improvement": 0.065780815099207,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.08480986700965305,
+            "sortino_excess": -0.37287489118583433,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "b0c85931f2fb0bd085e1c63c008a54df8336e8cfe9e6a0b704f73422a7459608",
+            "cost_drag": 0.001349136275,
+            "cvar5_improvement": 0.01466895551353425,
+            "drawdown_improvement": 0.0669415380172779,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.14720525648246857,
+            "sortino_excess": -0.05124705818228163,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "b78084f5ae17ca8e23076e38631dc7f558179058dab59d39f57c7365776caab9",
+            "cost_drag": 0.0013116213500000001,
+            "cvar5_improvement": 0.013929959728814867,
+            "drawdown_improvement": 0.06459081515166021,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.03406081105060814,
+            "sortino_excess": -0.30438483567694147,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ba114a375a5d23a98d66aa984159766e18746bae30a020eb4780b379d0663e6e",
+            "cost_drag": 0.001321320675,
+            "cvar5_improvement": 0.01419686404241571,
+            "drawdown_improvement": 0.06573573326540474,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.006270570140130206,
+            "sortino_excess": -0.2780504216610903,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "bf26a9f270d4bdbd9d5604c0563fc4880c262e0cd82c324937f1dbc4f7d8c6bc",
+            "cost_drag": 0.001253418625,
+            "cvar5_improvement": 0.013618934039683325,
+            "drawdown_improvement": 0.0615653942953483,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.01835682353670033,
+            "sortino_excess": -0.1052525839888749,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c22fc03cd43444f15b9fa2dd23bf8602189645c775c284729fe85029e6278aa0",
+            "cost_drag": 0.001748086775,
+            "cvar5_improvement": 0.014653231169217856,
+            "drawdown_improvement": 0.06803463656332384,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.09730924488423513,
+            "sortino_excess": -0.3323425241180826,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c3afbaa8629a17f9e075e8f41158433942f6e9f2ef346831553f5480549d54a7",
+            "cost_drag": 0.001315501375,
+            "cvar5_improvement": 0.013252695665647381,
+            "drawdown_improvement": 0.05831989083934608,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.07424021700338997,
+            "sortino_excess": -0.15811033272534583,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c694ca450c44b0dacd6d87c1d7ab2d6ee91d5aef8797f99ca0430ee15c9b6229",
+            "cost_drag": 0.001681488475,
+            "cvar5_improvement": 0.014583099916865152,
+            "drawdown_improvement": 0.06619920750989203,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.029570526733215894,
+            "sortino_excess": -0.45964981253174786,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c7607fa3377f5d7bd313e8cda5f431908f3677e29e9f7f7cf563e74dfbe744d1",
+            "cost_drag": 0.0013828907000000001,
+            "cvar5_improvement": 0.013994510608742457,
+            "drawdown_improvement": 0.06454694801498748,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.05169202444412304,
+            "sortino_excess": -0.19543156294311487,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "cd21492cb520c0db2078f74ce5fcd788aed8129adeefb6e2796bb19fa3f4adb3",
+            "cost_drag": 0.001218103175,
+            "cvar5_improvement": 0.013956934964925982,
+            "drawdown_improvement": 0.06453532943128709,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.008487690806377096,
+            "sortino_excess": -0.20427809912245268,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "cf314bcdacfc470a9f2a63b4a35d7ff814c7d7399eb328a184039ab11568cd03",
+            "cost_drag": 0.001212036525,
+            "cvar5_improvement": 0.014283971820027918,
+            "drawdown_improvement": 0.06568320064216149,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.005425560283855362,
+            "sortino_excess": -0.24355819697848588,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "d00e7a413dc0c16a28bc70ddeb8ed350aba95d73b88409a428dae37317de70ab",
+            "cost_drag": 0.001837836425,
+            "cvar5_improvement": 0.013601838514285702,
+            "drawdown_improvement": 0.060453871906050005,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.006966425563451967,
+            "sortino_excess": -0.14674730798216015,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "d5fd8ca1850d97fc16771fcade6477228a22d1c3279a1ad789f69bc7001850c0",
+            "cost_drag": 0.001205967925,
+            "cvar5_improvement": 0.013125144491723603,
+            "drawdown_improvement": 0.05739387784483618,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.08604826700074092,
+            "sortino_excess": -0.19901405454319607,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "dde17bdbb2efd257e236db81049bdd82ccd8407c5124cf5a18fef6cdd5d02c03",
+            "cost_drag": 0.0013446523500000001,
+            "cvar5_improvement": 0.013654111987813024,
+            "drawdown_improvement": 0.06281911809085744,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.006059107707610291,
+            "sortino_excess": -0.16462266666781317,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "e74ce674edaa94759d1e3c22d8c43922a1d508a2e32210d2851de073af103c10",
+            "cost_drag": 0.0014347164750000002,
+            "cvar5_improvement": 0.013432744495355937,
+            "drawdown_improvement": 0.05910394843597558,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.045856696345542305,
+            "sortino_excess": -0.1648304964073396,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ff4c177908f78482ba254405d5ee9378b5c7c63fe77102b4d0f56fa68a165555",
+            "cost_drag": 0.002290835575,
+            "cvar5_improvement": 0.013741752362205891,
+            "drawdown_improvement": 0.06101503526561525,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.016889704384312226,
+            "sortino_excess": -0.24793623256378644,
+            "stable": false
+          }
+        ],
+        "excess_attribution": {
+          "cash_opportunity_cost": -0.056244527010071925,
+          "execution_cost": 255.6667,
+          "grid_return": -0.014990438399574296,
+          "reconciliation_error": -2.7755575615628914e-17,
+          "transition_return": 0.0,
+          "trend_return": 0.0
+        },
+        "execution_cost_config": {
+          "commission_rate": 0.0001,
+          "minimum_commission": 5.0,
+          "sell_tax_rate": 0.0,
+          "slippage_bps": 3.0,
+          "transfer_fee_rate": 0.0
+        },
+        "screened_axes": {
+          "grid_only": [
+            [
+              "step_pct",
+              "unit_pct"
+            ]
+          ]
+        },
+        "selected_scores": {
+          "grid_only": {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "236aa65a294576dabeaac13b57e2808511cc1d554b7e66a07c0f94bd058785d0",
+            "cost_drag": 0.0017435071250000002,
+            "cvar5_improvement": 0.014513150521468102,
+            "drawdown_improvement": 0.06762727992989997,
+            "exposure_ratio": 0.75,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.75,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.11817771200246138,
+            "sortino_excess": -0.1976124837082378,
+            "stable": false
+          }
+        },
+        "strategy_spec": {
+          "config": {
+            "cost": {
+              "commission_rate": 0.0001,
+              "minimum_commission": 5.0,
+              "sell_tax_rate": 0.0,
+              "slippage_bps": 3.0,
+              "transfer_fee_rate": 0.0
+            },
+            "grid": {
+              "atr_stop_multiple": 3.0,
+              "cooldown_sessions": 5,
+              "fixed_initial_pct": 0.5,
+              "initial_model": "fixed",
+              "max_grid_per_day": 1,
+              "step_pct": 0.025,
+              "unit_pct": 0.1
+            },
+            "trend": {
+              "add_n": 0.5,
+              "amount_ratio_min": null,
+              "max_units": 4,
+              "require_macd_bullish": true,
+              "risk_per_unit": 0.005,
+              "stop_n": 2.0
+            }
+          },
+          "config_hash": "236aa65a294576dabeaac13b57e2808511cc1d554b7e66a07c0f94bd058785d0",
+          "policy_id": "grid_only",
+          "spec_hash": "de51ddee1d69ee6f0eb61236e582cbd967c176d20ada44a34d0eaff45596f014",
+          "strategy_id": "grid_only",
+          "version": "1"
+        },
+        "window_id": "wf_001"
+      },
+      {
+        "benchmark_specs": [
+          {
+            "benchmark_id": "buy_and_hold",
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "provenance_hash": "5620d861d7727f0d533e7f88179340e24751b6d2b84d170771e5083cb66ab83e",
+            "rebalance_sessions": null,
+            "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+            "target_weight": 1.0,
+            "version": "1"
+          },
+          {
+            "benchmark_id": "fixed_half_hold",
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "provenance_hash": "bcc817f7db1e9a38d0c91b89f1971d72e86d3658b95fa72b2fe79c5588a363c5",
+            "rebalance_sessions": 1,
+            "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+            "target_weight": 0.5,
+            "version": "1"
+          }
+        ],
+        "candidate_scores": [
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "0f8f8b4cd1c09f2045d0160fbe14f5a75f2748c86767f302e8ddeb2c3aab837e",
+            "cost_drag": 0.00137024115,
+            "cvar5_improvement": 0.014510319594060841,
+            "drawdown_improvement": 0.0593044624979554,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3978037434037267,
+            "sortino_excess": -0.6294168912583699,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "154f190c593cef61c84037b4896c73d6edec942d651987a9a82419300110c76d",
+            "cost_drag": 0.0015522781750000002,
+            "cvar5_improvement": 0.014520616596732146,
+            "drawdown_improvement": 0.05960288215370779,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.30025428837451296,
+            "sortino_excess": -0.6167534441364221,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "18c5a21197f2189444ba1135f516edecee9d9c93675fc7529ec8de19bac61906",
+            "cost_drag": 0.0022586884,
+            "cvar5_improvement": 0.013119653492543569,
+            "drawdown_improvement": 0.049839176859499984,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.39002671748555134,
+            "sortino_excess": -0.7720588567332433,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "1dbd81a06797a95bf524a061383ad8055a466926ebfd98fdc83bb09ea9722e6a",
+            "cost_drag": 0.001343617175,
+            "cvar5_improvement": 0.013087132590212566,
+            "drawdown_improvement": 0.04984536638570422,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3897091707240217,
+            "sortino_excess": -0.43254059389564165,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd",
+            "cost_drag": 0.003236614775,
+            "cvar5_improvement": 0.01293467505931572,
+            "drawdown_improvement": 0.054095960457705206,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.45315090791972895,
+            "sortino_excess": -0.9545045364054028,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "20a225c8b4f7b1dbf23a6281ddefea729a454968ff707bcd45cec7519d6b1933",
+            "cost_drag": 0.001478708325,
+            "cvar5_improvement": 0.013323810273319834,
+            "drawdown_improvement": 0.051266674908284765,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.38676254499131346,
+            "sortino_excess": -0.4624728133853966,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "236aa65a294576dabeaac13b57e2808511cc1d554b7e66a07c0f94bd058785d0",
+            "cost_drag": 0.001924081275,
+            "cvar5_improvement": 0.013911732845980213,
+            "drawdown_improvement": 0.0583140464470297,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3078943011199236,
+            "sortino_excess": -0.6566547229976141,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "260007e81996db708e0f60bf89f59c975331ae2ee41e0c73c0f0ad5b37b08064",
+            "cost_drag": 0.00159679925,
+            "cvar5_improvement": 0.013895020971758468,
+            "drawdown_improvement": 0.05734002912845729,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.24674852622434396,
+            "sortino_excess": -0.22227010668095085,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "2cff3bff54bcad3695deb6c5c45e20262b5a02bb4d1b31cf41aa9465801dbd4a",
+            "cost_drag": 0.00134757,
+            "cvar5_improvement": 0.013590819635742782,
+            "drawdown_improvement": 0.05417126657328644,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3376208506389309,
+            "sortino_excess": -0.4878845857047733,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "3e3aaa870da79fe388e0f5499d4a129f4b6c59a25e2961548c78263e4269df10",
+            "cost_drag": 0.00136830635,
+            "cvar5_improvement": 0.013307973947092527,
+            "drawdown_improvement": 0.05286629600690801,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3202904088200952,
+            "sortino_excess": -0.35823762282166516,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "41996ce3e781e343c04fe477e4151bad9651a096eb9cc56cab77a37ec868b692",
+            "cost_drag": 0.001597370575,
+            "cvar5_improvement": 0.013846902303260628,
+            "drawdown_improvement": 0.058434352170624926,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3892344387454426,
+            "sortino_excess": -0.7001362656249475,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "46976a746afc445d6867c17f5ca795f32b9f1ffc7a5664fb767aebab14118380",
+            "cost_drag": 0.0013275125499999998,
+            "cvar5_improvement": 0.013306625999109253,
+            "drawdown_improvement": 0.05167962000011114,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.35486354262329645,
+            "sortino_excess": -0.4034558570000414,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "4ba27c22874b9850f961a064b0c0cbec006c1e2e752fea8169985499d494e6d6",
+            "cost_drag": 0.0035544343249999995,
+            "cvar5_improvement": 0.013159080975535503,
+            "drawdown_improvement": 0.05197824683045266,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3022809626464532,
+            "sortino_excess": -0.5569337686778096,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7",
+            "cost_drag": 0.0016315762749999998,
+            "cvar5_improvement": 0.014182955472488702,
+            "drawdown_improvement": 0.0588824487406856,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3914724590430586,
+            "sortino_excess": -0.7578368209232723,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "60e882c4a0702e0d30ea46270dffa260f60f745dd4a32acc9fdb1e1a63724c5a",
+            "cost_drag": 0.00255080035,
+            "cvar5_improvement": 0.014025924463592424,
+            "drawdown_improvement": 0.059664468467553966,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3135278013031012,
+            "sortino_excess": -0.7809280743908575,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "63376a956e83a815918270479af18ab8fb5019bae65d97baabf0a96d55444f49",
+            "cost_drag": 0.0033896005,
+            "cvar5_improvement": 0.012594153615234846,
+            "drawdown_improvement": 0.05250952653010363,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3103682180959587,
+            "sortino_excess": -0.8024915408630676,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "65a89d08421d9718b4d5d94154a5fbd388473d11abcc90846531fe6a35e69f67",
+            "cost_drag": 0.0016124707,
+            "cvar5_improvement": 0.014332304488599207,
+            "drawdown_improvement": 0.05985869451773404,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.19858087197206642,
+            "sortino_excess": -0.28508526026119607,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "68ba01cc5f3024790b7fc6f92f93ebea8627b919d60db7c8ffff5e7b697ac400",
+            "cost_drag": 0.001525135075,
+            "cvar5_improvement": 0.0141763938708379,
+            "drawdown_improvement": 0.05926582008525344,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3039332196116284,
+            "sortino_excess": -0.5644182573912737,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "6bf23257f219baaf0f6815e84907344eaf777106f445281d02103bb38096fa13",
+            "cost_drag": 0.001366575575,
+            "cvar5_improvement": 0.014136346100508531,
+            "drawdown_improvement": 0.05833763488553598,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.39742443438388425,
+            "sortino_excess": -0.6127838474797862,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "76a66eb3271a1346cfc7e2ff79f6a550dccc258fdcca3a03d4b82eed5b8cf59a",
+            "cost_drag": 0.0013438909,
+            "cvar5_improvement": 0.013453552970626965,
+            "drawdown_improvement": 0.0541591757720713,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.31136682739227606,
+            "sortino_excess": -0.4004224772126269,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "795d4515ee57febfc68b17037832ce285e1c07a1a03cb8b0c584d4a2f05f48a1",
+            "cost_drag": 0.0018471587499999998,
+            "cvar5_improvement": 0.013516571489176737,
+            "drawdown_improvement": 0.05357660732007488,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3363211643761394,
+            "sortino_excess": -0.4393986267502434,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "7a7f7daceec6466e9fa6ede7cb8d5dd3835dc8f28a5c320307ce4b922cf162ae",
+            "cost_drag": 0.001679701225,
+            "cvar5_improvement": 0.014521957819196542,
+            "drawdown_improvement": 0.05890849887417457,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.318179576780931,
+            "sortino_excess": -0.6806054302263775,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "815b8196c744b75fe4f851240badeee093c72d4372769ddc31ba9ac4888a5b95",
+            "cost_drag": 0.003264240275,
+            "cvar5_improvement": 0.013214646617967554,
+            "drawdown_improvement": 0.05050603436565629,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3499440803731704,
+            "sortino_excess": -0.5215143286687342,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+            "cost_drag": 0.002145712,
+            "cvar5_improvement": 0.013368985524439204,
+            "drawdown_improvement": 0.054268243457256116,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3733517867903578,
+            "sortino_excess": -0.6899690404295399,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "99b6d40d50073ff10c74eb62acc384f9811a82c4e00eb39ee822839d93d239b5",
+            "cost_drag": 0.0013674023499999999,
+            "cvar5_improvement": 0.01331345821418021,
+            "drawdown_improvement": 0.05094474603854193,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.4153007657633635,
+            "sortino_excess": -0.4831237234102758,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "9dddf7f3ef757a9f18f5973a3ccd6687dea654db95fef784d949d02fe0b0b1d4",
+            "cost_drag": 0.002243820725,
+            "cvar5_improvement": 0.013286859531279538,
+            "drawdown_improvement": 0.052709912182394375,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.39487786593540597,
+            "sortino_excess": -0.7906360430618609,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "a543650991e385a828bf83ebe323ba2a8ab48da8f617c95c59457cd22277ec61",
+            "cost_drag": 0.0026812791,
+            "cvar5_improvement": 0.014100101912338804,
+            "drawdown_improvement": 0.05732024607749839,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.22509160520294527,
+            "sortino_excess": -0.6706378789477456,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ac22899e9617405640d32f4ea94925626d4ff8952dbc8d5acda5ffc217b263b5",
+            "cost_drag": 0.0015322276,
+            "cvar5_improvement": 0.013374203444667214,
+            "drawdown_improvement": 0.052296753718354294,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.35670751258650296,
+            "sortino_excess": -0.3772208347693677,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ac3b358b2e80557d5ba9620b510472a2109a6c52328ab769e429cd068464f5b6",
+            "cost_drag": 0.002812536,
+            "cvar5_improvement": 0.014049390224160985,
+            "drawdown_improvement": 0.05869711838874195,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.1403704172650831,
+            "sortino_excess": -0.41885654795629634,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "b0c85931f2fb0bd085e1c63c008a54df8336e8cfe9e6a0b704f73422a7459608",
+            "cost_drag": 0.00165641435,
+            "cvar5_improvement": 0.014725932619956241,
+            "drawdown_improvement": 0.06023066869135327,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.15483923833313387,
+            "sortino_excess": -0.2396568006388467,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "b78084f5ae17ca8e23076e38631dc7f558179058dab59d39f57c7365776caab9",
+            "cost_drag": 0.0014638685,
+            "cvar5_improvement": 0.014137019841139159,
+            "drawdown_improvement": 0.05832406394153464,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.29093158119366597,
+            "sortino_excess": -0.38744138095127684,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ba114a375a5d23a98d66aa984159766e18746bae30a020eb4780b379d0663e6e",
+            "cost_drag": 0.0014829009750000001,
+            "cvar5_improvement": 0.014476938025664915,
+            "drawdown_improvement": 0.05927948360238616,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.28247925999213436,
+            "sortino_excess": -0.3917350819540531,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "bf26a9f270d4bdbd9d5604c0563fc4880c262e0cd82c324937f1dbc4f7d8c6bc",
+            "cost_drag": 0.0013919887499999999,
+            "cvar5_improvement": 0.013763616599463135,
+            "drawdown_improvement": 0.05509730425385592,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3751853271964069,
+            "sortino_excess": -0.45876866851460935,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c22fc03cd43444f15b9fa2dd23bf8602189645c775c284729fe85029e6278aa0",
+            "cost_drag": 0.001973346125,
+            "cvar5_improvement": 0.01404321129743368,
+            "drawdown_improvement": 0.057482897159332774,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.29566773586913275,
+            "sortino_excess": -0.7500911226850313,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c3afbaa8629a17f9e075e8f41158433942f6e9f2ef346831553f5480549d54a7",
+            "cost_drag": 0.0014331895499999998,
+            "cvar5_improvement": 0.013315430979569429,
+            "drawdown_improvement": 0.05095379477248049,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3838361698833041,
+            "sortino_excess": -0.4056078742732487,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c694ca450c44b0dacd6d87c1d7ab2d6ee91d5aef8797f99ca0430ee15c9b6229",
+            "cost_drag": 0.00195113645,
+            "cvar5_improvement": 0.014124833561319734,
+            "drawdown_improvement": 0.056098477195526325,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3463270171129963,
+            "sortino_excess": -0.7866901649031484,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c7607fa3377f5d7bd313e8cda5f431908f3677e29e9f7f7cf563e74dfbe744d1",
+            "cost_drag": 0.001526849975,
+            "cvar5_improvement": 0.01379203220437536,
+            "drawdown_improvement": 0.0558333622901554,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.31253260612143546,
+            "sortino_excess": -0.42345906846502174,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "cd21492cb520c0db2078f74ce5fcd788aed8129adeefb6e2796bb19fa3f4adb3",
+            "cost_drag": 0.001343100025,
+            "cvar5_improvement": 0.013450752227176649,
+            "drawdown_improvement": 0.05415952007319025,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3490948511787636,
+            "sortino_excess": -0.531879970136658,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "cf314bcdacfc470a9f2a63b4a35d7ff814c7d7399eb328a184039ab11568cd03",
+            "cost_drag": 0.0013467255,
+            "cvar5_improvement": 0.013589179488003084,
+            "drawdown_improvement": 0.05418825783984546,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.37870835805078995,
+            "sortino_excess": -0.6088564685838935,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "d00e7a413dc0c16a28bc70ddeb8ed350aba95d73b88409a428dae37317de70ab",
+            "cost_drag": 0.002040342525,
+            "cvar5_improvement": 0.013230497675525752,
+            "drawdown_improvement": 0.0517094338427479,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3701267263206195,
+            "sortino_excess": -0.46506208094870644,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "d5fd8ca1850d97fc16771fcade6477228a22d1c3279a1ad789f69bc7001850c0",
+            "cost_drag": 0.00131071705,
+            "cvar5_improvement": 0.013006311810643933,
+            "drawdown_improvement": 0.049244423193751635,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.4085282616444867,
+            "sortino_excess": -0.4922824055327481,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "dde17bdbb2efd257e236db81049bdd82ccd8407c5124cf5a18fef6cdd5d02c03",
+            "cost_drag": 0.00147341655,
+            "cvar5_improvement": 0.013767877606529024,
+            "drawdown_improvement": 0.05510800573530436,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.30597665804953617,
+            "sortino_excess": -0.289063777462603,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "e74ce674edaa94759d1e3c22d8c43922a1d508a2e32210d2851de073af103c10",
+            "cost_drag": 0.001572169,
+            "cvar5_improvement": 0.013420921827502322,
+            "drawdown_improvement": 0.05296938929020195,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3914485116089566,
+            "sortino_excess": -0.4955805454264843,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ff4c177908f78482ba254405d5ee9378b5c7c63fe77102b4d0f56fa68a165555",
+            "cost_drag": 0.002525664975,
+            "cvar5_improvement": 0.0136366309350896,
+            "drawdown_improvement": 0.053278976852372595,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3155245980431509,
+            "sortino_excess": -0.4366866450894691,
+            "stable": false
+          }
+        ],
+        "excess_attribution": {
+          "cash_opportunity_cost": -0.016236960671527904,
+          "execution_cost": 229.06784,
+          "grid_return": -0.010892857096363014,
+          "reconciliation_error": 0.0,
+          "transition_return": 0.0,
+          "trend_return": 0.0
+        },
+        "execution_cost_config": {
+          "commission_rate": 0.0001,
+          "minimum_commission": 5.0,
+          "sell_tax_rate": 0.0,
+          "slippage_bps": 3.0,
+          "transfer_fee_rate": 0.0
+        },
+        "screened_axes": {
+          "grid_only": [
+            [
+              "step_pct",
+              "unit_pct"
+            ]
+          ]
+        },
+        "selected_scores": {
+          "grid_only": {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ac3b358b2e80557d5ba9620b510472a2109a6c52328ab769e429cd068464f5b6",
+            "cost_drag": 0.002812536,
+            "cvar5_improvement": 0.014049390224160985,
+            "drawdown_improvement": 0.05869711838874195,
+            "exposure_ratio": 0.7976190476190477,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.1403704172650831,
+            "sortino_excess": -0.41885654795629634,
+            "stable": false
+          }
+        },
+        "strategy_spec": {
+          "config": {
+            "cost": {
+              "commission_rate": 0.0001,
+              "minimum_commission": 5.0,
+              "sell_tax_rate": 0.0,
+              "slippage_bps": 3.0,
+              "transfer_fee_rate": 0.0
+            },
+            "grid": {
+              "atr_stop_multiple": 3.0,
+              "cooldown_sessions": 5,
+              "fixed_initial_pct": 0.5,
+              "initial_model": "fixed",
+              "max_grid_per_day": 1,
+              "step_pct": 0.015,
+              "unit_pct": 0.1
+            },
+            "trend": {
+              "add_n": 0.5,
+              "amount_ratio_min": null,
+              "max_units": 4,
+              "require_macd_bullish": true,
+              "risk_per_unit": 0.005,
+              "stop_n": 2.0
+            }
+          },
+          "config_hash": "ac3b358b2e80557d5ba9620b510472a2109a6c52328ab769e429cd068464f5b6",
+          "policy_id": "grid_only",
+          "spec_hash": "970c1ec32bd80612eba814e65d4e816076880aef16c7c6b0463e0cf79c86cdce",
+          "strategy_id": "grid_only",
+          "version": "1"
+        },
+        "window_id": "wf_002"
+      },
+      {
+        "benchmark_specs": [
+          {
+            "benchmark_id": "buy_and_hold",
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "provenance_hash": "3274e19422069735d2b29879bfd6d749ea2c0e1aef5687971ae4d05922309926",
+            "rebalance_sessions": null,
+            "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+            "target_weight": 1.0,
+            "version": "1"
+          },
+          {
+            "benchmark_id": "fixed_half_hold",
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "provenance_hash": "34d1bbf0b5d64c261e0ab422e7dea8f250893e1a2af8fd493720da2286ef93a2",
+            "rebalance_sessions": 1,
+            "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+            "target_weight": 0.5,
+            "version": "1"
+          }
+        ],
+        "candidate_scores": [
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "0f8f8b4cd1c09f2045d0160fbe14f5a75f2748c86767f302e8ddeb2c3aab837e",
+            "cost_drag": 0.0015742151000000002,
+            "cvar5_improvement": 0.014959357894071618,
+            "drawdown_improvement": 0.05371320518704628,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.38576787985343514,
+            "sortino_excess": -0.3553031485434194,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "154f190c593cef61c84037b4896c73d6edec942d651987a9a82419300110c76d",
+            "cost_drag": 0.001657168725,
+            "cvar5_improvement": 0.015505201190317522,
+            "drawdown_improvement": 0.05598065859139309,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.31235392389425215,
+            "sortino_excess": -0.28634824995781,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "18c5a21197f2189444ba1135f516edecee9d9c93675fc7529ec8de19bac61906",
+            "cost_drag": 0.0022862435500000003,
+            "cvar5_improvement": 0.014618321637623109,
+            "drawdown_improvement": 0.04579464087302318,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.38994532347049893,
+            "sortino_excess": -0.35339661416750856,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "1dbd81a06797a95bf524a061383ad8055a466926ebfd98fdc83bb09ea9722e6a",
+            "cost_drag": 0.00151040615,
+            "cvar5_improvement": 0.01344314440466795,
+            "drawdown_improvement": 0.04549015376948923,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.4853053495842796,
+            "sortino_excess": -0.47178876824909083,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd",
+            "cost_drag": 0.003050411875,
+            "cvar5_improvement": 0.015179401618802452,
+            "drawdown_improvement": 0.05299914823817639,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.30172023930643854,
+            "sortino_excess": -0.2829542438847451,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "20a225c8b4f7b1dbf23a6281ddefea729a454968ff707bcd45cec7519d6b1933",
+            "cost_drag": 0.001592943725,
+            "cvar5_improvement": 0.013811017117668082,
+            "drawdown_improvement": 0.04792050877040224,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.4726590278573016,
+            "sortino_excess": -0.4608021611373236,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "236aa65a294576dabeaac13b57e2808511cc1d554b7e66a07c0f94bd058785d0",
+            "cost_drag": 0.0019559092,
+            "cvar5_improvement": 0.014794462626976247,
+            "drawdown_improvement": 0.052876025399474974,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.2949504884344303,
+            "sortino_excess": -0.30438190547931476,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "260007e81996db708e0f60bf89f59c975331ae2ee41e0c73c0f0ad5b37b08064",
+            "cost_drag": 0.0016710085,
+            "cvar5_improvement": 0.014245859024109148,
+            "drawdown_improvement": 0.051540898895771764,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.4105068058872982,
+            "sortino_excess": -0.3908500725374514,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "2cff3bff54bcad3695deb6c5c45e20262b5a02bb4d1b31cf41aa9465801dbd4a",
+            "cost_drag": 0.0015508464999999998,
+            "cvar5_improvement": 0.014002657734761947,
+            "drawdown_improvement": 0.04862100998228752,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3826860818321311,
+            "sortino_excess": -0.3711773682796109,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "3e3aaa870da79fe388e0f5499d4a129f4b6c59a25e2961548c78263e4269df10",
+            "cost_drag": 0.0015238411750000001,
+            "cvar5_improvement": 0.01364836047644978,
+            "drawdown_improvement": 0.04652714396671004,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.4565415216346643,
+            "sortino_excess": -0.4435501019651417,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "41996ce3e781e343c04fe477e4151bad9651a096eb9cc56cab77a37ec868b692",
+            "cost_drag": 0.001716738575,
+            "cvar5_improvement": 0.014523509209070671,
+            "drawdown_improvement": 0.0522409352923337,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.37720289071062885,
+            "sortino_excess": -0.3651861735800916,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "46976a746afc445d6867c17f5ca795f32b9f1ffc7a5664fb767aebab14118380",
+            "cost_drag": 0.001523892175,
+            "cvar5_improvement": 0.013621850235801754,
+            "drawdown_improvement": 0.04653289643729866,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.4498116027151268,
+            "sortino_excess": -0.43769339046027816,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "4ba27c22874b9850f961a064b0c0cbec006c1e2e752fea8169985499d494e6d6",
+            "cost_drag": 0.0028648773,
+            "cvar5_improvement": 0.015021949616439052,
+            "drawdown_improvement": 0.05209538855754525,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.377341768171525,
+            "sortino_excess": -0.357007181028998,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7",
+            "cost_drag": 0.001758889425,
+            "cvar5_improvement": 0.015145302638099368,
+            "drawdown_improvement": 0.054302320345963745,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.2946319475325535,
+            "sortino_excess": -0.272456798428889,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "60e882c4a0702e0d30ea46270dffa260f60f745dd4a32acc9fdb1e1a63724c5a",
+            "cost_drag": 0.002657152025,
+            "cvar5_improvement": 0.015873240041567902,
+            "drawdown_improvement": 0.057245093350370785,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.13933868167162786,
+            "sortino_excess": -0.11094397567698466,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "63376a956e83a815918270479af18ab8fb5019bae65d97baabf0a96d55444f49",
+            "cost_drag": 0.0032416783250000004,
+            "cvar5_improvement": 0.015233550044013517,
+            "drawdown_improvement": 0.05302742615362693,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.12662057068474958,
+            "sortino_excess": -0.10457135676725787,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "65a89d08421d9718b4d5d94154a5fbd388473d11abcc90846531fe6a35e69f67",
+            "cost_drag": 0.0017092548500000002,
+            "cvar5_improvement": 0.014731674010883173,
+            "drawdown_improvement": 0.05327006639792706,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3508423779349126,
+            "sortino_excess": -0.317810810015474,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "68ba01cc5f3024790b7fc6f92f93ebea8627b919d60db7c8ffff5e7b697ac400",
+            "cost_drag": 0.0016357764,
+            "cvar5_improvement": 0.014951653470173885,
+            "drawdown_improvement": 0.05476840793586504,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3716298666533464,
+            "sortino_excess": -0.3554823642997826,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "6bf23257f219baaf0f6815e84907344eaf777106f445281d02103bb38096fa13",
+            "cost_drag": 0.001561133725,
+            "cvar5_improvement": 0.014535097452006564,
+            "drawdown_improvement": 0.05172660548696287,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.42368667381657915,
+            "sortino_excess": -0.4030181213287377,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "76a66eb3271a1346cfc7e2ff79f6a550dccc258fdcca3a03d4b82eed5b8cf59a",
+            "cost_drag": 0.001537224375,
+            "cvar5_improvement": 0.013812962015158964,
+            "drawdown_improvement": 0.047594773772507815,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.41630648496316514,
+            "sortino_excess": -0.4048098322219503,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "795d4515ee57febfc68b17037832ce285e1c07a1a03cb8b0c584d4a2f05f48a1",
+            "cost_drag": 0.00186901885,
+            "cvar5_improvement": 0.014052935662812419,
+            "drawdown_improvement": 0.048872682285499874,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.4161707177746923,
+            "sortino_excess": -0.41381303365387384,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "7a7f7daceec6466e9fa6ede7cb8d5dd3835dc8f28a5c320307ce4b922cf162ae",
+            "cost_drag": 0.00180122995,
+            "cvar5_improvement": 0.015759766258050867,
+            "drawdown_improvement": 0.05521787356812258,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.20260046624443723,
+            "sortino_excess": -0.15768196383659647,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "815b8196c744b75fe4f851240badeee093c72d4372769ddc31ba9ac4888a5b95",
+            "cost_drag": 0.00279035215,
+            "cvar5_improvement": 0.014617283504399683,
+            "drawdown_improvement": 0.05067090992494505,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.39231655384143027,
+            "sortino_excess": -0.38228494220970916,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+            "cost_drag": 0.00212438535,
+            "cvar5_improvement": 0.014332334218848422,
+            "drawdown_improvement": 0.04872522827521267,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.42295003844470097,
+            "sortino_excess": -0.40371481766237777,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "99b6d40d50073ff10c74eb62acc384f9811a82c4e00eb39ee822839d93d239b5",
+            "cost_drag": 0.001534569425,
+            "cvar5_improvement": 0.013677224689410511,
+            "drawdown_improvement": 0.04686482046106116,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.48684150268022597,
+            "sortino_excess": -0.47262958281827544,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "9dddf7f3ef757a9f18f5973a3ccd6687dea654db95fef784d949d02fe0b0b1d4",
+            "cost_drag": 0.002253521475,
+            "cvar5_improvement": 0.014639551335095036,
+            "drawdown_improvement": 0.04788482940093636,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3575160042826706,
+            "sortino_excess": -0.3340396575405137,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "a543650991e385a828bf83ebe323ba2a8ab48da8f617c95c59457cd22277ec61",
+            "cost_drag": 0.002772140475,
+            "cvar5_improvement": 0.016118009372954482,
+            "drawdown_improvement": 0.05662586735557673,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.06395660750928747,
+            "sortino_excess": -0.00915813318166342,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ac22899e9617405640d32f4ea94925626d4ff8952dbc8d5acda5ffc217b263b5",
+            "cost_drag": 0.001633560075,
+            "cvar5_improvement": 0.013735126652615432,
+            "drawdown_improvement": 0.04820291171526686,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.46601373731971624,
+            "sortino_excess": -0.45166389304928495,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ac3b358b2e80557d5ba9620b510472a2109a6c52328ab769e429cd068464f5b6",
+            "cost_drag": 0.0025833654,
+            "cvar5_improvement": 0.015488442529350901,
+            "drawdown_improvement": 0.055410799624385054,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.21307811759974998,
+            "sortino_excess": -0.20532237521832827,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "b0c85931f2fb0bd085e1c63c008a54df8336e8cfe9e6a0b704f73422a7459608",
+            "cost_drag": 0.001747296375,
+            "cvar5_improvement": 0.015206844535455944,
+            "drawdown_improvement": 0.054656579210996176,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.2846993505425514,
+            "sortino_excess": -0.22640640340049417,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "b78084f5ae17ca8e23076e38631dc7f558179058dab59d39f57c7365776caab9",
+            "cost_drag": 0.0015606849750000001,
+            "cvar5_improvement": 0.01453449113629866,
+            "drawdown_improvement": 0.051723971479767705,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.4374669168142661,
+            "sortino_excess": -0.41556351500232636,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ba114a375a5d23a98d66aa984159766e18746bae30a020eb4780b379d0663e6e",
+            "cost_drag": 0.0015740665999999998,
+            "cvar5_improvement": 0.014956722187446675,
+            "drawdown_improvement": 0.05369845034672249,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.4050693671329319,
+            "sortino_excess": -0.37286597454979736,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "bf26a9f270d4bdbd9d5604c0563fc4880c262e0cd82c324937f1dbc4f7d8c6bc",
+            "cost_drag": 0.00154821305,
+            "cvar5_improvement": 0.014116390021733882,
+            "drawdown_improvement": 0.04929737520951055,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.4572308332867088,
+            "sortino_excess": -0.441367547527882,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c22fc03cd43444f15b9fa2dd23bf8602189645c775c284729fe85029e6278aa0",
+            "cost_drag": 0.002042587075,
+            "cvar5_improvement": 0.01528449989162406,
+            "drawdown_improvement": 0.052887960334411954,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.15811848900177058,
+            "sortino_excess": -0.17801936791825151,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c3afbaa8629a17f9e075e8f41158433942f6e9f2ef346831553f5480549d54a7",
+            "cost_drag": 0.001534532825,
+            "cvar5_improvement": 0.013676456354856953,
+            "drawdown_improvement": 0.04686055735039893,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.4912442418601316,
+            "sortino_excess": -0.4766462286260305,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c694ca450c44b0dacd6d87c1d7ab2d6ee91d5aef8797f99ca0430ee15c9b6229",
+            "cost_drag": 0.0020446936,
+            "cvar5_improvement": 0.015480963813804255,
+            "drawdown_improvement": 0.05240717783630314,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.23236367779235287,
+            "sortino_excess": -0.23295466441680424,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c7607fa3377f5d7bd313e8cda5f431908f3677e29e9f7f7cf563e74dfbe744d1",
+            "cost_drag": 0.00161428095,
+            "cvar5_improvement": 0.01439328212828352,
+            "drawdown_improvement": 0.05153380249565742,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.4242472691833338,
+            "sortino_excess": -0.4124340097111933,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "cd21492cb520c0db2078f74ce5fcd788aed8129adeefb6e2796bb19fa3f4adb3",
+            "cost_drag": 0.0015368812,
+            "cvar5_improvement": 0.013849261446550052,
+            "drawdown_improvement": 0.047591404911157126,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.42651289782759905,
+            "sortino_excess": -0.4137931533706568,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "cf314bcdacfc470a9f2a63b4a35d7ff814c7d7399eb328a184039ab11568cd03",
+            "cost_drag": 0.0015504784999999998,
+            "cvar5_improvement": 0.014038884939263233,
+            "drawdown_improvement": 0.048619649934514175,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.3963549276863812,
+            "sortino_excess": -0.3833477110960823,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "d00e7a413dc0c16a28bc70ddeb8ed350aba95d73b88409a428dae37317de70ab",
+            "cost_drag": 0.001995964175,
+            "cvar5_improvement": 0.013806973234750509,
+            "drawdown_improvement": 0.046955213933951856,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.47848453577034017,
+            "sortino_excess": -0.4613099846538534,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "d5fd8ca1850d97fc16771fcade6477228a22d1c3279a1ad789f69bc7001850c0",
+            "cost_drag": 0.0015106719000000002,
+            "cvar5_improvement": 0.013429938983612647,
+            "drawdown_improvement": 0.04548418352245839,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.482318686441561,
+            "sortino_excess": -0.4692515443960809,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "dde17bdbb2efd257e236db81049bdd82ccd8407c5124cf5a18fef6cdd5d02c03",
+            "cost_drag": 0.00154764755,
+            "cvar5_improvement": 0.014118910890469984,
+            "drawdown_improvement": 0.049310043099606043,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.46566952454659744,
+            "sortino_excess": -0.4490605009062708,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "e74ce674edaa94759d1e3c22d8c43922a1d508a2e32210d2851de073af103c10",
+            "cost_drag": 0.00167547045,
+            "cvar5_improvement": 0.013869328238365931,
+            "drawdown_improvement": 0.04844123138077161,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.45119638650367666,
+            "sortino_excess": -0.44067717329483824,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ff4c177908f78482ba254405d5ee9378b5c7c63fe77102b4d0f56fa68a165555",
+            "cost_drag": 0.002386864425,
+            "cvar5_improvement": 0.014515604643374378,
+            "drawdown_improvement": 0.05097533579826258,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.39824788393632915,
+            "sortino_excess": -0.3852826903709109,
+            "stable": false
+          }
+        ],
+        "excess_attribution": {
+          "cash_opportunity_cost": 0.03031246085929771,
+          "execution_cost": 92.73967,
+          "grid_return": -0.03578276252179629,
+          "reconciliation_error": 1.214306433183765e-17,
+          "transition_return": 0.0,
+          "trend_return": 0.0
+        },
+        "execution_cost_config": {
+          "commission_rate": 0.0001,
+          "minimum_commission": 5.0,
+          "sell_tax_rate": 0.0,
+          "slippage_bps": 3.0,
+          "transfer_fee_rate": 0.0
+        },
+        "screened_axes": {
+          "grid_only": [
+            [
+              "step_pct",
+              "unit_pct"
+            ]
+          ]
+        },
+        "selected_scores": {
+          "grid_only": {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "a543650991e385a828bf83ebe323ba2a8ab48da8f617c95c59457cd22277ec61",
+            "cost_drag": 0.002772140475,
+            "cvar5_improvement": 0.016118009372954482,
+            "drawdown_improvement": 0.05662586735557673,
+            "exposure_ratio": 0.7817460317460317,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.06395660750928747,
+            "sortino_excess": -0.00915813318166342,
+            "stable": false
+          }
+        },
+        "strategy_spec": {
+          "config": {
+            "cost": {
+              "commission_rate": 0.0001,
+              "minimum_commission": 5.0,
+              "sell_tax_rate": 0.0,
+              "slippage_bps": 3.0,
+              "transfer_fee_rate": 0.0
+            },
+            "grid": {
+              "atr_stop_multiple": 3.0,
+              "cooldown_sessions": 5,
+              "fixed_initial_pct": 0.5,
+              "initial_model": "fixed",
+              "max_grid_per_day": 1,
+              "step_pct": 0.015,
+              "unit_pct": 0.2
+            },
+            "trend": {
+              "add_n": 0.5,
+              "amount_ratio_min": null,
+              "max_units": 4,
+              "require_macd_bullish": true,
+              "risk_per_unit": 0.005,
+              "stop_n": 2.0
+            }
+          },
+          "config_hash": "a543650991e385a828bf83ebe323ba2a8ab48da8f617c95c59457cd22277ec61",
+          "policy_id": "grid_only",
+          "spec_hash": "cc00abb09e1788472dcb337deebafcaaa2910da7ab66b37a1b48d613bdef69ea",
+          "strategy_id": "grid_only",
+          "version": "1"
+        },
+        "window_id": "wf_003"
+      },
+      {
+        "benchmark_specs": [
+          {
+            "benchmark_id": "buy_and_hold",
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "provenance_hash": "7e39c96e7edfdc38b4071eecc6af933b1bf2d0218cb202dd9bdc10f04067b3f5",
+            "rebalance_sessions": null,
+            "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+            "target_weight": 1.0,
+            "version": "1"
+          },
+          {
+            "benchmark_id": "fixed_half_hold",
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "provenance_hash": "0cba29d4cc4757dd9a3b1df65e4fa00a46c8005a9cb44d22fa82d2d6534430ff",
+            "rebalance_sessions": 1,
+            "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+            "target_weight": 0.5,
+            "version": "1"
+          }
+        ],
+        "candidate_scores": [
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "0f8f8b4cd1c09f2045d0160fbe14f5a75f2748c86767f302e8ddeb2c3aab837e",
+            "cost_drag": 0.0013782000250000001,
+            "cvar5_improvement": 0.012717579848983288,
+            "drawdown_improvement": 0.04344961646459203,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.038088379320476824,
+            "sortino_excess": 0.25874214218403124,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "154f190c593cef61c84037b4896c73d6edec942d651987a9a82419300110c76d",
+            "cost_drag": 0.001474511425,
+            "cvar5_improvement": 0.013020991108410002,
+            "drawdown_improvement": 0.04436161161375654,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.021150600464166634,
+            "sortino_excess": 0.19437712511755412,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "18c5a21197f2189444ba1135f516edecee9d9c93675fc7529ec8de19bac61906",
+            "cost_drag": 0.0018566246499999999,
+            "cvar5_improvement": 0.013030492168683306,
+            "drawdown_improvement": 0.04035308025672865,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.03089103729974029,
+            "sortino_excess": 0.12091083152133236,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "1dbd81a06797a95bf524a061383ad8055a466926ebfd98fdc83bb09ea9722e6a",
+            "cost_drag": 0.0013242743000000002,
+            "cvar5_improvement": 0.011114032122977777,
+            "drawdown_improvement": 0.03410946300427689,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.16235265229498072,
+            "sortino_excess": -0.020697019432924388,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd",
+            "cost_drag": 0.00262170275,
+            "cvar5_improvement": 0.013232059224456763,
+            "drawdown_improvement": 0.048067213676400045,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.13998002165325912,
+            "sortino_excess": 0.16667073356121787,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "20a225c8b4f7b1dbf23a6281ddefea729a454968ff707bcd45cec7519d6b1933",
+            "cost_drag": 0.001410281,
+            "cvar5_improvement": 0.011419021812375741,
+            "drawdown_improvement": 0.03603725634486962,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.16548788960037844,
+            "sortino_excess": -0.03697101095711487,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "236aa65a294576dabeaac13b57e2808511cc1d554b7e66a07c0f94bd058785d0",
+            "cost_drag": 0.0016035483249999998,
+            "cvar5_improvement": 0.012311482092306458,
+            "drawdown_improvement": 0.04132186769493648,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.017867365037682863,
+            "sortino_excess": 0.1640588344694419,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "260007e81996db708e0f60bf89f59c975331ae2ee41e0c73c0f0ad5b37b08064",
+            "cost_drag": 0.001488559525,
+            "cvar5_improvement": 0.011821560553477758,
+            "drawdown_improvement": 0.03949968428369349,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.08446326606749018,
+            "sortino_excess": 0.0774180921160524,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "2cff3bff54bcad3695deb6c5c45e20262b5a02bb4d1b31cf41aa9465801dbd4a",
+            "cost_drag": 0.0013422039,
+            "cvar5_improvement": 0.011650664224669965,
+            "drawdown_improvement": 0.036889000440859326,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.047562799076477806,
+            "sortino_excess": 0.05874546976006274,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "3e3aaa870da79fe388e0f5499d4a129f4b6c59a25e2961548c78263e4269df10",
+            "cost_drag": 0.001334097175,
+            "cvar5_improvement": 0.011355267043188663,
+            "drawdown_improvement": 0.03553323982792825,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.10777338182399208,
+            "sortino_excess": 0.060985927503209206,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "41996ce3e781e343c04fe477e4151bad9651a096eb9cc56cab77a37ec868b692",
+            "cost_drag": 0.00151467285,
+            "cvar5_improvement": 0.012094684984870147,
+            "drawdown_improvement": 0.04029012556441705,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.06301840833358777,
+            "sortino_excess": 0.06459413713498656,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "46976a746afc445d6867c17f5ca795f32b9f1ffc7a5664fb767aebab14118380",
+            "cost_drag": 0.0013220557249999999,
+            "cvar5_improvement": 0.011258903900399441,
+            "drawdown_improvement": 0.03479984529357835,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.1334083470162401,
+            "sortino_excess": -0.02397115011445898,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "4ba27c22874b9850f961a064b0c0cbec006c1e2e752fea8169985499d494e6d6",
+            "cost_drag": 0.002628547175,
+            "cvar5_improvement": 0.012908726515892064,
+            "drawdown_improvement": 0.045684034132607576,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.14212621574945564,
+            "sortino_excess": 0.1929690358508585,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7",
+            "cost_drag": 0.0015531605,
+            "cvar5_improvement": 0.01268446713433955,
+            "drawdown_improvement": 0.04231497367946352,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.027465845749766807,
+            "sortino_excess": 0.1660694127926846,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "60e882c4a0702e0d30ea46270dffa260f60f745dd4a32acc9fdb1e1a63724c5a",
+            "cost_drag": 0.0023048164500000003,
+            "cvar5_improvement": 0.014060232945483864,
+            "drawdown_improvement": 0.05140511287717678,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.29738022836180567,
+            "sortino_excess": 0.3710995101084664,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "63376a956e83a815918270479af18ab8fb5019bae65d97baabf0a96d55444f49",
+            "cost_drag": 0.0027768573000000003,
+            "cvar5_improvement": 0.013524517683637913,
+            "drawdown_improvement": 0.049806768029865056,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.23801877993381135,
+            "sortino_excess": 0.289881358497247,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "65a89d08421d9718b4d5d94154a5fbd388473d11abcc90846531fe6a35e69f67",
+            "cost_drag": 0.00152675325,
+            "cvar5_improvement": 0.012276503488937074,
+            "drawdown_improvement": 0.041290343429723986,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.00978852040527601,
+            "sortino_excess": 0.18189735301252047,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "68ba01cc5f3024790b7fc6f92f93ebea8627b919d60db7c8ffff5e7b697ac400",
+            "cost_drag": 0.00145316995,
+            "cvar5_improvement": 0.012495544373400325,
+            "drawdown_improvement": 0.04278445812957779,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.04589947438496228,
+            "sortino_excess": 0.11308560569101907,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "6bf23257f219baaf0f6815e84907344eaf777106f445281d02103bb38096fa13",
+            "cost_drag": 0.00136835045,
+            "cvar5_improvement": 0.012266755625404805,
+            "drawdown_improvement": 0.04108550252049148,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.0318497963076289,
+            "sortino_excess": 0.16315334341258836,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "76a66eb3271a1346cfc7e2ff79f6a550dccc258fdcca3a03d4b82eed5b8cf59a",
+            "cost_drag": 0.001332173325,
+            "cvar5_improvement": 0.011451813578169124,
+            "drawdown_improvement": 0.03584464490797734,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.09134101507333536,
+            "sortino_excess": 0.016375893832999915,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "795d4515ee57febfc68b17037832ce285e1c07a1a03cb8b0c584d4a2f05f48a1",
+            "cost_drag": 0.0015522056750000002,
+            "cvar5_improvement": 0.011606668569554213,
+            "drawdown_improvement": 0.03720540502255015,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.1085464051716152,
+            "sortino_excess": 0.028432046396312166,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "7a7f7daceec6466e9fa6ede7cb8d5dd3835dc8f28a5c320307ce4b922cf162ae",
+            "cost_drag": 0.001591878225,
+            "cvar5_improvement": 0.01327451421848192,
+            "drawdown_improvement": 0.043594687591715586,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.1257628880078623,
+            "sortino_excess": 0.2815494475192704,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.01,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "815b8196c744b75fe4f851240badeee093c72d4372769ddc31ba9ac4888a5b95",
+            "cost_drag": 0.0024847542249999996,
+            "cvar5_improvement": 0.01229775253928484,
+            "drawdown_improvement": 0.04168252365877942,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.025884722831911802,
+            "sortino_excess": 0.10304763801524515,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+            "cost_drag": 0.00170953895,
+            "cvar5_improvement": 0.012232423237933752,
+            "drawdown_improvement": 0.03970013493066285,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.07169820224765429,
+            "sortino_excess": 0.07205204734069787,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "99b6d40d50073ff10c74eb62acc384f9811a82c4e00eb39ee822839d93d239b5",
+            "cost_drag": 0.0013484903,
+            "cvar5_improvement": 0.011348756339078642,
+            "drawdown_improvement": 0.03548723165341061,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.15777730656759245,
+            "sortino_excess": -0.01709008464190699,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "9dddf7f3ef757a9f18f5973a3ccd6687dea654db95fef784d949d02fe0b0b1d4",
+            "cost_drag": 0.0017900347999999999,
+            "cvar5_improvement": 0.012787818619638205,
+            "drawdown_improvement": 0.04030785798368067,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.012498285005605653,
+            "sortino_excess": 0.13424847058195835,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "a543650991e385a828bf83ebe323ba2a8ab48da8f617c95c59457cd22277ec61",
+            "cost_drag": 0.0023016130999999997,
+            "cvar5_improvement": 0.014475355143436217,
+            "drawdown_improvement": 0.05224149409472434,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.2872295679610458,
+            "sortino_excess": 0.35087362182185056,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ac22899e9617405640d32f4ea94925626d4ff8952dbc8d5acda5ffc217b263b5",
+            "cost_drag": 0.001450931925,
+            "cvar5_improvement": 0.011343471357141815,
+            "drawdown_improvement": 0.03632122908388638,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.1541657291985075,
+            "sortino_excess": -0.01841875622309476,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ac3b358b2e80557d5ba9620b510472a2109a6c52328ab769e429cd068464f5b6",
+            "cost_drag": 0.002209346975,
+            "cvar5_improvement": 0.013459951140621401,
+            "drawdown_improvement": 0.04794705808990202,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.13391016554088542,
+            "sortino_excess": 0.24388201404709897,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.04,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "b0c85931f2fb0bd085e1c63c008a54df8336e8cfe9e6a0b704f73422a7459608",
+            "cost_drag": 0.0015650046500000003,
+            "cvar5_improvement": 0.012721303369001138,
+            "drawdown_improvement": 0.04303087037267356,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.06932939926004372,
+            "sortino_excess": 0.2967912556938856,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "b78084f5ae17ca8e23076e38631dc7f558179058dab59d39f57c7365776caab9",
+            "cost_drag": 0.0013679266000000002,
+            "cvar5_improvement": 0.01226599863861115,
+            "drawdown_improvement": 0.04109110401498964,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.057948055364992805,
+            "sortino_excess": 0.1183402822318749,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ba114a375a5d23a98d66aa984159766e18746bae30a020eb4780b379d0663e6e",
+            "cost_drag": 0.001377822975,
+            "cvar5_improvement": 0.01271714859865434,
+            "drawdown_improvement": 0.04344672228046262,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.0021027604922453716,
+            "sortino_excess": 0.18280624484525554,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.05,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "bf26a9f270d4bdbd9d5604c0563fc4880c262e0cd82c324937f1dbc4f7d8c6bc",
+            "cost_drag": 0.0013586705000000001,
+            "cvar5_improvement": 0.011822077415804313,
+            "drawdown_improvement": 0.03829737525582286,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.09626210757602825,
+            "sortino_excess": 0.0720612728632956,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c22fc03cd43444f15b9fa2dd23bf8602189645c775c284729fe85029e6278aa0",
+            "cost_drag": 0.001655329625,
+            "cvar5_improvement": 0.012854467666298653,
+            "drawdown_improvement": 0.042691858637395746,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.155787287316775,
+            "sortino_excess": 0.29052853212297075,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c3afbaa8629a17f9e075e8f41158433942f6e9f2ef346831553f5480549d54a7",
+            "cost_drag": 0.0013484291,
+            "cvar5_improvement": 0.011347673382658532,
+            "drawdown_improvement": 0.03548192926064947,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.16629918285704987,
+            "sortino_excess": -0.03160852109660754,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.025,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c694ca450c44b0dacd6d87c1d7ab2d6ee91d5aef8797f99ca0430ee15c9b6229",
+            "cost_drag": 0.0016930306250000002,
+            "cvar5_improvement": 0.013010942073339794,
+            "drawdown_improvement": 0.04263167031216458,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.2079102549290207,
+            "sortino_excess": 0.30387992522409013,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.035,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "c7607fa3377f5d7bd313e8cda5f431908f3677e29e9f7f7cf563e74dfbe744d1",
+            "cost_drag": 0.001431762675,
+            "cvar5_improvement": 0.011968332070424696,
+            "drawdown_improvement": 0.03948961366797779,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.10801649213738151,
+            "sortino_excess": 0.036078141190237514,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "cd21492cb520c0db2078f74ce5fcd788aed8129adeefb6e2796bb19fa3f4adb3",
+            "cost_drag": 0.001343939,
+            "cvar5_improvement": 0.011579169404894752,
+            "drawdown_improvement": 0.03694186362963928,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.05347273722394726,
+            "sortino_excess": 0.1385845871785355,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.055,
+                "unit_pct": 0.2
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "cf314bcdacfc470a9f2a63b4a35d7ff814c7d7399eb328a184039ab11568cd03",
+            "cost_drag": 0.0013541218499999999,
+            "cvar5_improvement": 0.011799865769210369,
+            "drawdown_improvement": 0.03836938067291282,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.0028572713298007438,
+            "sortino_excess": 0.21278105532743063,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.02,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "d00e7a413dc0c16a28bc70ddeb8ed350aba95d73b88409a428dae37317de70ab",
+            "cost_drag": 0.0016294062500000002,
+            "cvar5_improvement": 0.011565020153499143,
+            "drawdown_improvement": 0.03655845512036712,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.15050851001470716,
+            "sortino_excess": -0.016171276929289255,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.06,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "d5fd8ca1850d97fc16771fcade6477228a22d1c3279a1ad789f69bc7001850c0",
+            "cost_drag": 0.0013123236500000002,
+            "cvar5_improvement": 0.01106010431793146,
+            "drawdown_improvement": 0.03374359886510164,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.17486908903824477,
+            "sortino_excess": -0.06348788345915618,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.045,
+                "unit_pct": 0.1
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "dde17bdbb2efd257e236db81049bdd82ccd8407c5124cf5a18fef6cdd5d02c03",
+            "cost_drag": 0.0013581505999999998,
+            "cvar5_improvement": 0.0118241349788236,
+            "drawdown_improvement": 0.03830031098140069,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.11345215665856422,
+            "sortino_excess": 0.042864984451489604,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.03,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "e74ce674edaa94759d1e3c22d8c43922a1d508a2e32210d2851de073af103c10",
+            "cost_drag": 0.001476832225,
+            "cvar5_improvement": 0.011474310721880352,
+            "drawdown_improvement": 0.036603966876107535,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.14489789766528008,
+            "sortino_excess": -0.025297483590602146,
+            "stable": false
+          },
+          {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.05
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "ff4c177908f78482ba254405d5ee9378b5c7c63fe77102b4d0f56fa68a165555",
+            "cost_drag": 0.0020535423499999997,
+            "cvar5_improvement": 0.012235582185878877,
+            "drawdown_improvement": 0.04088169354426302,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.25,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": -0.07014815934370663,
+            "sortino_excess": 0.05198106370179008,
+            "stable": false
+          }
+        ],
+        "excess_attribution": {
+          "cash_opportunity_cost": -0.020713353963376157,
+          "execution_cost": 223.98675,
+          "grid_return": 0.029726665721181628,
+          "reconciliation_error": 3.469446951953614e-18,
+          "transition_return": 0.0,
+          "trend_return": 0.0
+        },
+        "execution_cost_config": {
+          "commission_rate": 0.0001,
+          "minimum_commission": 5.0,
+          "sell_tax_rate": 0.0,
+          "slippage_bps": 3.0,
+          "transfer_fee_rate": 0.0
+        },
+        "screened_axes": {
+          "grid_only": [
+            [
+              "step_pct",
+              "unit_pct"
+            ]
+          ]
+        },
+        "selected_scores": {
+          "grid_only": {
+            "config": {
+              "cost": {
+                "commission_rate": 0.0001,
+                "minimum_commission": 5.0,
+                "sell_tax_rate": 0.0,
+                "slippage_bps": 3.0,
+                "transfer_fee_rate": 0.0
+              },
+              "grid": {
+                "atr_stop_multiple": 3.0,
+                "cooldown_sessions": 5,
+                "fixed_initial_pct": 0.5,
+                "initial_model": "fixed",
+                "max_grid_per_day": 1,
+                "step_pct": 0.015,
+                "unit_pct": 0.15
+              },
+              "trend": {
+                "add_n": 0.5,
+                "amount_ratio_min": null,
+                "max_units": 4,
+                "require_macd_bullish": true,
+                "risk_per_unit": 0.005,
+                "stop_n": 2.0
+              }
+            },
+            "config_hash": "60e882c4a0702e0d30ea46270dffa260f60f745dd4a32acc9fdb1e1a63724c5a",
+            "cost_drag": 0.0023048164500000003,
+            "cvar5_improvement": 0.014060232945483864,
+            "drawdown_improvement": 0.05140511287717678,
+            "exposure_ratio": 0.751984126984127,
+            "family": "grid_only",
+            "positive_subperiod_share": 0.5,
+            "rejection_reason": "outside_stable_plateau",
+            "screened_axes": [
+              "step_pct",
+              "unit_pct"
+            ],
+            "sharpe_excess": 0.29738022836180567,
+            "sortino_excess": 0.3710995101084664,
+            "stable": false
+          }
+        },
+        "strategy_spec": {
+          "config": {
+            "cost": {
+              "commission_rate": 0.0001,
+              "minimum_commission": 5.0,
+              "sell_tax_rate": 0.0,
+              "slippage_bps": 3.0,
+              "transfer_fee_rate": 0.0
+            },
+            "grid": {
+              "atr_stop_multiple": 3.0,
+              "cooldown_sessions": 5,
+              "fixed_initial_pct": 0.5,
+              "initial_model": "fixed",
+              "max_grid_per_day": 1,
+              "step_pct": 0.015,
+              "unit_pct": 0.15
+            },
+            "trend": {
+              "add_n": 0.5,
+              "amount_ratio_min": null,
+              "max_units": 4,
+              "require_macd_bullish": true,
+              "risk_per_unit": 0.005,
+              "stop_n": 2.0
+            }
+          },
+          "config_hash": "60e882c4a0702e0d30ea46270dffa260f60f745dd4a32acc9fdb1e1a63724c5a",
+          "policy_id": "grid_only",
+          "spec_hash": "cbce994ee4fb630f0fd340d354641f8f541eedb6680558fc474c707bffb3e7b7",
+          "strategy_id": "grid_only",
+          "version": "1"
+        },
+        "window_id": "wf_004"
+      }
+    ],
+    "strategy_spec": {
+      "config": {
+        "cost": {
+          "commission_rate": 0.0001,
+          "minimum_commission": 5.0,
+          "sell_tax_rate": 0.0,
+          "slippage_bps": 3.0,
+          "transfer_fee_rate": 0.0
+        },
+        "grid": {
+          "atr_stop_multiple": 3.0,
+          "cooldown_sessions": 5,
+          "fixed_initial_pct": 0.5,
+          "initial_model": "fixed",
+          "max_grid_per_day": 1,
+          "step_pct": 0.02,
+          "unit_pct": 0.1
+        },
+        "trend": {
+          "add_n": 0.5,
+          "amount_ratio_min": null,
+          "max_units": 4,
+          "require_macd_bullish": true,
+          "risk_per_unit": 0.005,
+          "stop_n": 2.0
+        }
+      },
+      "policy_id": "grid_only",
+      "strategy_id": "grid_only",
+      "version": "1"
+    }
+  }
+}
+
+## 事件归因
+
+[
+  {
+    "window_id": "wf_000",
+    "trade_points": [
+      {
+        "event_date": "2024-02-20",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 38400,
+        "raw_price": 1.3013903
+      },
+      {
+        "event_date": "2024-04-18",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 7400,
+        "raw_price": 1.3695890000000002
+      },
+      {
+        "event_date": "2024-06-18",
+        "kind": "fill",
+        "reason": "grid_stop",
+        "shares": 31000,
+        "raw_price": 1.3375986000000002
+      },
+      {
+        "event_date": "2024-07-01",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 37200,
+        "raw_price": 1.3644092
+      },
+      {
+        "event_date": "2024-07-23",
+        "kind": "fill",
+        "reason": "grid_stop",
+        "shares": 37200,
+        "raw_price": 1.3156052
+      },
+      {
+        "event_date": "2024-08-19",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 38300,
+        "raw_price": 1.3023906
+      }
+    ],
+    "by_reason": {
+      "grid_initialize": {
+        "reason": "grid_initialize",
+        "fill_count": 3,
+        "shares": 113900,
+        "traded_value": "150610.9697400"
+      },
+      "grid_sell": {
+        "reason": "grid_sell",
+        "fill_count": 1,
+        "shares": 7400,
+        "traded_value": "10134.9586000000014800"
+      },
+      "grid_stop": {
+        "reason": "grid_stop",
+        "fill_count": 2,
+        "shares": 68200,
+        "traded_value": "90406.0700400000062000"
+      }
+    },
+    "invested_sessions": 97,
+    "cash_sessions": 29,
+    "rejected_order_count": 0
+  },
+  {
+    "window_id": "wf_001",
+    "trade_points": [
+      {
+        "event_date": "2024-08-22",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 38400,
+        "raw_price": 1.2993896999999999
+      },
+      {
+        "event_date": "2024-09-02",
+        "kind": "fill",
+        "reason": "grid_stop",
+        "shares": 38400,
+        "raw_price": 1.2676196
+      },
+      {
+        "event_date": "2024-09-25",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 37900,
+        "raw_price": 1.30039
+      },
+      {
+        "event_date": "2024-09-27",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 7300,
+        "raw_price": 1.3745875
+      },
+      {
+        "event_date": "2024-10-08",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 6800,
+        "raw_price": 1.5895230000000002
+      },
+      {
+        "event_date": "2024-10-09",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 7100,
+        "raw_price": 1.4704409999999999
+      },
+      {
+        "event_date": "2024-10-10",
+        "kind": "fill",
+        "reason": "grid_stop",
+        "shares": 30900,
+        "raw_price": 1.3885833
+      },
+      {
+        "event_date": "2024-10-11",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 35900,
+        "raw_price": 1.430429
+      },
+      {
+        "event_date": "2024-10-30",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 7200,
+        "raw_price": 1.3904169999999998
+      },
+      {
+        "event_date": "2024-11-08",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 7100,
+        "raw_price": 1.4545635000000001
+      },
+      {
+        "event_date": "2024-11-15",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 7200,
+        "raw_price": 1.420426
+      },
+      {
+        "event_date": "2024-12-09",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 7100,
+        "raw_price": 1.4755572000000001
+      },
+      {
+        "event_date": "2024-12-18",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 7200,
+        "raw_price": 1.4394317
+      },
+      {
+        "event_date": "2024-12-23",
+        "kind": "fill",
+        "reason": "grid_stop",
+        "shares": 43300,
+        "raw_price": 1.4205737
+      },
+      {
+        "event_date": "2024-12-24",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 36100,
+        "raw_price": 1.4254275
+      },
+      {
+        "event_date": "2025-01-13",
+        "kind": "fill",
+        "reason": "grid_stop",
+        "shares": 36100,
+        "raw_price": 1.3645905
+      },
+      {
+        "event_date": "2025-02-05",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 35700,
+        "raw_price": 1.410423
+      },
+      {
+        "event_date": "2025-02-24",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 7200,
+        "raw_price": 1.3774131
+      }
+    ],
+    "by_reason": {
+      "grid_initialize": {
+        "reason": "grid_initialize",
+        "fill_count": 5,
+        "shares": 184000,
+        "traded_value": "252343.7804299999961600"
+      },
+      "grid_stop": {
+        "reason": "grid_stop",
+        "fill_count": 4,
+        "shares": 148700,
+        "traded_value": "202356.3748700"
+      },
+      "grid_sell": {
+        "reason": "grid_sell",
+        "fill_count": 4,
+        "shares": 28300,
+        "traded_value": "41647.1021200000027800"
+      },
+      "grid_buy": {
+        "reason": "grid_buy",
+        "fill_count": 5,
+        "shares": 35900,
+        "traded_value": "50959.4832599999978500"
+      }
+    },
+    "invested_sessions": 97,
+    "cash_sessions": 29,
+    "rejected_order_count": 0
+  },
+  {
+    "window_id": "wf_002",
+    "trade_points": [
+      {
+        "event_date": "2025-03-06",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 36000,
+        "raw_price": 1.3854155
+      },
+      {
+        "event_date": "2025-03-26",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 7100,
+        "raw_price": 1.4065779
+      },
+      {
+        "event_date": "2025-04-08",
+        "kind": "fill",
+        "reason": "grid_stop",
+        "shares": 28900,
+        "raw_price": 1.3595920000000001
+      },
+      {
+        "event_date": "2025-04-16",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 35400,
+        "raw_price": 1.4004199999999998
+      },
+      {
+        "event_date": "2025-04-29",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 7000,
+        "raw_price": 1.419574
+      },
+      {
+        "event_date": "2025-05-15",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 6900,
+        "raw_price": 1.4435668
+      },
+      {
+        "event_date": "2025-06-25",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 6900,
+        "raw_price": 1.4645605000000002
+      },
+      {
+        "event_date": "2025-07-07",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 6700,
+        "raw_price": 1.4945515000000003
+      },
+      {
+        "event_date": "2025-07-16",
+        "kind": "fill",
+        "reason": "grid_stop",
+        "shares": 7900,
+        "raw_price": 1.4535638
+      },
+      {
+        "event_date": "2025-07-17",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 34900,
+        "raw_price": 1.4494347
+      },
+      {
+        "event_date": "2025-07-23",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 6900,
+        "raw_price": 1.4725581
+      },
+      {
+        "event_date": "2025-07-29",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 7000,
+        "raw_price": 1.4484344
+      },
+      {
+        "event_date": "2025-08-01",
+        "kind": "fill",
+        "reason": "grid_stop",
+        "shares": 35000,
+        "raw_price": 1.429571
+      },
+      {
+        "event_date": "2025-08-11",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 34600,
+        "raw_price": 1.4534359000000001
+      },
+      {
+        "event_date": "2025-08-18",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 6900,
+        "raw_price": 1.4354305
+      },
+      {
+        "event_date": "2025-08-26",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 6900,
+        "raw_price": 1.4535638
+      },
+      {
+        "event_date": "2025-08-28",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 7000,
+        "raw_price": 1.4274281
+      },
+      {
+        "event_date": "2025-09-02",
+        "kind": "fill",
+        "reason": "grid_stop",
+        "shares": 41600,
+        "raw_price": 1.4165749
+      }
+    ],
+    "by_reason": {
+      "grid_initialize": {
+        "reason": "grid_initialize",
+        "fill_count": 4,
+        "shares": 140900,
+        "traded_value": "200323.9791699999963800"
+      },
+      "grid_sell": {
+        "reason": "grid_sell",
+        "fill_count": 7,
+        "shares": 48400,
+        "traded_value": "70193.5356200000033900"
+      },
+      "grid_stop": {
+        "reason": "grid_stop",
+        "fill_count": 4,
+        "shares": 113400,
+        "traded_value": "159739.8636600000028900"
+      },
+      "grid_buy": {
+        "reason": "grid_buy",
+        "fill_count": 3,
+        "shares": 20900,
+        "traded_value": "30035.5079500"
+      }
+    },
+    "invested_sessions": 110,
+    "cash_sessions": 16,
+    "rejected_order_count": 0
+  },
+  {
+    "window_id": "wf_003",
+    "trade_points": [
+      {
+        "event_date": "2025-10-13",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 35500,
+        "raw_price": 1.4084223999999999
+      },
+      {
+        "event_date": "2025-10-16",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 14000,
+        "raw_price": 1.4305707
+      },
+      {
+        "event_date": "2025-10-28",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 13900,
+        "raw_price": 1.4525641
+      },
+      {
+        "event_date": "2025-11-11",
+        "kind": "rejected_order",
+        "reason": "insufficient shares",
+        "shares": null,
+        "raw_price": null
+      },
+      {
+        "event_date": "2025-11-12",
+        "kind": "rejected_order",
+        "reason": "insufficient shares",
+        "shares": null,
+        "raw_price": null
+      },
+      {
+        "event_date": "2025-11-13",
+        "kind": "rejected_order",
+        "reason": "insufficient shares",
+        "shares": null,
+        "raw_price": null
+      },
+      {
+        "event_date": "2025-11-14",
+        "kind": "rejected_order",
+        "reason": "insufficient shares",
+        "shares": null,
+        "raw_price": null
+      },
+      {
+        "event_date": "2025-11-17",
+        "kind": "rejected_order",
+        "reason": "insufficient shares",
+        "shares": null,
+        "raw_price": null
+      },
+      {
+        "event_date": "2025-11-21",
+        "kind": "rejected_order",
+        "reason": "insufficient shares",
+        "shares": null,
+        "raw_price": null
+      },
+      {
+        "event_date": "2025-11-25",
+        "kind": "fill",
+        "reason": "grid_stop",
+        "shares": 7600,
+        "raw_price": 1.4455662
+      },
+      {
+        "event_date": "2026-01-07",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 35900,
+        "raw_price": 1.4064218
+      },
+      {
+        "event_date": "2026-02-11",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 14200,
+        "raw_price": 1.4255722
+      },
+      {
+        "event_date": "2026-03-13",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 14000,
+        "raw_price": 1.4545635000000001
+      }
+    ],
+    "by_reason": {
+      "grid_initialize": {
+        "reason": "grid_initialize",
+        "fill_count": 2,
+        "shares": 71400,
+        "traded_value": "100489.5378199999964500"
+      },
+      "grid_sell": {
+        "reason": "grid_sell",
+        "fill_count": 4,
+        "shares": 56100,
+        "traded_value": "80825.6450300000014000"
+      },
+      "grid_stop": {
+        "reason": "grid_stop",
+        "fill_count": 1,
+        "shares": 7600,
+        "traded_value": "10986.3031200"
+      }
+    },
+    "invested_sessions": 76,
+    "cash_sessions": 50,
+    "rejected_order_count": 6
+  },
+  {
+    "window_id": "wf_004",
+    "trade_points": [
+      {
+        "event_date": "2026-03-20",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 34300,
+        "raw_price": 1.4544362
+      },
+      {
+        "event_date": "2026-03-24",
+        "kind": "fill",
+        "reason": "grid_stop",
+        "shares": 34300,
+        "raw_price": 1.4085773000000001
+      },
+      {
+        "event_date": "2026-04-02",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 34200,
+        "raw_price": 1.4384313999999998
+      },
+      {
+        "event_date": "2026-04-14",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 10300,
+        "raw_price": 1.4134239
+      },
+      {
+        "event_date": "2026-04-22",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 10300,
+        "raw_price": 1.4325701000000002
+      },
+      {
+        "event_date": "2026-05-25",
+        "kind": "fill",
+        "reason": "grid_stop",
+        "shares": 34200,
+        "raw_price": 1.4075776
+      },
+      {
+        "event_date": "2026-06-01",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 34000,
+        "raw_price": 1.430429
+      },
+      {
+        "event_date": "2026-06-17",
+        "kind": "fill",
+        "reason": "grid_stop",
+        "shares": 34000,
+        "raw_price": 1.3985803
+      },
+      {
+        "event_date": "2026-07-09",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 35200,
+        "raw_price": 1.3694107
+      },
+      {
+        "event_date": "2026-07-15",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 10500,
+        "raw_price": 1.3775865999999999
+      },
+      {
+        "event_date": "2026-07-21",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 10200,
+        "raw_price": 1.4275716
+      },
+      {
+        "event_date": "2026-07-31",
+        "kind": "fill",
+        "reason": "grid_sell",
+        "shares": 10100,
+        "raw_price": 1.4445665
+      },
+      {
+        "event_date": "2026-08-05",
+        "kind": "fill",
+        "reason": "grid_buy",
+        "shares": 10300,
+        "raw_price": 1.4154245
+      },
+      {
+        "event_date": "2026-08-10",
+        "kind": "fill",
+        "reason": "grid_stop",
+        "shares": 14700,
+        "raw_price": 1.3905827
+      },
+      {
+        "event_date": "2026-08-27",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 34500,
+        "raw_price": 1.4134239
+      }
+    ],
+    "by_reason": {
+      "grid_initialize": {
+        "reason": "grid_initialize",
+        "fill_count": 5,
+        "shares": 172200,
+        "traded_value": "244682.4827299999931600"
+      },
+      "grid_stop": {
+        "reason": "grid_stop",
+        "fill_count": 4,
+        "shares": 117200,
+        "traded_value": "164446.6512000000034300"
+      },
+      "grid_buy": {
+        "reason": "grid_buy",
+        "fill_count": 2,
+        "shares": 20600,
+        "traded_value": "29137.1385200"
+      },
+      "grid_sell": {
+        "reason": "grid_sell",
+        "fill_count": 4,
+        "shares": 41100,
+        "traded_value": "58371.4833000000010100"
+      }
+    },
+    "invested_sessions": 85,
+    "cash_sessions": 41,
+    "rejected_order_count": 0
+  }
+]
+## Excess return diagnostics
+
+Contributions sum daily net excess returns; execution_cost is a separate currency diagnostic already embedded in NAV.
+
+### wf_000
+
+Largest absolute contributor: cash_opportunity_cost (-0.00749777).
+Next research action: Study cash exposure and re-entry timing on training windows.
+
+### wf_001
+
+Largest absolute contributor: cash_opportunity_cost (-0.05624453).
+Next research action: Study cash exposure and re-entry timing on training windows.
+
+### wf_002
+
+Largest absolute contributor: cash_opportunity_cost (-0.01623696).
+Next research action: Study cash exposure and re-entry timing on training windows.
+
+### wf_003
+
+Largest absolute contributor: grid_return (-0.03578276).
+Next research action: Study grid spacing, sizing and stop/cooldown behavior on training windows.
+
+### wf_004
+
+Largest absolute contributor: grid_return (0.02972667).
+Next research action: Study grid spacing, sizing and stop/cooldown behavior on training windows.
+
+Research evidence only; no broker action is authorized.

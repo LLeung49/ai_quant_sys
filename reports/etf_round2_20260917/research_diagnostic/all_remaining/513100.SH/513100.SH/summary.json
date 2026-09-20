@@ -1,0 +1,1384 @@
+{
+  "activation_eligible": false,
+  "comparison": {
+    "buy_and_hold": {
+      "annual_return": 0.22744281900458607,
+      "annual_volatility": 0.2377380809691629,
+      "calmar": 0.9077202103813573,
+      "cvar5": -0.034256998467596805,
+      "max_drawdown": -0.25056489478077315,
+      "minimum_commission_share": 0.0,
+      "payoff_ratio": 1.0240472350694905,
+      "profit_factor": 1.198353147421744,
+      "recovery_sessions": 1,
+      "sharpe": 0.9566949395628703,
+      "slippage_degradation": 2.9985468374699757,
+      "sortino": 1.2775932398511851,
+      "total_cost": 199.7674,
+      "turnover": 3.920569583142156,
+      "unfilled_share": 0.0,
+      "win_rate": 0.5246422893481717,
+      "worst_126_session_return": -0.12952899451150646
+    },
+    "differences": {
+      "annual_return": -0.12043361301072286,
+      "annual_volatility": -0.11901477204985735,
+      "calmar": -0.10330000114724802,
+      "cvar5": 0.017103949307850985,
+      "max_drawdown": 0.11753839350012163,
+      "minimum_commission_share": 1.0,
+      "payoff_ratio": 0.019635596892267904,
+      "profit_factor": -0.01479529674346125,
+      "recovery_sessions": 0,
+      "sharpe": -0.055362193972063434,
+      "slippage_degradation": -2.936207914818042,
+      "sortino": -0.06927927113462884,
+      "total_cost": 1723.0660500000001,
+      "turnover": -0.5715740126533935,
+      "unfilled_share": 0.0,
+      "win_rate": 0.0,
+      "worst_126_session_return": 0.0633934173802011
+    },
+    "strategy": {
+      "annual_return": 0.10700920599386321,
+      "annual_volatility": 0.11872330891930556,
+      "calmar": 0.8044202092341093,
+      "cvar5": -0.01715304915974582,
+      "max_drawdown": -0.13302650128065152,
+      "minimum_commission_share": 1.0,
+      "payoff_ratio": 1.0436828319617584,
+      "profit_factor": 1.1835578506782827,
+      "recovery_sessions": 1,
+      "sharpe": 0.9013327455908069,
+      "slippage_degradation": 0.0623389226519337,
+      "sortino": 1.2083139687165563,
+      "total_cost": 1922.83345,
+      "turnover": 3.3489955704887624,
+      "unfilled_share": 0.0,
+      "win_rate": 0.5246422893481717,
+      "worst_126_session_return": -0.06613557713130536
+    }
+  },
+  "data_provenance": {
+    "config_hashes": [
+      "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce"
+    ],
+    "data_cutoff": "2026-09-17",
+    "run_manifest": {
+      "activation_eligible": false,
+      "benchmark_specs": [
+        {
+          "benchmark_id": "buy_and_hold",
+          "rebalance_sessions": null,
+          "target_weight": 1.0,
+          "version": "1"
+        },
+        {
+          "benchmark_id": "fixed_half_hold",
+          "rebalance_sessions": 1,
+          "target_weight": 0.5,
+          "version": "1"
+        }
+      ],
+      "data_cutoff": "2026-09-17",
+      "data_fingerprint": "6d3bec467d9953d0fcecfb19b5f33b7f305ec092eb0217e353f0bc82573bcb99",
+      "execution_windows": [
+        {
+          "benchmarks": [
+            {
+              "benchmark_id": "buy_and_hold",
+              "metrics": {
+                "annual_return": 0.28054129411422535,
+                "annual_volatility": 0.23847071926160063,
+                "calmar": 1.5656221199362974,
+                "cvar5": -0.03989967459374527,
+                "max_drawdown": -0.1791883817569211,
+                "minimum_commission_share": 0.0,
+                "payoff_ratio": 0.9033452031885624,
+                "profit_factor": 1.2334136428151523,
+                "recovery_sessions": 1,
+                "sharpe": 1.17641819919398,
+                "slippage_degradation": 2.99838,
+                "sortino": 1.3288881891726243,
+                "total_cost": 39.9838,
+                "turnover": 0.9433061098099356,
+                "unfilled_share": 0.0,
+                "win_rate": 0.568,
+                "worst_126_session_return": 0.1305001619999997
+              },
+              "nav_sessions": 126,
+              "provenance_hash": "ad96060e0acdbd7d60fb870e3232884fa580658da2888cfebb9f99956bf8f0e6",
+              "rebalance_sessions": null,
+              "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+              "target_weight": 1.0,
+              "validation_end": "2024-08-20",
+              "validation_start": "2024-02-19",
+              "version": "1"
+            },
+            {
+              "benchmark_id": "fixed_half_hold",
+              "metrics": {
+                "annual_return": 0.12959561083592352,
+                "annual_volatility": 0.11876397795798202,
+                "calmar": 1.3981566156970486,
+                "cvar5": -0.019932880340624442,
+                "max_drawdown": -0.09269033910862257,
+                "minimum_commission_share": 1.0,
+                "payoff_ratio": 0.9254553538309598,
+                "profit_factor": 1.2168024096666321,
+                "recovery_sessions": 1,
+                "sharpe": 1.0912030151244485,
+                "slippage_degradation": 0.055776,
+                "sortino": 1.2413012157769026,
+                "total_cost": 438.14704,
+                "turnover": 0.7506559938878898,
+                "unfilled_share": 0.0,
+                "win_rate": 0.568,
+                "worst_126_session_return": 0.06231052960000083
+              },
+              "nav_sessions": 126,
+              "provenance_hash": "8b2bac349c450898c8323f53d9294ff1bca46a32b24858cf044f59f48f6c9c43",
+              "rebalance_sessions": 1,
+              "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+              "target_weight": 0.5,
+              "validation_end": "2024-08-20",
+              "validation_start": "2024-02-19",
+              "version": "1"
+            }
+          ],
+          "execution_config": {
+            "cost": {
+              "commission_rate": 0.0001,
+              "minimum_commission": 5.0,
+              "sell_tax_rate": 0.0,
+              "slippage_bps": 3.0,
+              "transfer_fee_rate": 0.0
+            },
+            "grid": {
+              "atr_stop_multiple": 3.0,
+              "cooldown_sessions": 5,
+              "fixed_initial_pct": 0.5,
+              "initial_model": "fixed",
+              "max_grid_per_day": 1,
+              "step_pct": 0.02,
+              "unit_pct": 0.1
+            },
+            "trend": {
+              "add_n": 0.5,
+              "amount_ratio_min": null,
+              "max_units": 4,
+              "require_macd_bullish": true,
+              "risk_per_unit": 0.005,
+              "stop_n": 2.0
+            }
+          },
+          "profile_id": "core_hold_rebalance",
+          "reference_benchmark_id": "buy_and_hold",
+          "strategy_spec": null,
+          "window_id": "wf_000"
+        },
+        {
+          "benchmarks": [
+            {
+              "benchmark_id": "buy_and_hold",
+              "metrics": {
+                "annual_return": 0.051636775242464905,
+                "annual_volatility": 0.1994688787803615,
+                "calmar": 0.5308447590368589,
+                "cvar5": -0.030952899575204435,
+                "max_drawdown": -0.09727283610400972,
+                "minimum_commission_share": 0.0,
+                "payoff_ratio": 0.8590665739711896,
+                "profit_factor": 1.0621186732734706,
+                "recovery_sessions": 43,
+                "sharpe": 0.2588713365122136,
+                "slippage_degradation": 2.9983543543543547,
+                "sortino": 0.35299619537087323,
+                "total_cost": 39.943560000000005,
+                "turnover": 0.9617544115804972,
+                "unfilled_share": 0.0,
+                "win_rate": 0.544,
+                "worst_126_session_return": 0.02528856439999916
+              },
+              "nav_sessions": 126,
+              "provenance_hash": "ad96060e0acdbd7d60fb870e3232884fa580658da2888cfebb9f99956bf8f0e6",
+              "rebalance_sessions": null,
+              "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+              "target_weight": 1.0,
+              "validation_end": "2025-03-04",
+              "validation_start": "2024-08-21",
+              "version": "1"
+            },
+            {
+              "benchmark_id": "fixed_half_hold",
+              "metrics": {
+                "annual_return": 0.02315932500264095,
+                "annual_volatility": 0.09986741816070245,
+                "calmar": 0.46170861207681274,
+                "cvar5": -0.015531004478493371,
+                "max_drawdown": -0.050160045528429564,
+                "minimum_commission_share": 1.0,
+                "payoff_ratio": 0.8792293995791676,
+                "profit_factor": 1.0489052486207613,
+                "recovery_sessions": 43,
+                "sharpe": 0.2319007082507524,
+                "slippage_degradation": 0.059309,
+                "sortino": 0.31492586586032767,
+                "total_cost": 381.35124,
+                "turnover": 0.6991993819097332,
+                "unfilled_share": 0.0,
+                "win_rate": 0.544,
+                "worst_126_session_return": 0.01142148759999917
+              },
+              "nav_sessions": 126,
+              "provenance_hash": "8b2bac349c450898c8323f53d9294ff1bca46a32b24858cf044f59f48f6c9c43",
+              "rebalance_sessions": 1,
+              "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+              "target_weight": 0.5,
+              "validation_end": "2025-03-04",
+              "validation_start": "2024-08-21",
+              "version": "1"
+            }
+          ],
+          "execution_config": {
+            "cost": {
+              "commission_rate": 0.0001,
+              "minimum_commission": 5.0,
+              "sell_tax_rate": 0.0,
+              "slippage_bps": 3.0,
+              "transfer_fee_rate": 0.0
+            },
+            "grid": {
+              "atr_stop_multiple": 3.0,
+              "cooldown_sessions": 5,
+              "fixed_initial_pct": 0.5,
+              "initial_model": "fixed",
+              "max_grid_per_day": 1,
+              "step_pct": 0.02,
+              "unit_pct": 0.1
+            },
+            "trend": {
+              "add_n": 0.5,
+              "amount_ratio_min": null,
+              "max_units": 4,
+              "require_macd_bullish": true,
+              "risk_per_unit": 0.005,
+              "stop_n": 2.0
+            }
+          },
+          "profile_id": "core_hold_rebalance",
+          "reference_benchmark_id": "buy_and_hold",
+          "strategy_spec": null,
+          "window_id": "wf_001"
+        },
+        {
+          "benchmarks": [
+            {
+              "benchmark_id": "buy_and_hold",
+              "metrics": {
+                "annual_return": 0.19106126285931313,
+                "annual_volatility": 0.2763239574279447,
+                "calmar": 1.1108250414990541,
+                "cvar5": -0.041892998484214815,
+                "max_drawdown": -0.1719994199999999,
+                "minimum_commission_share": 0.0,
+                "payoff_ratio": 1.0366018575778642,
+                "profit_factor": 1.1846878372318448,
+                "recovery_sessions": 46,
+                "sharpe": 0.6914393693465215,
+                "slippage_degradation": 2.998198198198198,
+                "sortino": 0.8057356207134866,
+                "total_cost": 39.942,
+                "turnover": 0.983672959199517,
+                "unfilled_share": 0.0,
+                "win_rate": 0.512,
+                "worst_126_session_return": 0.0906005799999996
+              },
+              "nav_sessions": 126,
+              "provenance_hash": "ad96060e0acdbd7d60fb870e3232884fa580658da2888cfebb9f99956bf8f0e6",
+              "rebalance_sessions": null,
+              "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+              "target_weight": 1.0,
+              "validation_end": "2025-09-03",
+              "validation_start": "2025-03-05",
+              "version": "1"
+            },
+            {
+              "benchmark_id": "fixed_half_hold",
+              "metrics": {
+                "annual_return": 0.0908171731620977,
+                "annual_volatility": 0.13769026452101107,
+                "calmar": 1.0292630201271353,
+                "cvar5": -0.020922097487300968,
+                "max_drawdown": -0.08823514630000007,
+                "minimum_commission_share": 1.0,
+                "payoff_ratio": 1.0560694096028527,
+                "profit_factor": 1.1653179692169409,
+                "recovery_sessions": 46,
+                "sharpe": 0.6595758493022525,
+                "slippage_degradation": 0.06545597014925374,
+                "sortino": 0.7774200342195258,
+                "total_cost": 356.92775,
+                "turnover": 0.7256565805766703,
+                "unfilled_share": 0.0,
+                "win_rate": 0.512,
+                "worst_126_session_return": 0.04406172249999951
+              },
+              "nav_sessions": 126,
+              "provenance_hash": "8b2bac349c450898c8323f53d9294ff1bca46a32b24858cf044f59f48f6c9c43",
+              "rebalance_sessions": 1,
+              "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+              "target_weight": 0.5,
+              "validation_end": "2025-09-03",
+              "validation_start": "2025-03-05",
+              "version": "1"
+            }
+          ],
+          "execution_config": {
+            "cost": {
+              "commission_rate": 0.0001,
+              "minimum_commission": 5.0,
+              "sell_tax_rate": 0.0,
+              "slippage_bps": 3.0,
+              "transfer_fee_rate": 0.0
+            },
+            "grid": {
+              "atr_stop_multiple": 3.0,
+              "cooldown_sessions": 5,
+              "fixed_initial_pct": 0.5,
+              "initial_model": "fixed",
+              "max_grid_per_day": 1,
+              "step_pct": 0.02,
+              "unit_pct": 0.1
+            },
+            "trend": {
+              "add_n": 0.5,
+              "amount_ratio_min": null,
+              "max_units": 4,
+              "require_macd_bullish": true,
+              "risk_per_unit": 0.005,
+              "stop_n": 2.0
+            }
+          },
+          "profile_id": "core_hold_rebalance",
+          "reference_benchmark_id": "buy_and_hold",
+          "strategy_spec": null,
+          "window_id": "wf_002"
+        },
+        {
+          "benchmarks": [
+            {
+              "benchmark_id": "buy_and_hold",
+              "metrics": {
+                "annual_return": 0.10995626449487728,
+                "annual_volatility": 0.19036393704745092,
+                "calmar": 0.9021825763631227,
+                "cvar5": -0.02664534635712884,
+                "max_drawdown": -0.12187806257368972,
+                "minimum_commission_share": 0.0,
+                "payoff_ratio": 1.247486037290931,
+                "profit_factor": 1.1131413871211384,
+                "recovery_sessions": 1,
+                "sharpe": 0.577610792255621,
+                "slippage_degradation": 2.99827027027027,
+                "sortino": 0.9382344067806202,
+                "total_cost": 39.942719999999994,
+                "turnover": 0.9105359285608794,
+                "unfilled_share": 0.0,
+                "win_rate": 0.464,
+                "worst_126_session_return": 0.05310857279999959
+              },
+              "nav_sessions": 126,
+              "provenance_hash": "ad96060e0acdbd7d60fb870e3232884fa580658da2888cfebb9f99956bf8f0e6",
+              "rebalance_sessions": null,
+              "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+              "target_weight": 1.0,
+              "validation_end": "2026-03-18",
+              "validation_start": "2025-09-04",
+              "version": "1"
+            },
+            {
+              "benchmark_id": "fixed_half_hold",
+              "metrics": {
+                "annual_return": 0.05077609586955045,
+                "annual_volatility": 0.09524694313963929,
+                "calmar": 0.795492212450013,
+                "cvar5": -0.013402536042377086,
+                "max_drawdown": -0.06382978371738757,
+                "minimum_commission_share": 1.0,
+                "payoff_ratio": 1.2697436830158098,
+                "profit_factor": 1.099181098730104,
+                "recovery_sessions": 1,
+                "sharpe": 0.5330994801072915,
+                "slippage_degradation": 0.0667966875,
+                "sortino": 0.8589046485635766,
+                "total_cost": 341.37494,
+                "turnover": 0.6809173505367874,
+                "unfilled_share": 0.0,
+                "win_rate": 0.464,
+                "worst_126_session_return": 0.024872250599999646
+              },
+              "nav_sessions": 126,
+              "provenance_hash": "8b2bac349c450898c8323f53d9294ff1bca46a32b24858cf044f59f48f6c9c43",
+              "rebalance_sessions": 1,
+              "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+              "target_weight": 0.5,
+              "validation_end": "2026-03-18",
+              "validation_start": "2025-09-04",
+              "version": "1"
+            }
+          ],
+          "execution_config": {
+            "cost": {
+              "commission_rate": 0.0001,
+              "minimum_commission": 5.0,
+              "sell_tax_rate": 0.0,
+              "slippage_bps": 3.0,
+              "transfer_fee_rate": 0.0
+            },
+            "grid": {
+              "atr_stop_multiple": 3.0,
+              "cooldown_sessions": 5,
+              "fixed_initial_pct": 0.5,
+              "initial_model": "fixed",
+              "max_grid_per_day": 1,
+              "step_pct": 0.02,
+              "unit_pct": 0.1
+            },
+            "trend": {
+              "add_n": 0.5,
+              "amount_ratio_min": null,
+              "max_units": 4,
+              "require_macd_bullish": true,
+              "risk_per_unit": 0.005,
+              "stop_n": 2.0
+            }
+          },
+          "profile_id": "core_hold_rebalance",
+          "reference_benchmark_id": "buy_and_hold",
+          "strategy_spec": null,
+          "window_id": "wf_003"
+        },
+        {
+          "benchmarks": [
+            {
+              "benchmark_id": "buy_and_hold",
+              "metrics": {
+                "annual_return": 0.5752702398536544,
+                "annual_volatility": 0.2733508027904482,
+                "calmar": 4.201499012035221,
+                "cvar5": -0.032272648232508395,
+                "max_drawdown": -0.13692023685017873,
+                "minimum_commission_share": 0.0,
+                "payoff_ratio": 1.0641873213082966,
+                "profit_factor": 1.3597949105606013,
+                "recovery_sessions": 13,
+                "sharpe": 2.104512713996523,
+                "slippage_degradation": 2.9995315315315314,
+                "sortino": 3.7787690836318144,
+                "total_cost": 39.95532,
+                "turnover": 0.8454821117265742,
+                "unfilled_share": 0.0,
+                "win_rate": 0.552,
+                "worst_126_session_return": 0.25283644680000195
+              },
+              "nav_sessions": 126,
+              "provenance_hash": "ad96060e0acdbd7d60fb870e3232884fa580658da2888cfebb9f99956bf8f0e6",
+              "rebalance_sessions": null,
+              "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+              "target_weight": 1.0,
+              "validation_end": "2026-09-17",
+              "validation_start": "2026-03-19",
+              "version": "1"
+            },
+            {
+              "benchmark_id": "fixed_half_hold",
+              "metrics": {
+                "annual_return": 0.2590430733537137,
+                "annual_volatility": 0.13677911584363953,
+                "calmar": 3.669402617078923,
+                "cvar5": -0.016158533004346626,
+                "max_drawdown": -0.07059543483945308,
+                "minimum_commission_share": 1.0,
+                "payoff_ratio": 1.0752679176236386,
+                "profit_factor": 1.348972478473292,
+                "recovery_sessions": 13,
+                "sharpe": 1.893878840756958,
+                "slippage_degradation": 0.06587494736842105,
+                "sortino": 3.3866997685501232,
+                "total_cost": 405.03248,
+                "turnover": 0.7674204884354618,
+                "unfilled_share": 0.0,
+                "win_rate": 0.552,
+                "worst_126_session_return": 0.12104567519999954
+              },
+              "nav_sessions": 126,
+              "provenance_hash": "8b2bac349c450898c8323f53d9294ff1bca46a32b24858cf044f59f48f6c9c43",
+              "rebalance_sessions": 1,
+              "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+              "target_weight": 0.5,
+              "validation_end": "2026-09-17",
+              "validation_start": "2026-03-19",
+              "version": "1"
+            }
+          ],
+          "execution_config": {
+            "cost": {
+              "commission_rate": 0.0001,
+              "minimum_commission": 5.0,
+              "sell_tax_rate": 0.0,
+              "slippage_bps": 3.0,
+              "transfer_fee_rate": 0.0
+            },
+            "grid": {
+              "atr_stop_multiple": 3.0,
+              "cooldown_sessions": 5,
+              "fixed_initial_pct": 0.5,
+              "initial_model": "fixed",
+              "max_grid_per_day": 1,
+              "step_pct": 0.02,
+              "unit_pct": 0.1
+            },
+            "trend": {
+              "add_n": 0.5,
+              "amount_ratio_min": null,
+              "max_units": 4,
+              "require_macd_bullish": true,
+              "risk_per_unit": 0.005,
+              "stop_n": 2.0
+            }
+          },
+          "profile_id": "core_hold_rebalance",
+          "reference_benchmark_id": "buy_and_hold",
+          "strategy_spec": null,
+          "window_id": "wf_004"
+        }
+      ],
+      "experiment": {
+        "allowed_axes": {},
+        "as_of_date": "2026-09-17",
+        "experiment_id": "round2-nasdaq-20260917",
+        "profile": {
+          "benchmarks": [
+            {
+              "benchmark_id": "buy_and_hold",
+              "rebalance_sessions": null,
+              "target_weight": 1.0,
+              "version": "1"
+            },
+            {
+              "benchmark_id": "fixed_half_hold",
+              "rebalance_sessions": 1,
+              "target_weight": 0.5,
+              "version": "1"
+            }
+          ],
+          "profile_id": "core_hold_rebalance",
+          "required_evidence": [
+            "execution",
+            "integrated_oos",
+            "provenance"
+          ],
+          "selection_families": [],
+          "strategy": null,
+          "version": "1"
+        },
+        "profile_hash": "3d23b18c8a3614be7b56c821bcbd22b50743036b6473fa2520a5bd6e0acbeff9",
+        "start_date": "2021-01-01",
+        "target_codes": [
+          "513100.SH"
+        ]
+      },
+      "experiment_hash": "94df218c02d64add06e34ac71513377475bb942381f10440a3d296a64b4ac04a",
+      "experiment_windows": [
+        {
+          "benchmark_specs": [
+            {
+              "benchmark_id": "buy_and_hold",
+              "config": {
+                "cost": {
+                  "commission_rate": 0.0001,
+                  "minimum_commission": 5.0,
+                  "sell_tax_rate": 0.0,
+                  "slippage_bps": 3.0,
+                  "transfer_fee_rate": 0.0
+                },
+                "grid": {
+                  "atr_stop_multiple": 3.0,
+                  "cooldown_sessions": 5,
+                  "fixed_initial_pct": 0.5,
+                  "initial_model": "fixed",
+                  "max_grid_per_day": 1,
+                  "step_pct": 0.02,
+                  "unit_pct": 0.1
+                },
+                "trend": {
+                  "add_n": 0.5,
+                  "amount_ratio_min": null,
+                  "max_units": 4,
+                  "require_macd_bullish": true,
+                  "risk_per_unit": 0.005,
+                  "stop_n": 2.0
+                }
+              },
+              "provenance_hash": "ad96060e0acdbd7d60fb870e3232884fa580658da2888cfebb9f99956bf8f0e6",
+              "rebalance_sessions": null,
+              "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+              "target_weight": 1.0,
+              "version": "1"
+            },
+            {
+              "benchmark_id": "fixed_half_hold",
+              "config": {
+                "cost": {
+                  "commission_rate": 0.0001,
+                  "minimum_commission": 5.0,
+                  "sell_tax_rate": 0.0,
+                  "slippage_bps": 3.0,
+                  "transfer_fee_rate": 0.0
+                },
+                "grid": {
+                  "atr_stop_multiple": 3.0,
+                  "cooldown_sessions": 5,
+                  "fixed_initial_pct": 0.5,
+                  "initial_model": "fixed",
+                  "max_grid_per_day": 1,
+                  "step_pct": 0.02,
+                  "unit_pct": 0.1
+                },
+                "trend": {
+                  "add_n": 0.5,
+                  "amount_ratio_min": null,
+                  "max_units": 4,
+                  "require_macd_bullish": true,
+                  "risk_per_unit": 0.005,
+                  "stop_n": 2.0
+                }
+              },
+              "provenance_hash": "8b2bac349c450898c8323f53d9294ff1bca46a32b24858cf044f59f48f6c9c43",
+              "rebalance_sessions": 1,
+              "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+              "target_weight": 0.5,
+              "version": "1"
+            }
+          ],
+          "candidate_scores": [],
+          "excess_attribution": null,
+          "execution_cost_config": {
+            "commission_rate": 0.0001,
+            "minimum_commission": 5.0,
+            "sell_tax_rate": 0.0,
+            "slippage_bps": 3.0,
+            "transfer_fee_rate": 0.0
+          },
+          "screened_axes": {},
+          "selected_scores": {},
+          "strategy_spec": null,
+          "window_id": "wf_000"
+        },
+        {
+          "benchmark_specs": [
+            {
+              "benchmark_id": "buy_and_hold",
+              "config": {
+                "cost": {
+                  "commission_rate": 0.0001,
+                  "minimum_commission": 5.0,
+                  "sell_tax_rate": 0.0,
+                  "slippage_bps": 3.0,
+                  "transfer_fee_rate": 0.0
+                },
+                "grid": {
+                  "atr_stop_multiple": 3.0,
+                  "cooldown_sessions": 5,
+                  "fixed_initial_pct": 0.5,
+                  "initial_model": "fixed",
+                  "max_grid_per_day": 1,
+                  "step_pct": 0.02,
+                  "unit_pct": 0.1
+                },
+                "trend": {
+                  "add_n": 0.5,
+                  "amount_ratio_min": null,
+                  "max_units": 4,
+                  "require_macd_bullish": true,
+                  "risk_per_unit": 0.005,
+                  "stop_n": 2.0
+                }
+              },
+              "provenance_hash": "ad96060e0acdbd7d60fb870e3232884fa580658da2888cfebb9f99956bf8f0e6",
+              "rebalance_sessions": null,
+              "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+              "target_weight": 1.0,
+              "version": "1"
+            },
+            {
+              "benchmark_id": "fixed_half_hold",
+              "config": {
+                "cost": {
+                  "commission_rate": 0.0001,
+                  "minimum_commission": 5.0,
+                  "sell_tax_rate": 0.0,
+                  "slippage_bps": 3.0,
+                  "transfer_fee_rate": 0.0
+                },
+                "grid": {
+                  "atr_stop_multiple": 3.0,
+                  "cooldown_sessions": 5,
+                  "fixed_initial_pct": 0.5,
+                  "initial_model": "fixed",
+                  "max_grid_per_day": 1,
+                  "step_pct": 0.02,
+                  "unit_pct": 0.1
+                },
+                "trend": {
+                  "add_n": 0.5,
+                  "amount_ratio_min": null,
+                  "max_units": 4,
+                  "require_macd_bullish": true,
+                  "risk_per_unit": 0.005,
+                  "stop_n": 2.0
+                }
+              },
+              "provenance_hash": "8b2bac349c450898c8323f53d9294ff1bca46a32b24858cf044f59f48f6c9c43",
+              "rebalance_sessions": 1,
+              "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+              "target_weight": 0.5,
+              "version": "1"
+            }
+          ],
+          "candidate_scores": [],
+          "excess_attribution": null,
+          "execution_cost_config": {
+            "commission_rate": 0.0001,
+            "minimum_commission": 5.0,
+            "sell_tax_rate": 0.0,
+            "slippage_bps": 3.0,
+            "transfer_fee_rate": 0.0
+          },
+          "screened_axes": {},
+          "selected_scores": {},
+          "strategy_spec": null,
+          "window_id": "wf_001"
+        },
+        {
+          "benchmark_specs": [
+            {
+              "benchmark_id": "buy_and_hold",
+              "config": {
+                "cost": {
+                  "commission_rate": 0.0001,
+                  "minimum_commission": 5.0,
+                  "sell_tax_rate": 0.0,
+                  "slippage_bps": 3.0,
+                  "transfer_fee_rate": 0.0
+                },
+                "grid": {
+                  "atr_stop_multiple": 3.0,
+                  "cooldown_sessions": 5,
+                  "fixed_initial_pct": 0.5,
+                  "initial_model": "fixed",
+                  "max_grid_per_day": 1,
+                  "step_pct": 0.02,
+                  "unit_pct": 0.1
+                },
+                "trend": {
+                  "add_n": 0.5,
+                  "amount_ratio_min": null,
+                  "max_units": 4,
+                  "require_macd_bullish": true,
+                  "risk_per_unit": 0.005,
+                  "stop_n": 2.0
+                }
+              },
+              "provenance_hash": "ad96060e0acdbd7d60fb870e3232884fa580658da2888cfebb9f99956bf8f0e6",
+              "rebalance_sessions": null,
+              "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+              "target_weight": 1.0,
+              "version": "1"
+            },
+            {
+              "benchmark_id": "fixed_half_hold",
+              "config": {
+                "cost": {
+                  "commission_rate": 0.0001,
+                  "minimum_commission": 5.0,
+                  "sell_tax_rate": 0.0,
+                  "slippage_bps": 3.0,
+                  "transfer_fee_rate": 0.0
+                },
+                "grid": {
+                  "atr_stop_multiple": 3.0,
+                  "cooldown_sessions": 5,
+                  "fixed_initial_pct": 0.5,
+                  "initial_model": "fixed",
+                  "max_grid_per_day": 1,
+                  "step_pct": 0.02,
+                  "unit_pct": 0.1
+                },
+                "trend": {
+                  "add_n": 0.5,
+                  "amount_ratio_min": null,
+                  "max_units": 4,
+                  "require_macd_bullish": true,
+                  "risk_per_unit": 0.005,
+                  "stop_n": 2.0
+                }
+              },
+              "provenance_hash": "8b2bac349c450898c8323f53d9294ff1bca46a32b24858cf044f59f48f6c9c43",
+              "rebalance_sessions": 1,
+              "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+              "target_weight": 0.5,
+              "version": "1"
+            }
+          ],
+          "candidate_scores": [],
+          "excess_attribution": null,
+          "execution_cost_config": {
+            "commission_rate": 0.0001,
+            "minimum_commission": 5.0,
+            "sell_tax_rate": 0.0,
+            "slippage_bps": 3.0,
+            "transfer_fee_rate": 0.0
+          },
+          "screened_axes": {},
+          "selected_scores": {},
+          "strategy_spec": null,
+          "window_id": "wf_002"
+        },
+        {
+          "benchmark_specs": [
+            {
+              "benchmark_id": "buy_and_hold",
+              "config": {
+                "cost": {
+                  "commission_rate": 0.0001,
+                  "minimum_commission": 5.0,
+                  "sell_tax_rate": 0.0,
+                  "slippage_bps": 3.0,
+                  "transfer_fee_rate": 0.0
+                },
+                "grid": {
+                  "atr_stop_multiple": 3.0,
+                  "cooldown_sessions": 5,
+                  "fixed_initial_pct": 0.5,
+                  "initial_model": "fixed",
+                  "max_grid_per_day": 1,
+                  "step_pct": 0.02,
+                  "unit_pct": 0.1
+                },
+                "trend": {
+                  "add_n": 0.5,
+                  "amount_ratio_min": null,
+                  "max_units": 4,
+                  "require_macd_bullish": true,
+                  "risk_per_unit": 0.005,
+                  "stop_n": 2.0
+                }
+              },
+              "provenance_hash": "ad96060e0acdbd7d60fb870e3232884fa580658da2888cfebb9f99956bf8f0e6",
+              "rebalance_sessions": null,
+              "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+              "target_weight": 1.0,
+              "version": "1"
+            },
+            {
+              "benchmark_id": "fixed_half_hold",
+              "config": {
+                "cost": {
+                  "commission_rate": 0.0001,
+                  "minimum_commission": 5.0,
+                  "sell_tax_rate": 0.0,
+                  "slippage_bps": 3.0,
+                  "transfer_fee_rate": 0.0
+                },
+                "grid": {
+                  "atr_stop_multiple": 3.0,
+                  "cooldown_sessions": 5,
+                  "fixed_initial_pct": 0.5,
+                  "initial_model": "fixed",
+                  "max_grid_per_day": 1,
+                  "step_pct": 0.02,
+                  "unit_pct": 0.1
+                },
+                "trend": {
+                  "add_n": 0.5,
+                  "amount_ratio_min": null,
+                  "max_units": 4,
+                  "require_macd_bullish": true,
+                  "risk_per_unit": 0.005,
+                  "stop_n": 2.0
+                }
+              },
+              "provenance_hash": "8b2bac349c450898c8323f53d9294ff1bca46a32b24858cf044f59f48f6c9c43",
+              "rebalance_sessions": 1,
+              "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+              "target_weight": 0.5,
+              "version": "1"
+            }
+          ],
+          "candidate_scores": [],
+          "excess_attribution": null,
+          "execution_cost_config": {
+            "commission_rate": 0.0001,
+            "minimum_commission": 5.0,
+            "sell_tax_rate": 0.0,
+            "slippage_bps": 3.0,
+            "transfer_fee_rate": 0.0
+          },
+          "screened_axes": {},
+          "selected_scores": {},
+          "strategy_spec": null,
+          "window_id": "wf_003"
+        },
+        {
+          "benchmark_specs": [
+            {
+              "benchmark_id": "buy_and_hold",
+              "config": {
+                "cost": {
+                  "commission_rate": 0.0001,
+                  "minimum_commission": 5.0,
+                  "sell_tax_rate": 0.0,
+                  "slippage_bps": 3.0,
+                  "transfer_fee_rate": 0.0
+                },
+                "grid": {
+                  "atr_stop_multiple": 3.0,
+                  "cooldown_sessions": 5,
+                  "fixed_initial_pct": 0.5,
+                  "initial_model": "fixed",
+                  "max_grid_per_day": 1,
+                  "step_pct": 0.02,
+                  "unit_pct": 0.1
+                },
+                "trend": {
+                  "add_n": 0.5,
+                  "amount_ratio_min": null,
+                  "max_units": 4,
+                  "require_macd_bullish": true,
+                  "risk_per_unit": 0.005,
+                  "stop_n": 2.0
+                }
+              },
+              "provenance_hash": "ad96060e0acdbd7d60fb870e3232884fa580658da2888cfebb9f99956bf8f0e6",
+              "rebalance_sessions": null,
+              "spec_hash": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+              "target_weight": 1.0,
+              "version": "1"
+            },
+            {
+              "benchmark_id": "fixed_half_hold",
+              "config": {
+                "cost": {
+                  "commission_rate": 0.0001,
+                  "minimum_commission": 5.0,
+                  "sell_tax_rate": 0.0,
+                  "slippage_bps": 3.0,
+                  "transfer_fee_rate": 0.0
+                },
+                "grid": {
+                  "atr_stop_multiple": 3.0,
+                  "cooldown_sessions": 5,
+                  "fixed_initial_pct": 0.5,
+                  "initial_model": "fixed",
+                  "max_grid_per_day": 1,
+                  "step_pct": 0.02,
+                  "unit_pct": 0.1
+                },
+                "trend": {
+                  "add_n": 0.5,
+                  "amount_ratio_min": null,
+                  "max_units": 4,
+                  "require_macd_bullish": true,
+                  "risk_per_unit": 0.005,
+                  "stop_n": 2.0
+                }
+              },
+              "provenance_hash": "8b2bac349c450898c8323f53d9294ff1bca46a32b24858cf044f59f48f6c9c43",
+              "rebalance_sessions": 1,
+              "spec_hash": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597",
+              "target_weight": 0.5,
+              "version": "1"
+            }
+          ],
+          "candidate_scores": [],
+          "excess_attribution": null,
+          "execution_cost_config": {
+            "commission_rate": 0.0001,
+            "minimum_commission": 5.0,
+            "sell_tax_rate": 0.0,
+            "slippage_bps": 3.0,
+            "transfer_fee_rate": 0.0
+          },
+          "screened_axes": {},
+          "selected_scores": {},
+          "strategy_spec": null,
+          "window_id": "wf_004"
+        }
+      ],
+      "profile_hash": "3d23b18c8a3614be7b56c821bcbd22b50743036b6473fa2520a5bd6e0acbeff9",
+      "profile_id": "core_hold_rebalance",
+      "requested_start": "2021-01-04",
+      "research_only": true,
+      "run_mode": "research_diagnostic",
+      "runner": "run_instrument_validation",
+      "schema_version": 1,
+      "screened_axes": {
+        "grid": [],
+        "trend": []
+      },
+      "selected_configs": [
+        {
+          "config": null,
+          "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+          "window_id": "wf_000"
+        },
+        {
+          "config": null,
+          "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+          "window_id": "wf_001"
+        },
+        {
+          "config": null,
+          "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+          "window_id": "wf_002"
+        },
+        {
+          "config": null,
+          "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+          "window_id": "wf_003"
+        },
+        {
+          "config": null,
+          "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+          "window_id": "wf_004"
+        }
+      ],
+      "shadow_run_eligible": false,
+      "source_provider": "ValidationMarketDataProvider",
+      "strategy_spec": null,
+      "target": {
+        "exposure_id": "nasdaq_100",
+        "scope": "formal",
+        "stock_code": "513100.SH",
+        "sub_layer": "broad_overseas_mature"
+      },
+      "trading_authorized": false
+    },
+    "training_surface": [
+      {
+        "grid": [],
+        "trend": [],
+        "window_id": "wf_000"
+      },
+      {
+        "grid": [],
+        "trend": [],
+        "window_id": "wf_001"
+      },
+      {
+        "grid": [],
+        "trend": [],
+        "window_id": "wf_002"
+      },
+      {
+        "grid": [],
+        "trend": [],
+        "window_id": "wf_003"
+      },
+      {
+        "grid": [],
+        "trend": [],
+        "window_id": "wf_004"
+      }
+    ]
+  },
+  "decision": {
+    "blockers": [],
+    "conclusion": "diagnostic_complete"
+  },
+  "execution": {
+    "buy_and_hold": {
+      "cash_sessions": 5,
+      "cost_drag": 0.001997674,
+      "exposure_ratio": 0.9920634920634921,
+      "invested_sessions": 625,
+      "total_cost": 199.7674,
+      "turnover": 3.920569583142156
+    },
+    "strategy": {
+      "cash_sessions": 5,
+      "cost_drag": 0.0192283345,
+      "exposure_ratio": 0.9920634920634921,
+      "invested_sessions": 625,
+      "total_cost": 1922.83345,
+      "turnover": 3.3489955704887624
+    }
+  },
+  "exposure_id": "nasdaq_100",
+  "limitations": [],
+  "oos_distribution": {
+    "best_excess_return": -0.013867076799999767,
+    "median_excess_return": -0.046538857500000086,
+    "win_rate": 0.0,
+    "window_count": 5,
+    "worst_excess_return": -0.13179077159999997
+  },
+  "research_only": true,
+  "run_mode": "research_diagnostic",
+  "scope": "formal",
+  "shadow_run_eligible": false,
+  "status": "failed",
+  "stock_code": "513100.SH",
+  "strategy_profile": {
+    "benchmark_hashes": {
+      "buy_and_hold": "3958c38c790b7737f3af03d4a690f2509833bfa7f847fbd3e06c6a8e5cafd0c3",
+      "fixed_half_hold": "ac073b13dfd8fc5232bf30851ba89adea309c68abd84a01a15249842c1d2e597"
+    },
+    "executable_strategy_id": null,
+    "profile_hash": "3d23b18c8a3614be7b56c821bcbd22b50743036b6473fa2520a5bd6e0acbeff9",
+    "profile_id": "core_hold_rebalance",
+    "version": "1"
+  },
+  "sub_layer": "broad_overseas_mature",
+  "trading_authorized": false,
+  "trend_diagnostics": null,
+  "windows": [
+    {
+      "benchmark_annual_return": 0.28054129411422535,
+      "benchmark_annual_volatility": 0.23847071926160063,
+      "benchmark_calmar": 1.5656221199362974,
+      "benchmark_cvar5": -0.03989967459374527,
+      "benchmark_max_drawdown": -0.1791883817569211,
+      "benchmark_minimum_commission_share": 0.0,
+      "benchmark_payoff_ratio": 0.9033452031885624,
+      "benchmark_profit_factor": 1.2334136428151523,
+      "benchmark_recovery_sessions": 1,
+      "benchmark_return": 0.13050016199999992,
+      "benchmark_sharpe": 1.17641819919398,
+      "benchmark_slippage_degradation": 2.99838,
+      "benchmark_sortino": 1.3288881891726243,
+      "benchmark_total_cost": 39.9838,
+      "benchmark_turnover": 0.9433061098099356,
+      "benchmark_unfilled_share": 0.0,
+      "benchmark_win_rate": 0.568,
+      "benchmark_worst_126_session_return": 0.1305001619999997,
+      "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+      "excess_return": -0.06818963239999998,
+      "formal_selection_rejection": null,
+      "selected_config": "null",
+      "selection_status": "stable",
+      "strategy_annual_return": 0.12959561083592352,
+      "strategy_annual_volatility": 0.11876397795798202,
+      "strategy_calmar": 1.3981566156970486,
+      "strategy_cvar5": -0.019932880340624442,
+      "strategy_max_drawdown": -0.09269033910862257,
+      "strategy_minimum_commission_share": 1.0,
+      "strategy_payoff_ratio": 0.9254553538309598,
+      "strategy_profit_factor": 1.2168024096666321,
+      "strategy_recovery_sessions": 1,
+      "strategy_return": 0.06231052959999994,
+      "strategy_sharpe": 1.0912030151244485,
+      "strategy_slippage_degradation": 0.055776,
+      "strategy_sortino": 1.2413012157769026,
+      "strategy_total_cost": 438.14704,
+      "strategy_turnover": 0.7506559938878898,
+      "strategy_unfilled_share": 0.0,
+      "strategy_win_rate": 0.568,
+      "strategy_worst_126_session_return": 0.06231052960000083,
+      "training_end": "2024-02-08",
+      "training_selection_rank": null,
+      "validation_start": "2024-02-19",
+      "window_id": "wf_000"
+    },
+    {
+      "benchmark_annual_return": 0.051636775242464905,
+      "benchmark_annual_volatility": 0.1994688787803615,
+      "benchmark_calmar": 0.5308447590368589,
+      "benchmark_cvar5": -0.030952899575204435,
+      "benchmark_max_drawdown": -0.09727283610400972,
+      "benchmark_minimum_commission_share": 0.0,
+      "benchmark_payoff_ratio": 0.8590665739711896,
+      "benchmark_profit_factor": 1.0621186732734706,
+      "benchmark_recovery_sessions": 43,
+      "benchmark_return": 0.025288564399999824,
+      "benchmark_sharpe": 0.2588713365122136,
+      "benchmark_slippage_degradation": 2.9983543543543547,
+      "benchmark_sortino": 0.35299619537087323,
+      "benchmark_total_cost": 39.943560000000005,
+      "benchmark_turnover": 0.9617544115804972,
+      "benchmark_unfilled_share": 0.0,
+      "benchmark_win_rate": 0.544,
+      "benchmark_worst_126_session_return": 0.02528856439999916,
+      "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+      "excess_return": -0.013867076799999767,
+      "formal_selection_rejection": null,
+      "selected_config": "null",
+      "selection_status": "stable",
+      "strategy_annual_return": 0.02315932500264095,
+      "strategy_annual_volatility": 0.09986741816070245,
+      "strategy_calmar": 0.46170861207681274,
+      "strategy_cvar5": -0.015531004478493371,
+      "strategy_max_drawdown": -0.050160045528429564,
+      "strategy_minimum_commission_share": 1.0,
+      "strategy_payoff_ratio": 0.8792293995791676,
+      "strategy_profit_factor": 1.0489052486207613,
+      "strategy_recovery_sessions": 43,
+      "strategy_return": 0.011421487600000058,
+      "strategy_sharpe": 0.2319007082507524,
+      "strategy_slippage_degradation": 0.059309,
+      "strategy_sortino": 0.31492586586032767,
+      "strategy_total_cost": 381.35124,
+      "strategy_turnover": 0.6991993819097332,
+      "strategy_unfilled_share": 0.0,
+      "strategy_win_rate": 0.544,
+      "strategy_worst_126_session_return": 0.01142148759999917,
+      "training_end": "2024-08-20",
+      "training_selection_rank": null,
+      "validation_start": "2024-08-21",
+      "window_id": "wf_001"
+    },
+    {
+      "benchmark_annual_return": 0.19106126285931313,
+      "benchmark_annual_volatility": 0.2763239574279447,
+      "benchmark_calmar": 1.1108250414990541,
+      "benchmark_cvar5": -0.041892998484214815,
+      "benchmark_max_drawdown": -0.1719994199999999,
+      "benchmark_minimum_commission_share": 0.0,
+      "benchmark_payoff_ratio": 1.0366018575778642,
+      "benchmark_profit_factor": 1.1846878372318448,
+      "benchmark_recovery_sessions": 46,
+      "benchmark_return": 0.09060058000000004,
+      "benchmark_sharpe": 0.6914393693465215,
+      "benchmark_slippage_degradation": 2.998198198198198,
+      "benchmark_sortino": 0.8057356207134866,
+      "benchmark_total_cost": 39.942,
+      "benchmark_turnover": 0.983672959199517,
+      "benchmark_unfilled_share": 0.0,
+      "benchmark_win_rate": 0.512,
+      "benchmark_worst_126_session_return": 0.0906005799999996,
+      "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+      "excess_return": -0.046538857500000086,
+      "formal_selection_rejection": null,
+      "selected_config": "null",
+      "selection_status": "stable",
+      "strategy_annual_return": 0.0908171731620977,
+      "strategy_annual_volatility": 0.13769026452101107,
+      "strategy_calmar": 1.0292630201271353,
+      "strategy_cvar5": -0.020922097487300968,
+      "strategy_max_drawdown": -0.08823514630000007,
+      "strategy_minimum_commission_share": 1.0,
+      "strategy_payoff_ratio": 1.0560694096028527,
+      "strategy_profit_factor": 1.1653179692169409,
+      "strategy_recovery_sessions": 46,
+      "strategy_return": 0.044061722499999956,
+      "strategy_sharpe": 0.6595758493022525,
+      "strategy_slippage_degradation": 0.06545597014925374,
+      "strategy_sortino": 0.7774200342195258,
+      "strategy_total_cost": 356.92775,
+      "strategy_turnover": 0.7256565805766703,
+      "strategy_unfilled_share": 0.0,
+      "strategy_win_rate": 0.512,
+      "strategy_worst_126_session_return": 0.04406172249999951,
+      "training_end": "2025-03-04",
+      "training_selection_rank": null,
+      "validation_start": "2025-03-05",
+      "window_id": "wf_002"
+    },
+    {
+      "benchmark_annual_return": 0.10995626449487728,
+      "benchmark_annual_volatility": 0.19036393704745092,
+      "benchmark_calmar": 0.9021825763631227,
+      "benchmark_cvar5": -0.02664534635712884,
+      "benchmark_max_drawdown": -0.12187806257368972,
+      "benchmark_minimum_commission_share": 0.0,
+      "benchmark_payoff_ratio": 1.247486037290931,
+      "benchmark_profit_factor": 1.1131413871211384,
+      "benchmark_recovery_sessions": 1,
+      "benchmark_return": 0.05310857280000003,
+      "benchmark_sharpe": 0.577610792255621,
+      "benchmark_slippage_degradation": 2.99827027027027,
+      "benchmark_sortino": 0.9382344067806202,
+      "benchmark_total_cost": 39.942719999999994,
+      "benchmark_turnover": 0.9105359285608794,
+      "benchmark_unfilled_share": 0.0,
+      "benchmark_win_rate": 0.464,
+      "benchmark_worst_126_session_return": 0.05310857279999959,
+      "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+      "excess_return": -0.02823632219999994,
+      "formal_selection_rejection": null,
+      "selected_config": "null",
+      "selection_status": "stable",
+      "strategy_annual_return": 0.05077609586955045,
+      "strategy_annual_volatility": 0.09524694313963929,
+      "strategy_calmar": 0.795492212450013,
+      "strategy_cvar5": -0.013402536042377086,
+      "strategy_max_drawdown": -0.06382978371738757,
+      "strategy_minimum_commission_share": 1.0,
+      "strategy_payoff_ratio": 1.2697436830158098,
+      "strategy_profit_factor": 1.099181098730104,
+      "strategy_recovery_sessions": 1,
+      "strategy_return": 0.02487225060000009,
+      "strategy_sharpe": 0.5330994801072915,
+      "strategy_slippage_degradation": 0.0667966875,
+      "strategy_sortino": 0.8589046485635766,
+      "strategy_total_cost": 341.37494,
+      "strategy_turnover": 0.6809173505367874,
+      "strategy_unfilled_share": 0.0,
+      "strategy_win_rate": 0.464,
+      "strategy_worst_126_session_return": 0.024872250599999646,
+      "training_end": "2025-09-03",
+      "training_selection_rank": null,
+      "validation_start": "2025-09-04",
+      "window_id": "wf_003"
+    },
+    {
+      "benchmark_annual_return": 0.5752702398536544,
+      "benchmark_annual_volatility": 0.2733508027904482,
+      "benchmark_calmar": 4.201499012035221,
+      "benchmark_cvar5": -0.032272648232508395,
+      "benchmark_max_drawdown": -0.13692023685017873,
+      "benchmark_minimum_commission_share": 0.0,
+      "benchmark_payoff_ratio": 1.0641873213082966,
+      "benchmark_profit_factor": 1.3597949105606013,
+      "benchmark_recovery_sessions": 13,
+      "benchmark_return": 0.25283644679999995,
+      "benchmark_sharpe": 2.104512713996523,
+      "benchmark_slippage_degradation": 2.9995315315315314,
+      "benchmark_sortino": 3.7787690836318144,
+      "benchmark_total_cost": 39.95532,
+      "benchmark_turnover": 0.8454821117265742,
+      "benchmark_unfilled_share": 0.0,
+      "benchmark_win_rate": 0.552,
+      "benchmark_worst_126_session_return": 0.25283644680000195,
+      "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+      "excess_return": -0.13179077159999997,
+      "formal_selection_rejection": null,
+      "selected_config": "null",
+      "selection_status": "stable",
+      "strategy_annual_return": 0.2590430733537137,
+      "strategy_annual_volatility": 0.13677911584363953,
+      "strategy_calmar": 3.669402617078923,
+      "strategy_cvar5": -0.016158533004346626,
+      "strategy_max_drawdown": -0.07059543483945308,
+      "strategy_minimum_commission_share": 1.0,
+      "strategy_payoff_ratio": 1.0752679176236386,
+      "strategy_profit_factor": 1.348972478473292,
+      "strategy_recovery_sessions": 13,
+      "strategy_return": 0.12104567519999998,
+      "strategy_sharpe": 1.893878840756958,
+      "strategy_slippage_degradation": 0.06587494736842105,
+      "strategy_sortino": 3.3866997685501232,
+      "strategy_total_cost": 405.03248,
+      "strategy_turnover": 0.7674204884354618,
+      "strategy_unfilled_share": 0.0,
+      "strategy_win_rate": 0.552,
+      "strategy_worst_126_session_return": 0.12104567519999954,
+      "training_end": "2026-03-18",
+      "training_selection_rank": null,
+      "validation_start": "2026-03-19",
+      "window_id": "wf_004"
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "as_of_date": "2026-09-11",
+  "stock_code": "588000.SH",
+  "status": "failed",
+  "rejection_reason": "no_stable_training_parameters",
+  "decision": {
+    "conclusion": "do_not_trade",
+    "blockers": [
+      "stable_parameter_region",
+      "missing_research_evidence",
+      "strategy_metrics",
+      "benchmark_metrics",
+      "strategy_exposure",
+      "benchmark_exposure",
+      "no_stable_training_parameters",
+      "run_manifest",
+      "experiment_metadata"
+    ]
+  },
+  "experiment_hash": "c1a92863f0ebad10d8d8ec11dc004d7ee269fbd3e72adbbe72027d37ee7857b2"
+}

@@ -1,0 +1,50 @@
+{
+  "activation_eligible": false,
+  "as_of_date": "2026-09-08",
+  "benchmark_annual_return": 0.1399357077801211,
+  "benchmark_max_drawdown": 0.255846998482102,
+  "exposure_id": "chinext",
+  "rejection_reason": null,
+  "scope": "formal",
+  "status": "failed",
+  "stock_code": "159915.SZ",
+  "strategy_annual_return": 0.03802028007134828,
+  "strategy_max_drawdown": 0.04031540525131283,
+  "sub_layer": "broad_domestic_growth",
+  "window_distribution": {
+    "best_excess_return": -0.04844100902935611,
+    "median_excess_return": -0.04844100902935611,
+    "win_rate": 0.0,
+    "window_count": 1,
+    "worst_excess_return": -0.04844100902935611
+  },
+  "windows": [
+    {
+      "benchmark_calmar": 0.5469507502934822,
+      "benchmark_cvar5": -0.05338496439907001,
+      "benchmark_max_drawdown": -0.255846998482102,
+      "benchmark_recovery_sessions": 12,
+      "benchmark_return": 0.06712295762935616,
+      "benchmark_sharpe": 0.3601038128197881,
+      "benchmark_sortino": 0.5809319201293781,
+      "benchmark_total_cost": 9.99,
+      "benchmark_turnover": 91449.9361446809,
+      "benchmark_worst_126_session_return": 0.06712295762935572,
+      "config_hash": "65589c6175e1bf8344cf6f37756e8701380b01b33b00c4bfc595dd59b9f4de89",
+      "excess_return": -0.04844100902935611,
+      "strategy_calmar": 0.9430707649927489,
+      "strategy_cvar5": -0.01447236085404254,
+      "strategy_max_drawdown": -0.04031540525131283,
+      "strategy_recovery_sessions": 12,
+      "strategy_return": 0.018681948600000053,
+      "strategy_sharpe": 0.42619597197834547,
+      "strategy_sortino": 0.47603066624716456,
+      "strategy_total_cost": 63.41,
+      "strategy_turnover": 290715.4749020717,
+      "strategy_worst_126_session_return": 0.01868194860000072,
+      "training_end": "2026-01-29",
+      "validation_start": "2026-01-30",
+      "window_id": "wf_000"
+    }
+  ]
+}

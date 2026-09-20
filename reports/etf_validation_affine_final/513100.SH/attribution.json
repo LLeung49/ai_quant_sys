@@ -1,0 +1,99 @@
+[
+  {
+    "window_id": "wf_000",
+    "trade_points": [
+      {
+        "event_date": "2026-04-09",
+        "kind": "fill",
+        "reason": "trend_entry",
+        "shares": 7400,
+        "raw_price": 1.8335499
+      },
+      {
+        "event_date": "2026-04-16",
+        "kind": "fill",
+        "reason": "trend_add",
+        "shares": 6200,
+        "raw_price": 1.9005699999999999
+      },
+      {
+        "event_date": "2026-04-28",
+        "kind": "fill",
+        "reason": "trend_add",
+        "shares": 6000,
+        "raw_price": 1.9455835
+      },
+      {
+        "event_date": "2026-05-21",
+        "kind": "fill",
+        "reason": "trend_stop",
+        "shares": 19600,
+        "raw_price": 2.0843745
+      },
+      {
+        "event_date": "2026-05-25",
+        "kind": "fill",
+        "reason": "trend_entry",
+        "shares": 7400,
+        "raw_price": 2.2116632999999997
+      },
+      {
+        "event_date": "2026-06-01",
+        "kind": "fill",
+        "reason": "trend_add",
+        "shares": 5000,
+        "raw_price": 2.2736819
+      },
+      {
+        "event_date": "2026-06-02",
+        "kind": "fill",
+        "reason": "trend_add",
+        "shares": 3200,
+        "raw_price": 2.3557064999999997
+      },
+      {
+        "event_date": "2026-06-08",
+        "kind": "fill",
+        "reason": "trend_stop",
+        "shares": 15600,
+        "raw_price": 2.1153652000000003
+      },
+      {
+        "event_date": "2026-08-05",
+        "kind": "fill",
+        "reason": "grid_initialize",
+        "shares": 26900,
+        "raw_price": 2.2596776999999997
+      }
+    ],
+    "by_reason": {
+      "trend_entry": {
+        "reason": "trend_entry",
+        "fill_count": 2,
+        "shares": 14800,
+        "traded_value": "29934.5776799999977800"
+      },
+      "trend_add": {
+        "reason": "trend_add",
+        "fill_count": 4,
+        "shares": 20400,
+        "traded_value": "42363.7052999999984200"
+      },
+      "trend_stop": {
+        "reason": "trend_stop",
+        "fill_count": 2,
+        "shares": 35200,
+        "traded_value": "73853.4373200000046800"
+      },
+      "grid_initialize": {
+        "reason": "grid_initialize",
+        "fill_count": 1,
+        "shares": 26900,
+        "traded_value": "60785.3301299999919300"
+      }
+    },
+    "invested_sessions": 41,
+    "cash_sessions": 85,
+    "rejected_order_count": 0
+  }
+]

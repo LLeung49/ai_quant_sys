@@ -1,0 +1,19 @@
+{
+  "activation_eligible": false,
+  "as_of_date": "2026-09-08",
+  "benchmark_annual_return": null,
+  "benchmark_max_drawdown": null,
+  "exposure_id": "sp_china_low_vol_dividend",
+  "rejection_reason": "inconsistent raw/qfq OHLC ratio",
+  "scope": "formal",
+  "status": "data_rejected",
+  "stock_code": "515450.SH",
+  "strategy_annual_return": null,
+  "strategy_max_drawdown": null,
+  "sub_layer": "defensive_dividend_etf",
+  "window_distribution": {
+    "win_rate": 0.0,
+    "window_count": 0
+  },
+  "windows": []
+}

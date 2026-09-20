@@ -1,0 +1,22 @@
+{
+  "as_of_date": "2026-09-11",
+  "stock_code": "515080.SH",
+  "status": "failed",
+  "rejection_reason": "no_stable_training_parameters",
+  "decision": {
+    "conclusion": "do_not_trade",
+    "blockers": [
+      "stable_parameter_region",
+      "missing_research_evidence",
+      "strategy_metrics",
+      "benchmark_metrics",
+      "strategy_exposure",
+      "benchmark_exposure",
+      "no_stable_training_parameters",
+      "run_manifest",
+      "selected_config",
+      "experiment_metadata"
+    ]
+  },
+  "experiment_hash": "e113e53a07ecafd1ad052db70d361bc762d0b4acc91aa0225e6eac57d5a2a695"
+}

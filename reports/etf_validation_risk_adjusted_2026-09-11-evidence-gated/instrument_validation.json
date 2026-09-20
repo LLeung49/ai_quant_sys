@@ -1,0 +1,125 @@
+{
+  "as_of_date": "2026-09-10",
+  "results": [
+    {
+      "exposure_id": "sp_china_low_vol_dividend",
+      "stock_code": "515450.SH",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": -0.0242321981429382,
+      "benchmark_annual_return": 0.07229964530322719,
+      "strategy_max_drawdown": 0.11030474403924073,
+      "benchmark_max_drawdown": 0.18514692964814805,
+      "scope": "formal",
+      "available_from": null
+    },
+    {
+      "exposure_id": "csi_dividend",
+      "stock_code": "515080.SH",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": 0.008242316151512386,
+      "benchmark_annual_return": 0.0410633033355885,
+      "strategy_max_drawdown": 0.07070747862052251,
+      "benchmark_max_drawdown": 0.16135648601991137,
+      "scope": "formal",
+      "available_from": null
+    },
+    {
+      "exposure_id": "csi_300",
+      "stock_code": "510300.SH",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": -0.019989430590152346,
+      "benchmark_annual_return": 0.02878850221184126,
+      "strategy_max_drawdown": 0.0663014801193006,
+      "benchmark_max_drawdown": 0.2301511536776062,
+      "scope": "formal",
+      "available_from": null
+    },
+    {
+      "exposure_id": "csi_a500",
+      "stock_code": "563360.SH",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": -0.03839673390564691,
+      "benchmark_annual_return": 0.21443826601111948,
+      "strategy_max_drawdown": 0.039806816871794215,
+      "benchmark_max_drawdown": 0.08436870566348675,
+      "scope": "reference_only",
+      "available_from": "2024-10-15"
+    },
+    {
+      "exposure_id": "chinext",
+      "stock_code": "159915.SZ",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": 0.027695943017137736,
+      "benchmark_annual_return": 0.07432237155282562,
+      "strategy_max_drawdown": 0.12809168833561546,
+      "benchmark_max_drawdown": 0.3943631276084032,
+      "scope": "formal",
+      "available_from": null
+    },
+    {
+      "exposure_id": "star_50",
+      "stock_code": "588000.SH",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": -0.025549976324557577,
+      "benchmark_annual_return": 0.08329296582149603,
+      "strategy_max_drawdown": 0.22988111237371067,
+      "benchmark_max_drawdown": 0.42705488489977084,
+      "scope": "formal",
+      "available_from": null
+    },
+    {
+      "exposure_id": "nasdaq_100",
+      "stock_code": "513100.SH",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": 0.02168247628528186,
+      "benchmark_annual_return": 0.26376038474366004,
+      "strategy_max_drawdown": 0.0873424467059789,
+      "benchmark_max_drawdown": 0.24037977628802965,
+      "scope": "formal",
+      "available_from": null
+    },
+    {
+      "exposure_id": "sp_500",
+      "stock_code": "513500.SH",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": 0.01504429211154723,
+      "benchmark_annual_return": 0.19734670574411828,
+      "strategy_max_drawdown": 0.061290236466385206,
+      "benchmark_max_drawdown": 0.249604929000941,
+      "scope": "formal",
+      "available_from": null
+    },
+    {
+      "exposure_id": "hang_seng_tech",
+      "stock_code": "513130.SH",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": 0.017384935469883844,
+      "benchmark_annual_return": 0.03777651254941383,
+      "strategy_max_drawdown": 0.17411328841111118,
+      "benchmark_max_drawdown": 0.3687952379237873,
+      "scope": "formal",
+      "available_from": null
+    },
+    {
+      "exposure_id": "hang_seng_internet_technology",
+      "stock_code": "513330.SH",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": 0.011618384137509485,
+      "benchmark_annual_return": -0.037253703372695735,
+      "strategy_max_drawdown": 0.20673588189483616,
+      "benchmark_max_drawdown": 0.37389684561734593,
+      "scope": "formal",
+      "available_from": null
+    }
+  ]
+}

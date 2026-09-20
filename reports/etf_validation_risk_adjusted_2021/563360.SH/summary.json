@@ -1,0 +1,156 @@
+{
+  "activation_eligible": false,
+  "comparison": {
+    "buy_and_hold": {
+      "annual_return": 0.21443826601111948,
+      "annual_volatility": 0.17048949813698386,
+      "calmar": 2.5416801683129826,
+      "cvar5": -0.02379096246948481,
+      "max_drawdown": -0.08436870566348675,
+      "minimum_commission_share": 0.0,
+      "payoff_ratio": 0.9891619736949226,
+      "profit_factor": 1.222963894750086,
+      "recovery_sessions": 1,
+      "sharpe": 1.2577799122783735,
+      "slippage_degradation": 2.9985585585585586,
+      "sortino": 1.9793448110639762,
+      "total_cost": 39.9456,
+      "turnover": 0.9788556971868236,
+      "unfilled_share": 0.0,
+      "win_rate": 0.544,
+      "worst_126_session_return": 0.10116626583456201
+    },
+    "differences": {
+      "annual_return": -0.2528349999167664,
+      "annual_volatility": -0.11529268538927827,
+      "calmar": -3.50625701527141,
+      "cvar5": 0.014123590357020025,
+      "max_drawdown": 0.04456188879169243,
+      "minimum_commission_share": 0.8666666666666667,
+      "payoff_ratio": -0.17594846510975037,
+      "profit_factor": -0.364571857910182,
+      "recovery_sessions": 11,
+      "sharpe": -1.953413083728893,
+      "slippage_degradation": -1.4963850210634662,
+      "sortino": -2.6952900937235453,
+      "total_cost": 151.24548,
+      "turnover": 2.9041512635220315,
+      "unfilled_share": 0.0,
+      "win_rate": -0.24000000000000005,
+      "worst_126_session_return": -0.12040017663456293
+    },
+    "strategy": {
+      "annual_return": -0.03839673390564691,
+      "annual_volatility": 0.05519681274770559,
+      "calmar": -0.9645768469584275,
+      "cvar5": -0.009667372112464786,
+      "max_drawdown": -0.039806816871794326,
+      "minimum_commission_share": 0.8666666666666667,
+      "payoff_ratio": 0.8132135085851723,
+      "profit_factor": 0.8583920368399041,
+      "recovery_sessions": 12,
+      "sharpe": -0.6956331714505196,
+      "slippage_degradation": 1.5021735374950924,
+      "sortino": -0.7159452826595689,
+      "total_cost": 191.19108,
+      "turnover": 3.883006960708855,
+      "unfilled_share": 0.0,
+      "win_rate": 0.304,
+      "worst_126_session_return": -0.01923391080000092
+    }
+  },
+  "data_provenance": {
+    "config_hashes": [
+      "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce"
+    ],
+    "data_cutoff": "2026-09-08",
+    "training_surface": [
+      {
+        "grid": [],
+        "trend": [],
+        "window_id": "wf_000"
+      }
+    ]
+  },
+  "decision": {
+    "blockers": [
+      "stable_parameter_region"
+    ],
+    "conclusion": "do_not_trade"
+  },
+  "execution": {
+    "buy_and_hold": {
+      "cash_sessions": 0,
+      "cost_drag": 0.00039945599999999996,
+      "exposure_ratio": 1.0,
+      "invested_sessions": 126,
+      "total_cost": 39.9456,
+      "turnover": 0.9788556971868236
+    },
+    "strategy": {
+      "cash_sessions": 55,
+      "cost_drag": 0.0019119108,
+      "exposure_ratio": 0.5634920634920635,
+      "invested_sessions": 71,
+      "total_cost": 191.19108,
+      "turnover": 3.883006960708855
+    }
+  },
+  "exposure_id": "csi_a500",
+  "oos_distribution": {
+    "best_excess_return": -0.12040017663456226,
+    "median_excess_return": -0.12040017663456226,
+    "win_rate": 0.0,
+    "window_count": 1,
+    "worst_excess_return": -0.12040017663456226
+  },
+  "scope": "reference_only",
+  "status": "failed",
+  "stock_code": "563360.SH",
+  "sub_layer": "broad_domestic_core",
+  "windows": [
+    {
+      "benchmark_annual_return": 0.21443826601111948,
+      "benchmark_annual_volatility": 0.170489498136984,
+      "benchmark_calmar": 2.541680168312979,
+      "benchmark_cvar5": -0.02379096246948485,
+      "benchmark_max_drawdown": -0.08436870566348686,
+      "benchmark_minimum_commission_share": 0.0,
+      "benchmark_payoff_ratio": 0.9891619736949233,
+      "benchmark_profit_factor": 1.222963894750087,
+      "benchmark_recovery_sessions": 1,
+      "benchmark_return": 0.10116626583456223,
+      "benchmark_sharpe": 1.2577799122783726,
+      "benchmark_slippage_degradation": 2.9985585585585586,
+      "benchmark_sortino": 1.979344811063974,
+      "benchmark_total_cost": 39.9456,
+      "benchmark_turnover": 0.9808069694971316,
+      "benchmark_unfilled_share": 0.0,
+      "benchmark_win_rate": 0.544,
+      "benchmark_worst_126_session_return": 0.10116626583456245,
+      "config_hash": "928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce",
+      "excess_return": -0.12040017663456226,
+      "strategy_annual_return": -0.03839673390564691,
+      "strategy_annual_volatility": 0.05519681274770559,
+      "strategy_calmar": -0.9645768469584275,
+      "strategy_cvar5": -0.009667372112464786,
+      "strategy_max_drawdown": -0.039806816871794326,
+      "strategy_minimum_commission_share": 0.8666666666666667,
+      "strategy_payoff_ratio": 0.8132135085851723,
+      "strategy_profit_factor": 0.8583920368399041,
+      "strategy_recovery_sessions": 12,
+      "strategy_return": -0.01923391080000003,
+      "strategy_sharpe": -0.6956331714505196,
+      "strategy_slippage_degradation": 1.5021735374950924,
+      "strategy_sortino": -0.7159452826595689,
+      "strategy_total_cost": 191.19108,
+      "strategy_turnover": 3.883006960708855,
+      "strategy_unfilled_share": 0.0,
+      "strategy_win_rate": 0.304,
+      "strategy_worst_126_session_return": -0.01923391080000092,
+      "training_end": "2025-10-27",
+      "validation_start": "2025-10-28",
+      "window_id": "wf_000"
+    }
+  ]
+}

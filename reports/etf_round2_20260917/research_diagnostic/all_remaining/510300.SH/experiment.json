@@ -1,0 +1,92 @@
+{
+  "experiment": {
+    "experiment_id": "round2-csi300-20260917",
+    "target_codes": [
+      "510300.SH"
+    ],
+    "profile": {
+      "profile_id": "grid_core",
+      "version": "1",
+      "strategy": {
+        "strategy_id": "grid_only",
+        "version": "1",
+        "config": {
+          "grid": {
+            "step_pct": 0.02,
+            "unit_pct": 0.1,
+            "initial_model": "fixed",
+            "fixed_initial_pct": 0.5,
+            "max_grid_per_day": 1,
+            "atr_stop_multiple": 3.0,
+            "cooldown_sessions": 5
+          },
+          "trend": {
+            "stop_n": 2.0,
+            "risk_per_unit": 0.005,
+            "add_n": 0.5,
+            "max_units": 4,
+            "require_macd_bullish": true,
+            "amount_ratio_min": null
+          },
+          "cost": {
+            "commission_rate": 0.0001,
+            "minimum_commission": 5.0,
+            "slippage_bps": 3.0,
+            "sell_tax_rate": 0.0,
+            "transfer_fee_rate": 0.0
+          }
+        },
+        "policy_id": "grid_only"
+      },
+      "benchmarks": [
+        {
+          "benchmark_id": "buy_and_hold",
+          "version": "1",
+          "rebalance_sessions": null,
+          "target_weight": 1.0
+        },
+        {
+          "benchmark_id": "fixed_half_hold",
+          "version": "1",
+          "rebalance_sessions": 1,
+          "target_weight": 0.5
+        }
+      ],
+      "selection_families": [
+        "grid_only"
+      ],
+      "required_evidence": [
+        "execution",
+        "integrated_oos",
+        "provenance"
+      ]
+    },
+    "profile_hash": "53e04e2ebcde6b11cecadf28bd776455bbc733ecf2d4f5a2eececcacc0d3ff45",
+    "allowed_axes": {
+      "step_pct": [
+        0.01,
+        0.015,
+        0.02,
+        0.025,
+        0.03,
+        0.035,
+        0.04,
+        0.045,
+        0.05,
+        0.055,
+        0.06
+      ],
+      "unit_pct": [
+        0.05,
+        0.1,
+        0.15,
+        0.2
+      ]
+    },
+    "start_date": "2021-01-01",
+    "as_of_date": "2026-09-17"
+  },
+  "experiment_hash": "17b7b5e0ace9e9a974f808732c9a2ea200e13c17d72cbe93497eef934c99aa06",
+  "research_only": true,
+  "trading_authorized": false
+}

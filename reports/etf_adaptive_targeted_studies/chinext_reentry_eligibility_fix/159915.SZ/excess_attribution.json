@@ -1,0 +1,11 @@
+[
+  {
+    "window_id": "wf_000",
+    "grid_return": 0.020730873397495447,
+    "trend_return": 0.017742728670594395,
+    "transition_return": -0.01972993912538409,
+    "cash_opportunity_cost": 0.04432098720179166,
+    "execution_cost": 97.35456,
+    "reconciliation_error": -6.938893903907228e-17
+  }
+]

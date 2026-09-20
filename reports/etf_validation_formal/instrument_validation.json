@@ -1,0 +1,125 @@
+{
+  "as_of_date": "2026-09-08",
+  "results": [
+    {
+      "exposure_id": "sp_china_low_vol_dividend",
+      "stock_code": "515450.SH",
+      "status": "data_rejected",
+      "rejection_reason": "expected market session is missing from both price coordinates",
+      "strategy_annual_return": null,
+      "benchmark_annual_return": null,
+      "strategy_max_drawdown": null,
+      "benchmark_max_drawdown": null,
+      "scope": "formal",
+      "available_from": null
+    },
+    {
+      "exposure_id": "csi_dividend",
+      "stock_code": "515080.SH",
+      "status": "data_rejected",
+      "rejection_reason": "inconsistent raw/qfq OHLC ratio",
+      "strategy_annual_return": null,
+      "benchmark_annual_return": null,
+      "strategy_max_drawdown": null,
+      "benchmark_max_drawdown": null,
+      "scope": "formal",
+      "available_from": null
+    },
+    {
+      "exposure_id": "csi_300",
+      "stock_code": "510300.SH",
+      "status": "data_rejected",
+      "rejection_reason": "inconsistent raw/qfq OHLC ratio",
+      "strategy_annual_return": null,
+      "benchmark_annual_return": null,
+      "strategy_max_drawdown": null,
+      "benchmark_max_drawdown": null,
+      "scope": "formal",
+      "available_from": null
+    },
+    {
+      "exposure_id": "csi_a500",
+      "stock_code": "563360.SH",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": -0.03839673390564691,
+      "benchmark_annual_return": 0.21443826601111948,
+      "strategy_max_drawdown": 0.039806816871794215,
+      "benchmark_max_drawdown": 0.08436870566348675,
+      "scope": "reference_only",
+      "available_from": "2024-10-15"
+    },
+    {
+      "exposure_id": "chinext",
+      "stock_code": "159915.SZ",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": 0.03187258148251737,
+      "benchmark_annual_return": 0.04306367591722382,
+      "strategy_max_drawdown": 0.14609741961954803,
+      "benchmark_max_drawdown": 0.4634653379150069,
+      "scope": "formal",
+      "available_from": null
+    },
+    {
+      "exposure_id": "star_50",
+      "stock_code": "588000.SH",
+      "status": "data_rejected",
+      "rejection_reason": "expected market session is missing from both price coordinates",
+      "strategy_annual_return": null,
+      "benchmark_annual_return": null,
+      "strategy_max_drawdown": null,
+      "benchmark_max_drawdown": null,
+      "scope": "formal",
+      "available_from": null
+    },
+    {
+      "exposure_id": "nasdaq_100",
+      "stock_code": "513100.SH",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": 0.013898546610261464,
+      "benchmark_annual_return": 0.19280693392266746,
+      "strategy_max_drawdown": 0.1192201190269846,
+      "benchmark_max_drawdown": 0.2337275748273251,
+      "scope": "formal",
+      "available_from": null
+    },
+    {
+      "exposure_id": "sp_500",
+      "stock_code": "513500.SH",
+      "status": "failed",
+      "rejection_reason": null,
+      "strategy_annual_return": -0.0503939838020262,
+      "benchmark_annual_return": -0.023474210274801344,
+      "strategy_max_drawdown": 0.34679126204251154,
+      "benchmark_max_drawdown": 0.575967329432873,
+      "scope": "formal",
+      "available_from": null
+    },
+    {
+      "exposure_id": "hang_seng_tech",
+      "stock_code": "513130.SH",
+      "status": "data_rejected",
+      "rejection_reason": "expected market session is missing from both price coordinates",
+      "strategy_annual_return": null,
+      "benchmark_annual_return": null,
+      "strategy_max_drawdown": null,
+      "benchmark_max_drawdown": null,
+      "scope": "formal",
+      "available_from": null
+    },
+    {
+      "exposure_id": "hang_seng_internet_technology",
+      "stock_code": "513330.SH",
+      "status": "data_rejected",
+      "rejection_reason": "expected market session is missing from both price coordinates",
+      "strategy_annual_return": null,
+      "benchmark_annual_return": null,
+      "strategy_max_drawdown": null,
+      "benchmark_max_drawdown": null,
+      "scope": "formal",
+      "available_from": null
+    }
+  ]
+}

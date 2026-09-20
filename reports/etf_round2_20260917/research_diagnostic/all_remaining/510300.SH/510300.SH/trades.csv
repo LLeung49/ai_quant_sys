@@ -1,0 +1,130 @@
+window_id,role,trade_date,kind,side,shares,raw_price,reason,commission,config_hash
+wf_000,strategy,2024-02-20,fill,buy,14700,3.3840149,grid_initialize,5.00,562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7
+wf_000,strategy,2024-02-28,fill,sell,4300,3.4859539,grid_sell,5.00,562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7
+wf_000,strategy,2024-03-13,fill,sell,4200,3.5839245,grid_sell,5.00,562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7
+wf_000,strategy,2024-06-12,fill,sell,6200,3.5429368,grid_stop,5.00,562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7
+wf_000,strategy,2024-07-12,fill,buy,14500,3.5120533,grid_initialize,5.09,562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7
+wf_000,strategy,2024-07-25,fill,sell,14500,3.4629608000000003,grid_stop,5.02,562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7
+wf_000,strategy,2024-08-01,fill,buy,14400,3.5030505999999995,grid_initialize,5.04,562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7
+wf_000,strategy,2024-08-08,fill,buy,4400,3.3970187999999997,grid_buy,5.00,562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7
+wf_000,strategy,2024-08-15,fill,sell,18800,3.3639905000000003,grid_stop,6.32,562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7
+wf_000,buy_and_hold,2024-02-20,fill,buy,29500,3.3840149,grid_initialize,9.98,562a0a941e6a597295ce7bb7c86c6656fb14da14b34806a39ab4ad923e5615f7
+wf_001,strategy,2024-09-25,fill,buy,14300,3.4900466999999997,grid_initialize,5.00,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_001,strategy,2024-09-27,fill,sell,2700,3.6988900000000005,grid_sell,5.00,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_001,strategy,2024-09-30,fill,sell,2600,4.0057979,grid_sell,5.00,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_001,strategy,2024-10-08,fill,sell,2400,4.6546031999999995,grid_sell,5.00,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_001,strategy,2024-10-09,fill,buy,2500,4.2862855,grid_buy,5.00,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_001,strategy,2024-10-10,fill,sell,9100,4.068779,grid_stop,5.00,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_001,strategy,2024-10-11,fill,buy,13200,4.0582171,grid_initialize,5.36,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_001,strategy,2024-10-14,fill,buy,2600,3.9881961,grid_buy,5.00,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_001,strategy,2024-10-17,fill,buy,2600,3.931179,grid_buy,5.00,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_001,strategy,2024-10-21,fill,sell,2600,4.0157949,grid_sell,5.00,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_001,strategy,2024-11-06,fill,sell,2600,4.1357589,grid_sell,5.00,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_001,strategy,2024-11-08,fill,sell,2600,4.2807154,grid_sell,5.00,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_001,strategy,2024-11-11,fill,buy,2600,4.1532456,grid_buy,5.00,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_001,strategy,2024-11-18,fill,buy,2600,4.0722213,grid_buy,5.00,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_001,strategy,2024-11-25,fill,sell,15800,3.9538135000000003,grid_stop,6.25,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_001,strategy,2024-12-09,fill,buy,13200,4.0552162,grid_initialize,5.35,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_001,strategy,2025-01-03,fill,sell,13200,3.9078273,grid_stop,5.16,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_001,strategy,2025-01-27,fill,buy,13300,3.9371807999999997,grid_initialize,5.24,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_001,strategy,2025-02-13,fill,sell,2600,4.007797300000001,grid_sell,5.00,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_001,buy_and_hold,2024-08-22,fill,buy,29400,3.391017,grid_initialize,9.97,928ff9246144538cdea5af2f6efde5b0355c71d0abf4f11f954532e7de8195ce
+wf_002,strategy,2025-03-07,fill,buy,12300,4.041212,grid_initialize,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-03-17,fill,sell,3600,4.116764600000001,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-03-21,fill,buy,3700,4.064218899999999,grid_buy,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-03-24,fill,buy,3700,4.0102027,grid_buy,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-04-07,fill,sell,16100,3.79886,grid_stop,6.12,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-04-28,fill,buy,12400,3.8841649,grid_initialize,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-05-08,fill,sell,3700,3.9168246000000004,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-05-13,fill,sell,3600,4.0097967,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-05-27,fill,buy,3600,3.9661894999999996,grid_buy,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-06-12,fill,sell,3600,3.9968006000000003,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-06-19,fill,sell,5100,3.8968306000000004,grid_stop,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-06-24,fill,buy,12400,3.8971687999999998,grid_initialize,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-06-25,fill,sell,3700,3.9378183,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-06-26,fill,sell,3600,3.9938015000000004,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-07-09,fill,sell,3600,4.0467856,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-07-18,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-07-21,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-07-22,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-07-23,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-07-24,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-07-25,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-07-28,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-07-29,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-07-30,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-07-31,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-01,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-04,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-05,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-06,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-07,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-08,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-11,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-12,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-13,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-14,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-15,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-18,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-19,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-20,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-21,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-22,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-25,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-26,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-27,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-28,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-08-29,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-09-01,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-09-02,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,strategy,2025-09-03,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_002,buy_and_hold,2025-03-06,fill,buy,24800,4.0162045,grid_initialize,9.96,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_003,strategy,2025-09-05,fill,buy,11200,4.451335,grid_initialize,5.00,cf314bcdacfc470a9f2a63b4a35d7ff814c7d7399eb328a184039ab11568cd03
+wf_003,strategy,2025-09-26,fill,sell,4300,4.6755968999999995,grid_sell,5.00,cf314bcdacfc470a9f2a63b4a35d7ff814c7d7399eb328a184039ab11568cd03
+wf_003,strategy,2025-11-24,fill,sell,6900,4.5776262999999995,grid_stop,5.00,cf314bcdacfc470a9f2a63b4a35d7ff814c7d7399eb328a184039ab11568cd03
+wf_003,strategy,2025-12-08,fill,buy,10800,4.712413300000001,grid_initialize,5.09,cf314bcdacfc470a9f2a63b4a35d7ff814c7d7399eb328a184039ab11568cd03
+wf_003,strategy,2026-01-20,fill,sell,10800,4.7335795,grid_stop,5.11,cf314bcdacfc470a9f2a63b4a35d7ff814c7d7399eb328a184039ab11568cd03
+wf_003,strategy,2026-01-21,fill,buy,10800,4.710412699999999,grid_initialize,5.09,cf314bcdacfc470a9f2a63b4a35d7ff814c7d7399eb328a184039ab11568cd03
+wf_003,buy_and_hold,2025-09-05,fill,buy,22400,4.451335,grid_initialize,9.97,cf314bcdacfc470a9f2a63b4a35d7ff814c7d7399eb328a184039ab11568cd03
+wf_004,strategy,2026-04-09,fill,buy,10900,4.5743719,grid_initialize,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-04-13,fill,sell,3200,4.6276113,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-04-15,fill,sell,3200,4.7305804,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-04-23,fill,sell,3100,4.818554000000001,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-04-29,fill,buy,3200,4.7564265,grid_buy,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-04-30,fill,sell,3100,4.828551,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-05-07,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-05-08,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-05-11,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-05-12,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-05-13,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-05-14,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-05-15,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-05-18,rejected_order,sell,,,insufficient shares,,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-05-22,fill,sell,1500,4.8265516,grid_stop,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-05-25,fill,buy,10400,4.881463999999999,grid_initialize,5.08,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-05-26,fill,sell,3100,4.9105264,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-05-27,fill,sell,3100,4.9615111,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-06-02,fill,buy,3100,4.8684601,grid_buy,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-06-03,fill,sell,3100,4.9365186,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-06-08,fill,buy,3100,4.791437,grid_buy,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-06-09,fill,sell,7300,4.762570800000001,grid_stop,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-06-16,fill,buy,10300,4.921476,grid_initialize,5.07,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-06-22,fill,sell,3000,4.9815051,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-06-23,fill,sell,3000,5.0774763,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-06-24,fill,buy,3100,4.9304787,grid_buy,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-06-26,fill,sell,3000,5.0064976,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-06-29,fill,buy,3100,4.8984691,grid_buy,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-06-30,fill,sell,3100,4.9455159,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-07-01,fill,sell,3000,5.007497300000001,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-07-03,fill,sell,1400,4.828551,grid_stop,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-07-10,fill,buy,10400,4.9194754,grid_initialize,5.12,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-07-13,fill,buy,3100,4.803440599999999,grid_buy,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-07-17,fill,buy,3100,4.721416,grid_buy,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-07-20,fill,sell,16600,4.628611,grid_stop,7.68,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-08-10,fill,buy,10400,4.7564265,grid_initialize,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-08-20,fill,buy,3100,4.6714009999999995,grid_buy,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-08-26,fill,buy,3100,4.6163845,grid_buy,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-08-28,fill,sell,3100,4.6825948,grid_sell,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-09-03,fill,buy,3100,4.6323893,grid_buy,5.00,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,strategy,2026-09-14,fill,sell,16600,4.5496347,grid_stop,7.55,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
+wf_004,buy_and_hold,2026-03-20,fill,buy,21700,4.5993794,grid_initialize,9.98,1f06fc3ec576c68de3d8e5583156febe08db82be723dbe24bf5392db1a7f65cd
