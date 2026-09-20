@@ -60,6 +60,10 @@ class QMTDataGateway:
             ),
         )
 
+    def connect(self) -> None:
+        """Compatibility no-op; HTTP requests establish the bridge connection."""
+        return None
+
     def _request(
         self, method: str, path: str, payload: dict[str, Any] | None = None
     ) -> dict[str, Any]:
@@ -170,12 +174,15 @@ class QMTDataGateway:
 
     def get_financial_data(
         self,
-        fields: list[str],
-        stocks: list[str],
+        fields: list[str] | None = None,
+        stocks: list[str] | None = None,
         start_time: str = "",
         end_time: str = "",
         report_type: str = "report_time",
+        **kwargs: Any,
     ) -> dict[str, dict[str, pd.DataFrame]]:
+        fields = list(fields or kwargs.pop("table_list", []))
+        stocks = list(stocks or kwargs.pop("stock_list", []))
         result: dict[str, dict[str, pd.DataFrame]] = {}
         for batch in _chunks(list(stocks), 50):
             body = self._request(
@@ -194,6 +201,19 @@ class QMTDataGateway:
                     name: self._frame(records)
                     for name, records in (tables or {}).items()
                 }
+        return result
+
+    def download_financial_data2(
+        self,
+        stock_list: list[str],
+        table_list: list[str],
+        start_time: str = "",
+        end_time: str = "",
+        callback=None,
+    ) -> DownloadResult:
+        result = self.download_financial_data(stock_list, table_list)
+        if callback is not None:
+            callback(result)
         return result
 
     def get_stock_list_in_sector(self, sector_name: str) -> list[str]:
@@ -221,8 +241,9 @@ class QMTDataGateway:
 
     def get_instrument_detail(
         self, stock_list: str | list[str], iscomplete: bool = False
-    ) -> dict[str, dict[str, Any]]:
-        stocks = [stock_list] if isinstance(stock_list, str) else list(stock_list)
+    ) -> dict[str, dict[str, Any]] | dict[str, Any]:
+        scalar = isinstance(stock_list, str)
+        stocks = [stock_list] if scalar else list(stock_list)
         result: dict[str, dict[str, Any]] = {}
         for batch in _chunks(stocks, 200):
             body = self._request(
@@ -235,7 +256,7 @@ class QMTDataGateway:
                     raise QMTBridgeError(f"instrument detail failed: {code}: {detail['error']}")
                 if detail is not None:
                     result[code] = detail
-        return result
+        return result.get(stock_list, {}) if scalar else result
 
     def get_divid_factors(self, stock_code: str) -> pd.DataFrame:
         body = self._request(
