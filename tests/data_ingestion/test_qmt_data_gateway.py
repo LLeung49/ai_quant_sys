@@ -146,6 +146,17 @@ def test_sector_and_etf_refresh_contracts():
     ]
 
 
+def test_refresh_endpoints_share_a_success_status_contract():
+    gateway = QMTDataGateway(base_url="http://qmt", token="test")
+    gateway._session.request = lambda method, url, **kwargs: _Response({"status": "failed"})
+
+    with pytest.raises(QMTBridgeError, match="refresh failed"):
+        gateway.download_sector_data()
+
+    with pytest.raises(QMTBridgeError, match="refresh failed"):
+        gateway.download_etf_info()
+
+
 def test_divid_factors_forwards_requested_window():
     gateway = QMTDataGateway(base_url="http://qmt", token="test")
     calls = []

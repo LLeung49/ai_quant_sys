@@ -225,10 +225,15 @@ class QMTDataGateway:
         return [str(code) for code in body.get("stocks", [])]
 
     def download_sector_data(self) -> None:
-        self._request("POST", "/api/xtdata/download_sector_data", {})
+        self._refresh("/api/xtdata/download_sector_data")
 
     def download_etf_info(self) -> None:
-        self._request("POST", "/api/xtdata/download_etf_info", {})
+        self._refresh("/api/xtdata/download_etf_info")
+
+    def _refresh(self, path: str) -> None:
+        body = self._request("POST", path, {})
+        if body.get("status") != "success":
+            raise QMTBridgeError(f"{path}: refresh failed")
 
     def get_etf_info(self) -> dict[str, Any]:
         body = self._request("POST", "/api/xtdata/etf_info", {})

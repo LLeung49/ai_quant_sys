@@ -1585,12 +1585,11 @@ class XtdataDownloadSectorHandler(BaseHandler):
     def post(self):
         try:
             from xtquant import xtdata
-            xtdata.download_sector_data()
         except ImportError:
             raise HTTPError(501, "QMT环境缺少xtquant包")
-        except Exception as exc:
-            logger.exception("download_sector_data failed")
-            raise HTTPError(500, f"download_sector_data failed: {exc}")
+        if not hasattr(xtdata, 'download_sector_data'):
+            raise HTTPError(501, "当前QMT内嵌xtquant版本不支持download_sector_data")
+        safe_call(xtdata.download_sector_data)
         self.write(json.dumps({"status": "success"}, ensure_ascii=False))
 
 
@@ -1598,12 +1597,11 @@ class XtdataDownloadEtfInfoHandler(BaseHandler):
     def post(self):
         try:
             from xtquant import xtdata
-            xtdata.download_etf_info()
         except ImportError:
             raise HTTPError(501, "QMT环境缺少xtquant包")
-        except Exception as exc:
-            logger.exception("download_etf_info failed")
-            raise HTTPError(500, f"download_etf_info failed: {exc}")
+        if not hasattr(xtdata, 'download_etf_info'):
+            raise HTTPError(501, "当前QMT内嵌xtquant版本不支持download_etf_info")
+        safe_call(xtdata.download_etf_info)
         self.write(json.dumps({"status": "success"}, ensure_ascii=False))
 
 
@@ -1611,15 +1609,12 @@ class XtdataEtfInfoHandler(BaseHandler):
     def post(self):
         try:
             from xtquant import xtdata
-            raw = xtdata.get_etf_info()
         except ImportError:
             raise HTTPError(501, "QMT环境缺少xtquant包")
-        except Exception as exc:
-            logger.exception("get_etf_info failed")
-            raise HTTPError(500, f"get_etf_info failed: {exc}")
-        if raw is None:
-            raise HTTPError(500, "ETF数据读取失败")
-        self.write(json.dumps({"data": raw}, ensure_ascii=False, default=str))
+        if not hasattr(xtdata, 'get_etf_info'):
+            raise HTTPError(501, "当前QMT内嵌xtquant版本不支持get_etf_info")
+        raw = safe_call(xtdata.get_etf_info)
+        self.write(json.dumps({"data": raw or {}}, ensure_ascii=False, default=str))
 
 
 # ============= 路由注册 =============
