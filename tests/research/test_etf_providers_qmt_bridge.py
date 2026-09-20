@@ -1,12 +1,12 @@
-from pathlib import Path
+﻿from pathlib import Path
 from datetime import date
 
-from morning_conference.sector_rotation2.research.etf_core.providers_qmt_bridge import (
+from morning_conference_qmt.sector_rotation2.research.etf_core.providers_qmt_bridge import (
     QMTBridgeETFProvider,
 )
 
 
-PATH = Path(__file__).parents[2] / "src/morning_conference/sector_rotation2/research/etf_core/providers_qmt_bridge.py"
+PATH = Path(__file__).parents[2] / "src/morning_conference_qmt/sector_rotation2/research/etf_core/providers_qmt_bridge.py"
 
 
 def test_etf_provider_copy_exists_without_direct_xtquant_import():

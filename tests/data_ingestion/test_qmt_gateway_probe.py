@@ -1,7 +1,7 @@
-import pandas as pd
+﻿import pandas as pd
 
-from data_ingestion.qmt_data_gateway import QMTBridgeError
-from data_ingestion.qmt_gateway_probe import GatewayProbe, ProbeConfig, summarize
+from data_ingestion_qmt.qmt_data_gateway import QMTBridgeError
+from data_ingestion_qmt.qmt_gateway_probe import GatewayProbe, ProbeConfig, summarize
 
 
 class _Gateway:

@@ -1,6 +1,6 @@
-import pytest
+﻿import pytest
 
-from data_ingestion.qmt_data_gateway import QMTBridgeError, QMTDataGateway
+from data_ingestion_qmt.qmt_data_gateway import QMTBridgeError, QMTDataGateway
 
 
 class _Response:
@@ -110,10 +110,12 @@ def test_market_data_empty_and_missing_fields_remain_observable():
 def test_financial_data_restores_nested_dataframes():
     gateway = QMTDataGateway(base_url="http://qmt", token="test")
     gateway._session.request = lambda method, url, **kwargs: _Response({
-        "data": {"600519.SH": {"Balance": [{"m_timetag": 20241231, "total_asset": 1.0}]}}
+        "data": {
+            "600519.SH": {"ASHAREBALANCESHEET.tot_assets": {"20241231": 1.0}}
+        }
     })
     result = gateway.get_financial_data(
-        ["total_asset"], ["600519.SH"], "20200101", "20250101", "report_time"
+        ["Balance"], ["600519.SH"], "20200101", "20250101", "report_time"
     )
     assert isinstance(result["600519.SH"]["Balance"], __import__("pandas").DataFrame)
 
@@ -138,7 +140,8 @@ def test_reference_envelopes_are_unwrapped():
         "http://qmt/api/data/stock_list_in_sector",
         {"sectorname": "沪深A股"},
     )
-    assert gateway.get_sector_list() == ["SW1食品饮料"]
+    with pytest.raises(QMTBridgeError, match="AKShare"):
+        gateway.get_sector_list()
     assert gateway.get_instrument_detail(["600519.SH"])["600519.SH"]["OpenDate"] == "20010827"
     assert gateway.get_divid_factors("600519.SH").iloc[0]["factor"] == 1.2
 
@@ -154,7 +157,7 @@ def test_financial_download_raises_for_partial_batch():
         gateway.download_financial_data(["600519.SH", "000001.SZ"], ["Balance"])
 
 
-def test_sector_and_etf_refresh_contracts():
+def test_sector_and_etf_refresh_contracts_are_explicitly_deferred():
     gateway = QMTDataGateway(base_url="http://qmt", token="test")
     calls = []
 
@@ -165,24 +168,23 @@ def test_sector_and_etf_refresh_contracts():
         return _Response({"status": "success"})
 
     gateway._session.request = request
-    gateway.download_sector_data()
-    gateway.download_etf_info()
-    assert "510300.SH" in gateway.get_etf_info()
-    assert calls == [
-        "http://qmt/api/xtdata/download_sector_data",
-        "http://qmt/api/xtdata/download_etf_info",
-        "http://qmt/api/xtdata/etf_info",
-    ]
+    with pytest.raises(QMTBridgeError, match="not supported"):
+        gateway.download_sector_data()
+    with pytest.raises(QMTBridgeError, match="deferred"):
+        gateway.download_etf_info()
+    with pytest.raises(QMTBridgeError, match="deferred"):
+        gateway.get_etf_info()
+    assert calls == []
 
 
-def test_refresh_endpoints_share_a_success_status_contract():
+def test_deferred_endpoints_do_not_issue_legacy_refresh_requests():
     gateway = QMTDataGateway(base_url="http://qmt", token="test")
     gateway._session.request = lambda method, url, **kwargs: _Response({"status": "failed"})
 
-    with pytest.raises(QMTBridgeError, match="refresh failed"):
+    with pytest.raises(QMTBridgeError, match="not supported"):
         gateway.download_sector_data()
 
-    with pytest.raises(QMTBridgeError, match="refresh failed"):
+    with pytest.raises(QMTBridgeError, match="deferred"):
         gateway.download_etf_info()
 
 
