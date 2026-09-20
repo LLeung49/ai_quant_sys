@@ -123,3 +123,24 @@ def test_financial_download_raises_for_partial_batch():
     })
     with pytest.raises(QMTBridgeError, match="000001.SZ"):
         gateway.download_financial_data(["600519.SH", "000001.SZ"], ["Balance"])
+
+
+def test_sector_and_etf_refresh_contracts():
+    gateway = QMTDataGateway(base_url="http://qmt", token="test")
+    calls = []
+
+    def request(method, url, **kwargs):
+        calls.append(url)
+        if url.endswith("/etf_info"):
+            return _Response({"data": {"510300.SH": {"成份股信息": []}}})
+        return _Response({"status": "success"})
+
+    gateway._session.request = request
+    gateway.download_sector_data()
+    gateway.download_etf_info()
+    assert "510300.SH" in gateway.get_etf_info()
+    assert calls == [
+        "http://qmt/api/xtdata/download_sector_data",
+        "http://qmt/api/xtdata/download_etf_info",
+        "http://qmt/api/xtdata/etf_info",
+    ]

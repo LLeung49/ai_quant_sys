@@ -202,6 +202,19 @@ class QMTDataGateway:
         )
         return [str(code) for code in body.get("stocks", [])]
 
+    def download_sector_data(self) -> None:
+        self._request("POST", "/api/xtdata/download_sector_data", {})
+
+    def download_etf_info(self) -> None:
+        self._request("POST", "/api/xtdata/download_etf_info", {})
+
+    def get_etf_info(self) -> dict[str, Any]:
+        body = self._request("POST", "/api/xtdata/etf_info", {})
+        data = body.get("data")
+        if not isinstance(data, dict):
+            raise QMTBridgeError("/api/xtdata/etf_info: expected mapping")
+        return data
+
     def get_sector_list(self) -> list[str]:
         body = self._request("GET", "/api/xtdata/sector_list")
         return [str(name) for name in body.get("sectors", [])]
