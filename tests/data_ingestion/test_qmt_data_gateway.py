@@ -84,3 +84,42 @@ def test_market_data_empty_and_missing_fields_remain_observable():
     present = gateway.get_market_data_ex(["close", "volume"], ["600519.SH"], "1d")
     assert empty["600519.SH"].empty
     assert "volume" not in present["600519.SH"].columns
+
+
+def test_financial_data_restores_nested_dataframes():
+    gateway = QMTDataGateway(base_url="http://qmt", token="test")
+    gateway._session.request = lambda method, url, **kwargs: _Response({
+        "data": {"600519.SH": {"Balance": [{"m_timetag": 20241231, "total_asset": 1.0}]}}
+    })
+    result = gateway.get_financial_data(
+        ["total_asset"], ["600519.SH"], "20200101", "20250101", "report_time"
+    )
+    assert isinstance(result["600519.SH"]["Balance"], __import__("pandas").DataFrame)
+
+
+def test_reference_envelopes_are_unwrapped():
+    gateway = QMTDataGateway(base_url="http://qmt", token="test")
+    responses_by_path = {
+        "stock_list_in_sector": {"stocks": ["600519.SH"]},
+        "sector_list": {"sectors": ["SW1食品饮料"]},
+        "instrument_detail": {"data": {"600519.SH": {"OpenDate": "20010827"}}},
+        "divid_factors": {"factors": [{"time": "20250102", "factor": 1.2}]},
+    }
+    gateway._session.request = lambda method, url, **kwargs: _Response(
+        next(value for key, value in responses_by_path.items() if key in url)
+    )
+    assert gateway.get_stock_list_in_sector("沪深A股") == ["600519.SH"]
+    assert gateway.get_sector_list() == ["SW1食品饮料"]
+    assert gateway.get_instrument_detail(["600519.SH"])["600519.SH"]["OpenDate"] == "20010827"
+    assert gateway.get_divid_factors("600519.SH").iloc[0]["factor"] == 1.2
+
+
+def test_financial_download_raises_for_partial_batch():
+    gateway = QMTDataGateway(base_url="http://qmt", token="test")
+    gateway._session.request = lambda method, url, **kwargs: _Response({
+        "status": "success",
+        "downloaded": ["600519.SH"],
+        "failed": [{"stock": "000001.SZ", "error": "missing"}],
+    })
+    with pytest.raises(QMTBridgeError, match="000001.SZ"):
+        gateway.download_financial_data(["600519.SH", "000001.SZ"], ["Balance"])

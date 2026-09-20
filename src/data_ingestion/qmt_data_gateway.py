@@ -149,3 +149,83 @@ class QMTDataGateway:
             for code, records in (body.get("data") or {}).items():
                 result[code] = self._frame(records)
         return result
+
+    def download_financial_data(
+        self, stock_list: list[str], table_list: list[str]
+    ) -> DownloadResult:
+        downloaded: list[str] = []
+        failed: list[dict[str, Any]] = []
+        for batch in _chunks(list(stock_list), 20):
+            body = self._request(
+                "POST",
+                "/api/xtdata/download_financial_data",
+                {"stock_list": ",".join(batch), "table_list": ",".join(table_list)},
+            )
+            downloaded.extend(str(code) for code in body.get("downloaded", batch))
+            failed.extend(body.get("failed", []) or [])
+        if failed:
+            codes = ", ".join(str(item.get("stock", "?")) for item in failed)
+            raise QMTBridgeError(f"financial download failed: {codes}")
+        return DownloadResult(tuple(downloaded), tuple(failed))
+
+    def get_financial_data(
+        self,
+        fields: list[str],
+        stocks: list[str],
+        start_time: str = "",
+        end_time: str = "",
+        report_type: str = "report_time",
+    ) -> dict[str, dict[str, pd.DataFrame]]:
+        result: dict[str, dict[str, pd.DataFrame]] = {}
+        for batch in _chunks(list(stocks), 50):
+            body = self._request(
+                "POST",
+                "/api/xtdata/financial_data",
+                {
+                    "stock_list": ",".join(batch),
+                    "table_list": ",".join(fields),
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "report_type": report_type,
+                },
+            )
+            for code, tables in (body.get("data") or {}).items():
+                result[code] = {
+                    name: self._frame(records)
+                    for name, records in (tables or {}).items()
+                }
+        return result
+
+    def get_stock_list_in_sector(self, sector_name: str) -> list[str]:
+        body = self._request(
+            "POST", "/api/xtdata/stock_list_in_sector", {"sector_name": sector_name}
+        )
+        return [str(code) for code in body.get("stocks", [])]
+
+    def get_sector_list(self) -> list[str]:
+        body = self._request("GET", "/api/xtdata/sector_list")
+        return [str(name) for name in body.get("sectors", [])]
+
+    def get_instrument_detail(
+        self, stock_list: str | list[str], iscomplete: bool = False
+    ) -> dict[str, dict[str, Any]]:
+        stocks = [stock_list] if isinstance(stock_list, str) else list(stock_list)
+        result: dict[str, dict[str, Any]] = {}
+        for batch in _chunks(stocks, 200):
+            body = self._request(
+                "POST",
+                "/api/xtdata/instrument_detail",
+                {"stock_list": ",".join(batch), "iscomplete": iscomplete},
+            )
+            for code, detail in (body.get("data") or {}).items():
+                if isinstance(detail, dict) and detail.get("error"):
+                    raise QMTBridgeError(f"instrument detail failed: {code}: {detail['error']}")
+                if detail is not None:
+                    result[code] = detail
+        return result
+
+    def get_divid_factors(self, stock_code: str) -> pd.DataFrame:
+        body = self._request(
+            "POST", "/api/xtdata/divid_factors", {"stock_code": stock_code}
+        )
+        return self._frame(body.get("factors", []))
