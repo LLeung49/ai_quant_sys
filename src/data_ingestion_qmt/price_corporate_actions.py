@@ -36,7 +36,7 @@ except ImportError:  # Direct script execution from src/data_ingestion_qmt.
     )
 
 
-DATA_SOURCE = "xtquant"  # 同一股票、除权日可保留不同供应商来源的事件快照。
+DATA_SOURCE = "qmt_context"  # 同一股票、除权日可保留不同供应商来源的事件快照。
 TASK_REASON = "corporate_action_changed"  # 供任务表审计、聚合和排障使用。
 
 ACTION_VALUE_FIELDS = (

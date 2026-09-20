@@ -71,7 +71,7 @@ SELECT_ADJUSTMENT_ASOF_SQL = """
 SELECT MAX(ex_date) AS adjustment_asof
 FROM trade_corporate_action
 WHERE stock_code = %s
-  AND data_source = 'xtquant'
+  AND data_source = 'qmt_context'
   AND event_status = 'effective'
 """
 
@@ -79,7 +79,7 @@ SELECT_ADJUSTMENTS_ASOF_SQL = """
 SELECT stock_code, MAX(ex_date) AS adjustment_asof
 FROM trade_corporate_action
 WHERE stock_code IN ({placeholders})
-  AND data_source = 'xtquant'
+  AND data_source = 'qmt_context'
   AND event_status = 'effective'
 GROUP BY stock_code
 """
@@ -161,7 +161,7 @@ def _split_qmt_rows(stock_code: str, dataframe, dividend_type: str) -> tuple[lis
             item["pre_close"] = _optional_number(row, "preClose")
             suspend = _optional_number(row, "suspendFlag")
             item["suspend_flag"] = int(suspend) if suspend is not None else None
-            item["data_source"] = "xtquant"
+            item["data_source"] = "qmt_context"
         else:
             item["turnover_rate"] = None
         rows.append(item)

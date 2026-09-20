@@ -285,7 +285,7 @@ def _commit_records_to_pit(records_by_code):
             source_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
             written = store.insert_raw({
                 "stock_code": code,
-                "source_table": "miniqmt",
+                "source_table": "qmt_context",
                 "report_date": report_date,
                 "announcement_date": None,
                 "period_type": "quarterly",
@@ -298,7 +298,7 @@ def _commit_records_to_pit(records_by_code):
                 "source_updated_at": _dt.now(),
                 "source_hash": source_hash,
                 "is_restated": 0,
-                "data_source": "qmt",
+                "data_source": "qmt_context",
             })
             if written:
                 rows_out += written
