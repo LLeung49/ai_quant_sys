@@ -36,6 +36,31 @@ def test_from_env_and_error_envelope(monkeypatch):
     assert session.headers["X-Token"] == "test-token"
 
 
+def test_from_env_reads_project_dotenv_when_process_env_is_unset(monkeypatch, tmp_path):
+    env_file = tmp_path / ".env"
+    env_file.write_text(
+        "QMT_BRIDGE_URL=http://qmt-from-dotenv:16666\n"
+        "QMT_BRIDGE_TOKEN=dotenv-token\n"
+        "QMT_BRIDGE_CONNECT_TIMEOUT=4\n"
+        "QMT_BRIDGE_READ_TIMEOUT=90\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("AI_QUANT_ENV_FILE", str(env_file))
+    for name in (
+        "QMT_BRIDGE_URL",
+        "QMT_BRIDGE_TOKEN",
+        "QMT_BRIDGE_CONNECT_TIMEOUT",
+        "QMT_BRIDGE_READ_TIMEOUT",
+    ):
+        monkeypatch.delenv(name, raising=False)
+
+    gateway = QMTDataGateway.from_env()
+
+    assert gateway.base_url == "http://qmt-from-dotenv:16666"
+    assert gateway._session.headers["X-Token"] == "dotenv-token"
+    assert gateway.timeout == (4.0, 90.0)
+
+
 def test_market_data_restores_dataframe_index(monkeypatch):
     gateway = QMTDataGateway(base_url="http://qmt", token="test")
     gateway._session.request = lambda method, url, **kwargs: _Response({

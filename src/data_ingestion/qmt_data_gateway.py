@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 import requests
+from dotenv import dotenv_values
 
 
 class QMTBridgeError(RuntimeError):
@@ -28,6 +30,27 @@ class DownloadResult:
 def _chunks(values: list[str], size: int):
     for offset in range(0, len(values), size):
         yield values[offset : offset + size]
+
+
+def resolve_env_path() -> Path:
+    """Resolve .env with the same rules used by data_ingestion.db_config."""
+    configured_path = os.environ.get("AI_QUANT_ENV_FILE")
+    if configured_path:
+        return Path(configured_path).expanduser()
+
+    module_path = Path(__file__).resolve()
+    for directory in module_path.parents:
+        candidate = directory / ".env"
+        if candidate.is_file():
+            return candidate
+
+    return Path(__file__).parent.parent.parent / ".env"
+
+
+def _bridge_env(name: str, values: dict[str, str | None], default: str) -> str:
+    if name in os.environ:
+        return os.environ[name]
+    return values.get(name) or default
 
 
 class QMTDataGateway:
@@ -51,12 +74,15 @@ class QMTDataGateway:
 
     @classmethod
     def from_env(cls) -> "QMTDataGateway":
+        values = dotenv_values(resolve_env_path())
         return cls(
-            base_url=os.getenv("QMT_BRIDGE_URL", "http://127.0.0.1:15588"),
-            token=os.getenv("QMT_BRIDGE_TOKEN", ""),
+            base_url=_bridge_env(
+                "QMT_BRIDGE_URL", values, "http://127.0.0.1:15588"
+            ),
+            token=_bridge_env("QMT_BRIDGE_TOKEN", values, ""),
             timeout=(
-                float(os.getenv("QMT_BRIDGE_CONNECT_TIMEOUT", "3")),
-                float(os.getenv("QMT_BRIDGE_READ_TIMEOUT", "60")),
+                float(_bridge_env("QMT_BRIDGE_CONNECT_TIMEOUT", values, "3")),
+                float(_bridge_env("QMT_BRIDGE_READ_TIMEOUT", values, "60")),
             ),
         )
 
