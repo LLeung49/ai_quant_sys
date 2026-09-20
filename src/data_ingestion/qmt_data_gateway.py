@@ -118,3 +118,34 @@ class QMTDataGateway:
             codes = ", ".join(str(item.get("stock", "?")) for item in failed)
             raise QMTBridgeError(f"history download failed: {codes}")
         return DownloadResult(tuple(downloaded), tuple(failed))
+
+    def get_market_data_ex(
+        self,
+        field_list: list[str],
+        stock_list: list[str],
+        period: str,
+        start_time: str = "",
+        end_time: str = "",
+        count: int = -1,
+        dividend_type: str = "none",
+        fill_data: bool = True,
+    ) -> dict[str, pd.DataFrame]:
+        result: dict[str, pd.DataFrame] = {}
+        for batch in _chunks(list(stock_list), 50):
+            body = self._request(
+                "POST",
+                "/api/xtdata/market_data_ex",
+                {
+                    "field_list": ",".join(field_list),
+                    "stock_list": ",".join(batch),
+                    "period": period,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "count": count,
+                    "dividend_type": dividend_type,
+                    "fill_data": str(fill_data).lower(),
+                },
+            )
+            for code, records in (body.get("data") or {}).items():
+                result[code] = self._frame(records)
+        return result
