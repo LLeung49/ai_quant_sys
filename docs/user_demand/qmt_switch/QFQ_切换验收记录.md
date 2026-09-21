@@ -17,7 +17,7 @@
 | 20 代码 dry-run | `requested=56822`、`matched=8371`、`written=0`、`missing=48451`、`failed=5` |
 | 全量运行 | 于 2026-09-21 启动，后台进程已退出；其标准输出未被宿主保留，不能补报运行期的批次数或失败数 |
 | 运行后表统计 | 总行数 `14,415,635`；非 NULL `137,992`；NULL `14,277,643` |
-| 审计状态 | `trade_qfq_integrity_audit` 当前无记录 |
+| 审计状态 | 初始统计为空；随后对 `300316.SZ` 的真实 QMT 审计写入 `qmt_verified_exception/warning` 23 条 |
 
 `turnover_rate` 只会在 QMT 返回对应代码和日期时写入；剩余 NULL 不以当前流通股本或 AkShare 推算。回填 SQL 附带 `AND turnover_rate IS NULL`，可安全重跑，只会尝试余下 NULL 行。
 
@@ -27,6 +27,13 @@
 - QMT 旧日线采集、旧 K 线加载和旧/新对账重刷入口均已退役。
 - pattern_detection、morning_conference、data_ingestion 的业务前复权读取均已切换至 `trade_stock_daily_qfq`。
 - `asset_allocation/etf_adaptive/market_data.py` 保留 raw 交易事实读取，同时使用 QFQ 进行复权价格分析。
+
+## 非仿射供应商例外验收
+
+2026-09-22 对 `300316.SZ` 执行一次真实 raw/QFQ 审计：检测 23 条非仿射关系，QMT 当前
+`none` 与 `front` 响应均与库内存储一致。因此结果为 `detected=23`、`repaired=0`、
+`failed=0`；审计表持久化为 23 条 `warning/qmt_verified_exception`。该例验证了供应商原生
+复权差异不会再触发无意义的全量重刷。
 
 ## 已知限制
 
