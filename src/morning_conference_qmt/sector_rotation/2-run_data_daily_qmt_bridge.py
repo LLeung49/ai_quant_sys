@@ -4,7 +4,7 @@
 run_daily.py -- 每日增量
 
 执行顺序:
-    1. 增量下载所有股票 K 线 (按 trade_stock_daily 中已有的 max(trade_date)+1)
+    1. Task 8 已维护 trade_stock_daily_qfq
     2. 重算最近 60 个交易日的 trade_sector_daily
        (60 天足够覆盖任何延迟到位的成分股 K 线 + 重新校验 close_idx 链)
     3. 默认不刷新 trade_stock_status 申万分类 (申万官方分类一年才调一次)
@@ -43,7 +43,6 @@ from numpy import full
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from industry_meta_qmt_bridge import sync_sw_classification
-from stock_kline_loader_qmt_bridge import sync_all_kline
 from sector_index_builder import rebuild_all_sectors
 
 
@@ -64,8 +63,7 @@ def main():
     if args.refresh_meta:
         sync_sw_classification()
 
-    # sync_all_kline(incremental=True, level=args.level)
-
+    print("\n[INFO] 假定 Task 8 已维护 trade_stock_daily_qfq\n")
     rebuild_all_sectors(level=args.level, days=args.days, full=False)
 
     print("\n" + "#" * 70)
