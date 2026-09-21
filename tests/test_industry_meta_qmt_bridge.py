@@ -1,9 +1,9 @@
-import importlib.util
+﻿import importlib.util
 from pathlib import Path
 
 
 MODULE_PATH = next(
-    Path("src/morning_conference/sector_rotation").glob("industry_meta_qmt_bridge.py")
+    Path("src/morning_conference_qmt/sector_rotation").glob("industry_meta_qmt_bridge.py")
 )
 
 

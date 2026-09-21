@@ -1,10 +1,10 @@
-import importlib.util
+﻿import importlib.util
 from pathlib import Path
 
 import pytest
 
 
-PATH = Path(__file__).parents[1] / "src/data_ingestion/1-行情数据采集_qmt_bridge.py"
+PATH = Path(__file__).parents[1] / "src/data_ingestion_qmt/1-行情数据采集_qmt_bridge.py"
 
 
 def test_market_copy_exists_without_direct_xtquant_import():

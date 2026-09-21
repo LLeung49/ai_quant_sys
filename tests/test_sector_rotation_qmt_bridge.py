@@ -1,9 +1,9 @@
-from pathlib import Path
+﻿from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
-KLINE = ROOT / "src/morning_conference/sector_rotation/stock_kline_loader_qmt_bridge.py"
-INDUSTRY = ROOT / "src/morning_conference/sector_rotation/industry_meta_qmt_bridge.py"
+KLINE = ROOT / "src/morning_conference_qmt/sector_rotation/stock_kline_loader_qmt_bridge.py"
+INDUSTRY = ROOT / "src/morning_conference_qmt/sector_rotation/industry_meta_qmt_bridge.py"
 
 
 def test_morning_copies_exist_without_direct_xtquant_imports():

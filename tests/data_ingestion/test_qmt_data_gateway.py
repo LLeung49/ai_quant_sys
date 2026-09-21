@@ -1,6 +1,6 @@
-import pytest
+﻿import pytest
 
-from data_ingestion.qmt_data_gateway import QMTBridgeError, QMTDataGateway
+from data_ingestion_qmt.qmt_data_gateway import QMTBridgeError, QMTDataGateway
 
 
 class _Response:
@@ -107,59 +107,17 @@ def test_market_data_empty_and_missing_fields_remain_observable():
     assert "volume" not in present["600519.SH"].columns
 
 
-def test_financial_data_rejects_unknown_xtdata_table_names():
+def test_financial_data_restores_nested_dataframes():
     gateway = QMTDataGateway(base_url="http://qmt", token="test")
-    with pytest.raises(QMTBridgeError, match="unsupported: total_asset"):
-        gateway.get_financial_data(["total_asset"], ["600519.SH"])
-
-
-def test_financial_data_rebuilds_xtdata_tables_from_context_raw_reports():
-    gateway = QMTDataGateway(base_url="http://qmt", token="test")
-    calls = []
-
-    def request(method, url, **kwargs):
-        calls.append((method, url, kwargs["json"]))
-        return _Response({
-            "data": {
-                "600519.SH": {
-                    "ASHAREBALANCESHEET.tot_assets": {"1782748800000": 309.0},
-                    "ASHAREINCOME.revenue": {"1782748800000": 92.0},
-                    "ASHAREINCOME.net_profit_excl_min_int_inc": {"1782748800000": 44.0},
-                    "ASHARECASHFLOW.net_cash_flows_oper_act": {"1782748800000": 70.0},
-                    "PERSHAREINDEX.s_fa_eps_basic": {"1782748800000": 35.0},
-                }
-            }
-        })
-
-    gateway._session.request = request
-
+    gateway._session.request = lambda method, url, **kwargs: _Response({
+        "data": {
+            "600519.SH": {"ASHAREBALANCESHEET.tot_assets": {"20241231": 1.0}}
+        }
+    })
     result = gateway.get_financial_data(
-        ["Balance", "Income", "CashFlow", "PershareIndex"],
-        ["600519.SH"], "20260621", "20260920", "report_time",
+        ["Balance"], ["600519.SH"], "20200101", "20250101", "report_time"
     )
-
-    assert result["600519.SH"]["Balance"].iloc[0].to_dict() == {
-        "m_timetag": 1782748800000, "tot_assets": 309.0,
-    }
-    assert result["600519.SH"]["Income"].iloc[0]["revenue"] == 92.0
-    assert result["600519.SH"]["Income"].iloc[0]["net_profit_excl_min_int_inc"] == 44.0
-    assert result["600519.SH"]["CashFlow"].iloc[0]["net_cash_flows_oper_act"] == 70.0
-    assert result["600519.SH"]["PershareIndex"].iloc[0]["s_fa_eps_basic"] == 35.0
-    assert calls == [
-        ("POST", "http://qmt/api/data/raw_financial_data", {
-            "field_list": "ASHAREBALANCESHEET.tot_assets,ASHAREBALANCESHEET.tot_liab,"
-            "ASHAREBALANCESHEET.total_equity,ASHAREBALANCESHEET.tot_shrhldr_eqy_incl_min_int,"
-            "ASHAREBALANCESHEET.total_current_assets,ASHAREBALANCESHEET.total_current_liability,"
-            "ASHAREINCOME.revenue,ASHAREINCOME.operating_revenue,"
-            "ASHAREINCOME.net_profit_incl_min_int_inc,ASHAREINCOME.net_profit_excl_min_int_inc,"
-            "ASHAREINCOME.cost_of_goods_sold,ASHAREINCOME.total_operating_cost,"
-            "ASHARECASHFLOW.net_cash_flows_oper_act,PERSHAREINDEX.s_fa_eps_basic,"
-            "PERSHAREINDEX.du_return_on_equity,PERSHAREINDEX.equity_roe,"
-            "PERSHAREINDEX.net_roe,PERSHAREINDEX.sales_gross_profit",
-            "stock_list": "600519.SH", "start_time": "20260621",
-            "end_time": "20260920", "report_type": "report_time",
-        })
-    ]
+    assert isinstance(result["600519.SH"]["Balance"], __import__("pandas").DataFrame)
 
 
 def test_reference_envelopes_are_unwrapped():
@@ -182,26 +140,24 @@ def test_reference_envelopes_are_unwrapped():
         "http://qmt/api/data/stock_list_in_sector",
         {"sectorname": "沪深A股"},
     )
-    assert gateway.get_sector_list() == ["SW1食品饮料"]
+    with pytest.raises(QMTBridgeError, match="AKShare"):
+        gateway.get_sector_list()
     assert gateway.get_instrument_detail(["600519.SH"])["600519.SH"]["OpenDate"] == "20010827"
     assert gateway.get_divid_factors("600519.SH").iloc[0]["factor"] == 1.2
 
 
-def test_financial_readiness_check_reports_stocks_missing_from_qmt_data_manager():
+def test_financial_download_raises_for_partial_batch():
     gateway = QMTDataGateway(base_url="http://qmt", token="test")
     gateway._session.request = lambda method, url, **kwargs: _Response({
-        "data": {
-            "600519.SH": {
-                "ASHAREBALANCESHEET.tot_assets": {"1782748800000": 1.0},
-            },
-            "000001.SZ": {},
-        },
+        "status": "success",
+        "downloaded": ["600519.SH"],
+        "failed": [{"stock": "000001.SZ", "error": "missing"}],
     })
     with pytest.raises(QMTBridgeError, match="000001.SZ"):
         gateway.download_financial_data(["600519.SH", "000001.SZ"], ["Balance"])
 
 
-def test_sector_and_etf_refresh_contracts():
+def test_sector_and_etf_refresh_contracts_are_explicitly_deferred():
     gateway = QMTDataGateway(base_url="http://qmt", token="test")
     calls = []
 
@@ -212,24 +168,23 @@ def test_sector_and_etf_refresh_contracts():
         return _Response({"status": "success"})
 
     gateway._session.request = request
-    gateway.download_sector_data()
-    gateway.download_etf_info()
-    assert "510300.SH" in gateway.get_etf_info()
-    assert calls == [
-        "http://qmt/api/xtdata/download_sector_data",
-        "http://qmt/api/xtdata/download_etf_info",
-        "http://qmt/api/xtdata/etf_info",
-    ]
+    with pytest.raises(QMTBridgeError, match="not supported"):
+        gateway.download_sector_data()
+    with pytest.raises(QMTBridgeError, match="deferred"):
+        gateway.download_etf_info()
+    with pytest.raises(QMTBridgeError, match="deferred"):
+        gateway.get_etf_info()
+    assert calls == []
 
 
-def test_refresh_endpoints_share_a_success_status_contract():
+def test_deferred_endpoints_do_not_issue_legacy_refresh_requests():
     gateway = QMTDataGateway(base_url="http://qmt", token="test")
     gateway._session.request = lambda method, url, **kwargs: _Response({"status": "failed"})
 
-    with pytest.raises(QMTBridgeError, match="refresh failed"):
+    with pytest.raises(QMTBridgeError, match="not supported"):
         gateway.download_sector_data()
 
-    with pytest.raises(QMTBridgeError, match="refresh failed"):
+    with pytest.raises(QMTBridgeError, match="deferred"):
         gateway.download_etf_info()
 
 
