@@ -10,7 +10,7 @@ from __future__ import annotations
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
@@ -82,30 +82,41 @@ def display_name(sector_xt_name: str, level: int) -> str:
 # 从 xtdata 拉申万分类
 # ============================================================
 
-def fetch_sw_classification_from_xtdata() -> Dict[str, Dict[str, str]]:
+def _load_sw_catalog_from_akshare() -> Tuple[List[str], List[str]]:
+    """Load the SW1/SW2 directory only; QMT remains the membership source."""
+    import akshare as ak
+
+    first = ak.sw_index_first_info()
+    second = ak.sw_index_second_info()
+    # AKShare's current Chinese column labels are not stable across releases;
+    # the first two columns are consistently SW code and industry name.
+    sw1 = sorted({"SW1" + str(name).strip() for name in first.iloc[:, 1] if str(name).strip()})
+    sw2 = sorted({"SW2" + str(name).strip() for name in second.iloc[:, 1] if str(name).strip()})
+    if not sw1 or not sw2:
+        raise RuntimeError("AKShare returned an empty Shenwan industry catalog")
+    return sw1, sw2
+
+
+def fetch_sw_classification_from_qmt(
+    *, catalog_loader: Callable[[], Tuple[List[str], List[str]]] = _load_sw_catalog_from_akshare,
+) -> Dict[str, Dict[str, str]]:
     """
     遍历所有申万一级和二级板块, 反查每只股票的 (sector_1, sector_2)
 
     返回: {stock_code: {"sector_1": ..., "sector_2": ..., "stock_name": ...}}
     """
-    xtdata = QMT_GATEWAY
-    xtdata.connect()
+    gateway = QMT_GATEWAY
+    gateway.connect()
+    sw1, sw2 = catalog_loader()
 
-    print("[META] 下载板块分类信息 (含申万行业) ...")
-    xtdata.download_sector_data()
-
-    all_sectors = xtdata.get_sector_list() or []
-    sw1 = sorted(set(s for s in all_sectors if is_sw_level_1(s)))
-    sw2 = sorted(set(s for s in all_sectors if is_sw_level_2(s)))
-
-    print(f"[META] xtdata 板块总数 {len(all_sectors)}, "
-          f"过滤后申万一级 {len(sw1)} / 二级 {len(sw2)}")
+    print(f"[META] AKShare 申万目录: 一级 {len(sw1)} / 二级 {len(sw2)}; "
+          "QMT ContextInfo 拉取成分股")
 
     classification: Dict[str, Dict[str, str]] = {}
 
     print(f"[META] 拉申万一级成分股 ...")
     for i, sector in enumerate(sw1, 1):
-        codes = xtdata.get_stock_list_in_sector(sector) or []
+        codes = gateway.get_industry(sector) or []
         l1_name = display_name(sector, 1)
         for code in codes:
             classification.setdefault(code, {})["sector_1"] = l1_name
@@ -114,7 +125,7 @@ def fetch_sw_classification_from_xtdata() -> Dict[str, Dict[str, str]]:
 
     print(f"[META] 拉申万二级成分股 ...")
     for i, sector in enumerate(sw2, 1):
-        codes = xtdata.get_stock_list_in_sector(sector) or []
+        codes = gateway.get_industry(sector) or []
         l2_name = display_name(sector, 2)
         for code in codes:
             classification.setdefault(code, {})["sector_2"] = l2_name
@@ -124,7 +135,7 @@ def fetch_sw_classification_from_xtdata() -> Dict[str, Dict[str, str]]:
     print(f"[META] 拉股票名称 ({len(classification)} 只) ...")
     for code in classification:
         try:
-            info = xtdata.get_instrument_detail(code) or {}
+            info = gateway.get_instrument_detail(code) or {}
             classification[code]["stock_name"] = info.get("InstrumentName") or code
         except Exception:
             classification[code]["stock_name"] = code
@@ -168,7 +179,7 @@ def sync_sw_classification() -> int:
     print(f"  同步申万分类到 trade_stock_status")
     print(f"{'='*70}\n")
 
-    classification = fetch_sw_classification_from_xtdata()
+    classification = fetch_sw_classification_from_qmt()
     n = upsert_stock_status(classification)
     print(f"\n[OK] 写入 trade_stock_status, 影响 {n} 行 ({len(classification)} 只股票)")
     return len(classification)

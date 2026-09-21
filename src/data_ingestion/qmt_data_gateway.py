@@ -32,6 +32,41 @@ def _chunks(values: list[str], size: int):
         yield values[offset : offset + size]
 
 
+# ContextInfo financial data uses QMT's official table names.  The copied
+# collector still expects the xtdata table names and field suffixes below.
+_RAW_FINANCIAL_FIELDS: dict[str, dict[str, str]] = {
+    "Balance": {
+        "ASHAREBALANCESHEET.tot_assets": "tot_assets",
+        "ASHAREBALANCESHEET.tot_liab": "tot_liab",
+        "ASHAREBALANCESHEET.total_equity": "total_equity",
+        "ASHAREBALANCESHEET.tot_shrhldr_eqy_incl_min_int": "tot_shrhldr_eqy_incl_min_int",
+        "ASHAREBALANCESHEET.total_current_assets": "total_current_assets",
+        "ASHAREBALANCESHEET.total_current_liability": "total_current_liability",
+    },
+    "Income": {
+        "ASHAREINCOME.revenue": "revenue",
+        "ASHAREINCOME.operating_revenue": "operating_revenue",
+        "ASHAREINCOME.net_profit_incl_min_int_inc": "net_profit_incl_min_int_inc",
+        "ASHAREINCOME.net_profit_excl_min_int_inc": "net_profit_excl_min_int_inc",
+        "ASHAREINCOME.cost_of_goods_sold": "cost_of_goods_sold",
+        "ASHAREINCOME.total_operating_cost": "total_operating_cost",
+    },
+    "CashFlow": {
+        "ASHARECASHFLOW.net_cash_flows_oper_act": "net_cash_flows_oper_act",
+    },
+    "PershareIndex": {
+        "PERSHAREINDEX.s_fa_eps_basic": "s_fa_eps_basic",
+        "PERSHAREINDEX.du_return_on_equity": "du_return_on_equity",
+        "PERSHAREINDEX.equity_roe": "equity_roe",
+        "PERSHAREINDEX.net_roe": "net_roe",
+        "PERSHAREINDEX.sales_gross_profit": "sales_gross_profit",
+    },
+    "Capital": {
+        "CAPITALSTRUCTURE.total_capital": "total_capital",
+    },
+}
+
+
 def resolve_env_path() -> Path:
     """Resolve .env with the same rules used by data_ingestion.db_config."""
     configured_path = os.environ.get("AI_QUANT_ENV_FILE")
@@ -178,20 +213,13 @@ class QMTDataGateway:
     def download_financial_data(
         self, stock_list: list[str], table_list: list[str]
     ) -> DownloadResult:
-        downloaded: list[str] = []
-        failed: list[dict[str, Any]] = []
-        for batch in _chunks(list(stock_list), 20):
-            body = self._request(
-                "POST",
-                "/api/xtdata/download_financial_data",
-                {"stock_list": ",".join(batch), "table_list": ",".join(table_list)},
-            )
-            downloaded.extend(str(code) for code in body.get("downloaded", batch))
-            failed.extend(body.get("failed", []) or [])
-        if failed:
-            codes = ", ".join(str(item.get("stock", "?")) for item in failed)
-            raise QMTBridgeError(f"financial download failed: {codes}")
-        return DownloadResult(tuple(downloaded), tuple(failed))
+        # Financial reports are downloaded by QMT Data Manager.  ContextInfo
+        # has no matching download method, so this compatibility method checks
+        # readiness rather than falsely reporting an xtdata refresh success.
+        self.get_financial_data(
+            table_list or ["Balance"], list(stock_list), "", "", "report_time"
+        )
+        return DownloadResult(tuple(stock_list), ())
 
     def get_financial_data(
         self,
@@ -204,24 +232,53 @@ class QMTDataGateway:
     ) -> dict[str, dict[str, pd.DataFrame]]:
         fields = list(fields or kwargs.pop("table_list", []))
         stocks = list(stocks or kwargs.pop("stock_list", []))
+        unsupported = [name for name in fields if name not in _RAW_FINANCIAL_FIELDS]
+        if unsupported:
+            raise QMTBridgeError(
+                "ContextInfo financial adapter only supports tables: "
+                + ", ".join(_RAW_FINANCIAL_FIELDS)
+                + "; unsupported: " + ", ".join(unsupported)
+            )
+        qmt_fields = [
+            field
+            for table in fields
+            for field in _RAW_FINANCIAL_FIELDS[table]
+        ]
         result: dict[str, dict[str, pd.DataFrame]] = {}
         for batch in _chunks(list(stocks), 50):
             body = self._request(
                 "POST",
-                "/api/xtdata/financial_data",
+                "/api/data/raw_financial_data",
                 {
+                    "field_list": ",".join(qmt_fields),
                     "stock_list": ",".join(batch),
-                    "table_list": ",".join(fields),
-                    "start_time": start_time,
-                    "end_time": end_time,
+                    "start_time": start_time or "19000101",
+                    "end_time": end_time or "20991231",
                     "report_type": report_type,
                 },
             )
-            for code, tables in (body.get("data") or {}).items():
-                result[code] = {
-                    name: self._frame(records)
-                    for name, records in (tables or {}).items()
-                }
+            raw_by_stock = body.get("data") or {}
+            missing = []
+            for code in batch:
+                raw_fields = raw_by_stock.get(code) or {}
+                tables: dict[str, pd.DataFrame] = {}
+                for table in fields:
+                    rows: dict[int, dict[str, Any]] = {}
+                    for qmt_field, legacy_field in _RAW_FINANCIAL_FIELDS[table].items():
+                        for timetag, value in (raw_fields.get(qmt_field) or {}).items():
+                            timestamp = int(timetag)
+                            rows.setdefault(timestamp, {"m_timetag": timestamp})[legacy_field] = value
+                    tables[table] = pd.DataFrame(
+                        [rows[key] for key in sorted(rows)]
+                    )
+                if not any(not frame.empty for frame in tables.values()):
+                    missing.append(code)
+                result[code] = tables
+            if missing:
+                raise QMTBridgeError(
+                    "financial data is not available in QMT Data Manager for: "
+                    + ", ".join(missing)
+                )
         return result
 
     def download_financial_data2(
@@ -240,6 +297,13 @@ class QMTDataGateway:
     def get_stock_list_in_sector(self, sector_name: str) -> list[str]:
         body = self._request(
             "POST", "/api/data/stock_list_in_sector", {"sectorname": sector_name}
+        )
+        return [str(code) for code in body.get("stocks", [])]
+
+    def get_industry(self, industry_name: str) -> list[str]:
+        """Return QMT ContextInfo members for one known SW/CSRC industry."""
+        body = self._request(
+            "POST", "/api/data/industry", {"industry": industry_name}
         )
         return [str(code) for code in body.get("stocks", [])]
 

@@ -226,6 +226,13 @@ class QMTBridgeETFProvider:
     ``xtdata.get_etf_info`` commonly exposes only ``成份股代码`` in
     ``成份股信息``.  Such rows are unusable for exposure and are rejected; no
     equal weight or redemption quantity is ever substituted.
+
+    Deferred: this copied provider is not imported by the active
+    ``refresh_daily`` entry point.  Native QMT ``get_etf_info(stockcode)``
+    supplies constituent quantities but not portfolio weights, while this
+    provider's downstream exposure mapping requires explicit weights.  Do not
+    enable a QMT-native ETF path until a separately validated weighting model
+    is approved.
     """
 
     def __init__(
