@@ -138,7 +138,7 @@ def run_macd_pool_scan(level: int, as_of_date: str, end_date: str | None = None,
     end_date = end_date or as_of_date
     thresholds = {**ENTITY_VOLUME_THRESHOLDS, **(volume_thresholds or {})}
     start_date = (pd.Timestamp(end_date) - pd.Timedelta(days=220)).strftime("%Y-%m-%d")
-    rows = execute_query("SELECT d.stock_code, s.stock_name, s.sector_1, s.sector_2, d.trade_date, d.close_price AS close, d.volume FROM trade_stock_daily d LEFT JOIN trade_stock_status s ON s.stock_code=d.stock_code WHERE d.trade_date >= %s AND d.trade_date <= %s ORDER BY d.stock_code, d.trade_date", (start_date, end_date))
+    rows = execute_query("SELECT d.stock_code, s.stock_name, s.sector_1, s.sector_2, d.trade_date, d.close_price AS close, d.volume FROM trade_stock_daily_qfq d LEFT JOIN trade_stock_status s ON s.stock_code=d.stock_code WHERE d.trade_date >= %s AND d.trade_date <= %s ORDER BY d.stock_code, d.trade_date", (start_date, end_date))
     if not rows:
         return pd.DataFrame()
     all_data = pd.DataFrame(rows)
@@ -210,7 +210,7 @@ def run_macd_daily_metrics(as_of_date: str, enable_step2: bool = True, volume_th
     frames: list[dict] = []
     stock_rows = execute_query(
         "SELECT d.stock_code, s.stock_name, s.sector_1, s.sector_2, d.trade_date, d.close_price AS close, d.volume "
-        "FROM trade_stock_daily d LEFT JOIN trade_stock_status s ON s.stock_code=d.stock_code "
+        "FROM trade_stock_daily_qfq d LEFT JOIN trade_stock_status s ON s.stock_code=d.stock_code "
         "WHERE d.trade_date BETWEEN %s AND %s ORDER BY d.stock_code, d.trade_date",
         (start_date, as_of_date),
     )
