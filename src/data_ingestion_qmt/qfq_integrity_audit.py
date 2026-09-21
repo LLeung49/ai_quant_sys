@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from hashlib import sha256
 import json
@@ -91,3 +91,19 @@ def upsert_integrity_finding(finding: IntegrityFinding) -> int:
         finding.note,
     )
     return execute_update(UPSERT_INTEGRITY_FINDING_SQL, params)
+
+
+def transition_integrity_finding(
+    finding: IntegrityFinding,
+    status: str,
+    *,
+    note: str | None = None,
+    last_error: str | None = None,
+) -> int:
+    """Persist a repair lifecycle transition while retaining original evidence."""
+    return upsert_integrity_finding(replace(
+        finding,
+        status=status,
+        last_error=last_error,
+        note=note if note is not None else finding.note,
+    ))

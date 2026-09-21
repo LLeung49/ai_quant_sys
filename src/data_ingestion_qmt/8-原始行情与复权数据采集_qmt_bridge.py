@@ -49,6 +49,7 @@ try:
     from data_ingestion_qmt.qfq_integrity_audit import (
         IntegrityFinding,
         build_source_fingerprint,
+        transition_integrity_finding,
         upsert_integrity_finding,
     )
 except ImportError:  # Direct execution from src/data_ingestion_qmt.
@@ -61,6 +62,7 @@ except ImportError:  # Direct execution from src/data_ingestion_qmt.
     from qfq_integrity_audit import (
         IntegrityFinding,
         build_source_fingerprint,
+        transition_integrity_finding,
         upsert_integrity_finding,
     )
 
@@ -407,8 +409,8 @@ def _record_integrity_finding(
     stock_code: str, trade_date: str, check_code: str, severity: str,
     status: str, raw_row: dict | None, qfq_row: dict | None,
     last_error: str | None = None, note: str | None = None,
-) -> None:
-    upsert_integrity_finding(IntegrityFinding(
+) -> IntegrityFinding:
+    finding = IntegrityFinding(
         stock_code=stock_code,
         trade_date=trade_date,
         check_code=check_code,
@@ -420,7 +422,9 @@ def _record_integrity_finding(
         validator_version="qmt-v2",
         last_error=last_error,
         note=note,
-    ))
+    )
+    upsert_integrity_finding(finding)
+    return finding
 
 
 def _verify_audit_issues(stock_code: str, issues):
@@ -453,6 +457,7 @@ def audit_and_repair_projection(
     overwrite any of the independent raw/QFQ/BFQ projections, and the stored
     result is immediately re-audited.
     """
+    pending_findings: list[IntegrityFinding] = []
     try:
         issues = audit_raw_qfq_projection(stock_code)
         if not issues:
@@ -475,11 +480,11 @@ def audit_and_repair_projection(
             return {"detected": len(issues), "repaired": 0, "failed": 0}
         issues = decision.hard_issues
         for issue in issues:
-            _record_integrity_finding(
+            pending_findings.append(_record_integrity_finding(
                 stock_code, issue.trade_date, issue.reason, "error", "repair_pending",
                 raw_by_date.get(issue.trade_date), qfq_by_date.get(issue.trade_date),
                 note="QMT source differs from storage or hard integrity check failed",
-            )
+            ))
         sample = ", ".join(
             f"{issue.trade_date}:{issue.reason}" for issue in issues[:3]
         )
@@ -502,7 +507,16 @@ def audit_and_repair_projection(
                 {str(row["trade_date"]): row for row in post_qfq}.get(exception.trade_date),
                 note="QMT raw/front response matches stored non-affine pair after rebuild",
             )
+        for finding in pending_findings:
+            transition_integrity_finding(
+                finding, "repaired", note="full raw/QFQ/BFQ rebuild verified"
+            )
     except Exception as exc:
+        for finding in pending_findings:
+            transition_integrity_finding(
+                finding, "failed", last_error=f"{type(exc).__name__}: {exc}",
+                note="full raw/QFQ/BFQ rebuild failed",
+            )
         _progress(
             f"[raw/qfq integrity] stock={stock_code} action=repair_failed "
             f"error={type(exc).__name__}: {exc}"

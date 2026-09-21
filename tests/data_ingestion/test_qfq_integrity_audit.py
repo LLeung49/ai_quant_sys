@@ -1,6 +1,7 @@
 from data_ingestion_qmt.qfq_integrity_audit import (
     IntegrityFinding,
     build_source_fingerprint,
+    transition_integrity_finding,
     upsert_integrity_finding,
 )
 
@@ -49,3 +50,21 @@ def test_upsert_preserves_first_seen(monkeypatch):
     assert "ON DUPLICATE KEY UPDATE" in captured["sql"]
     update_clause = captured["sql"].split("ON DUPLICATE KEY UPDATE", 1)[1]
     assert "first_detected_at" not in update_clause
+
+
+def test_transition_records_repair_outcome(monkeypatch):
+    captured = []
+    monkeypatch.setattr(
+        "data_ingestion_qmt.qfq_integrity_audit.upsert_integrity_finding",
+        lambda finding: captured.append(finding) or 1,
+    )
+    pending = IntegrityFinding(
+        "300316.SZ", "2015-02-03", "qmt_storage_mismatch", "error",
+        "repair_pending", {"open": 1}, {"open": 1}, "f" * 64,
+        "qmt-v2", None, "pending",
+    )
+
+    assert transition_integrity_finding(pending, "repaired", note="rebuilt") == 1
+    assert captured[0].status == "repaired"
+    assert captured[0].last_error is None
+    assert captured[0].note == "rebuilt"
