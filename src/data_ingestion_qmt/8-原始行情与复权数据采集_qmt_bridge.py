@@ -39,7 +39,30 @@ from price_projection_store import (
     write_daily_rows,
     write_daily_rows_batch,
 )
-from price_projection_integrity import audit_raw_qfq_projection, find_raw_qfq_issues
+try:
+    from data_ingestion_qmt.price_projection_integrity import (
+        audit_raw_qfq_projection,
+        classify_projection_issues,
+        find_raw_qfq_issues,
+        load_raw_qfq_rows,
+    )
+    from data_ingestion_qmt.qfq_integrity_audit import (
+        IntegrityFinding,
+        build_source_fingerprint,
+        upsert_integrity_finding,
+    )
+except ImportError:  # Direct execution from src/data_ingestion_qmt.
+    from price_projection_integrity import (
+        audit_raw_qfq_projection,
+        classify_projection_issues,
+        find_raw_qfq_issues,
+        load_raw_qfq_rows,
+    )
+    from qfq_integrity_audit import (
+        IntegrityFinding,
+        build_source_fingerprint,
+        upsert_integrity_finding,
+    )
 
 
 DATA_START = "20150101"
@@ -339,9 +362,12 @@ def download_and_save_all_modes(
         for dividend_type in DIVIDEND_TYPES
     }
     issues = find_raw_qfq_issues(rows_by_mode["none"], rows_by_mode["front"])
-    if issues:
+    hard_candidate_issues = [
+        issue for issue in issues if issue.reason != "qfq_ohlc_affine_mismatch"
+    ]
+    if hard_candidate_issues:
         sample = ", ".join(
-            f"{issue.trade_date}:{issue.reason}" for issue in issues[:3]
+            f"{issue.trade_date}:{issue.reason}" for issue in hard_candidate_issues[:3]
         )
         raise RuntimeError(
             f"raw/qfq candidate integrity failed for {stock_code}: {sample}"
@@ -351,6 +377,70 @@ def download_and_save_all_modes(
         write_daily_rows(dividend_type, rows, adjustment_asof)
         counts[dividend_type] = len(rows)
     return counts
+
+
+def _fetch_qmt_audit_rows(
+    stock_code: str, dividend_type: str, trade_dates: set[str],
+) -> list[dict]:
+    """Read current QMT evidence for only the non-affine dates under audit."""
+    if not trade_dates:
+        return []
+    compact_dates = sorted(trade_date.replace("-", "") for trade_date in trade_dates)
+    data = qmt_gateway.get_market_data_ex(
+        field_list=list(MARKET_FIELDS),
+        stock_list=[stock_code],
+        period="1d",
+        start_time=compact_dates[0],
+        end_time=compact_dates[-1],
+        dividend_type=dividend_type,
+    )
+    dataframe = data.get(stock_code) if data else None
+    if dataframe is None or len(dataframe) == 0:
+        raise RuntimeError(
+            f"empty QMT {MODE_LABELS[dividend_type]} evidence for {stock_code}"
+        )
+    rows, _ = _split_qmt_rows(stock_code, dataframe, dividend_type)
+    return [row for row in rows if row["trade_date"] in trade_dates]
+
+
+def _record_integrity_finding(
+    stock_code: str, trade_date: str, check_code: str, severity: str,
+    status: str, raw_row: dict | None, qfq_row: dict | None,
+    last_error: str | None = None, note: str | None = None,
+) -> None:
+    upsert_integrity_finding(IntegrityFinding(
+        stock_code=stock_code,
+        trade_date=trade_date,
+        check_code=check_code,
+        severity=severity,
+        status=status,
+        raw_ohlc=raw_row,
+        qfq_ohlc=qfq_row,
+        source_fingerprint=build_source_fingerprint(raw_row, qfq_row),
+        validator_version="qmt-v2",
+        last_error=last_error,
+        note=note,
+    ))
+
+
+def _verify_audit_issues(stock_code: str, issues):
+    """Classify only QMT non-affine rows; source query failures stay hard."""
+    stored_raw, stored_qfq = load_raw_qfq_rows(stock_code)
+    affected_dates = {
+        issue.trade_date for issue in issues
+        if issue.reason == "qfq_ohlc_affine_mismatch"
+    }
+    if not affected_dates:
+        return classify_projection_issues(
+            issues, stored_raw, stored_qfq, [], []
+        ), stored_raw, stored_qfq
+    qmt_raw = _fetch_qmt_audit_rows(stock_code, "none", affected_dates)
+    qmt_qfq = _fetch_qmt_audit_rows(stock_code, "front", affected_dates)
+    return (
+        classify_projection_issues(issues, stored_raw, stored_qfq, qmt_raw, qmt_qfq),
+        stored_raw,
+        stored_qfq,
+    )
 
 
 def audit_and_repair_projection(
@@ -367,6 +457,29 @@ def audit_and_repair_projection(
         issues = audit_raw_qfq_projection(stock_code)
         if not issues:
             return {"detected": 0, "repaired": 0, "failed": 0}
+        decision, stored_raw, stored_qfq = _verify_audit_issues(stock_code, issues)
+        raw_by_date = {str(row["trade_date"]): row for row in stored_raw}
+        qfq_by_date = {str(row["trade_date"]): row for row in stored_qfq}
+        for exception in decision.verified_exceptions:
+            _record_integrity_finding(
+                stock_code, exception.trade_date, exception.check_code,
+                "warning", exception.status,
+                raw_by_date.get(exception.trade_date), qfq_by_date.get(exception.trade_date),
+                note="QMT raw/front response matches stored non-affine pair",
+            )
+        if not decision.hard_issues:
+            _progress(
+                f"[raw/qfq integrity] stock={stock_code} "
+                f"action=qmt_verified_exception count={len(decision.verified_exceptions)}"
+            )
+            return {"detected": len(issues), "repaired": 0, "failed": 0}
+        issues = decision.hard_issues
+        for issue in issues:
+            _record_integrity_finding(
+                stock_code, issue.trade_date, issue.reason, "error", "repair_pending",
+                raw_by_date.get(issue.trade_date), qfq_by_date.get(issue.trade_date),
+                note="QMT source differs from storage or hard integrity check failed",
+            )
         sample = ", ".join(
             f"{issue.trade_date}:{issue.reason}" for issue in issues[:3]
         )
@@ -376,9 +489,18 @@ def audit_and_repair_projection(
         )
         download_and_save_all_modes(stock_code, DATA_START, adjustment_asof)
         remaining = audit_raw_qfq_projection(stock_code)
-        if remaining:
+        post_decision, post_raw, post_qfq = _verify_audit_issues(stock_code, remaining)
+        if post_decision.hard_issues:
             raise RuntimeError(
-                f"post-repair audit still has {len(remaining)} issue(s)"
+                f"post-repair audit still has {len(post_decision.hard_issues)} hard issue(s)"
+            )
+        for exception in post_decision.verified_exceptions:
+            _record_integrity_finding(
+                stock_code, exception.trade_date, exception.check_code,
+                "warning", exception.status,
+                {str(row["trade_date"]): row for row in post_raw}.get(exception.trade_date),
+                {str(row["trade_date"]): row for row in post_qfq}.get(exception.trade_date),
+                note="QMT raw/front response matches stored non-affine pair after rebuild",
             )
     except Exception as exc:
         _progress(
