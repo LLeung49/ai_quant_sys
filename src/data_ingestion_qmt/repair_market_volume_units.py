@@ -19,7 +19,6 @@ from .market_volume_contract import assess_volume
 
 
 FACT_TABLES = (
-    "trade_stock_daily",
     "trade_stock_daily_qfq",
     "trade_stock_daily_bfq",
 )
@@ -28,17 +27,16 @@ FACT_TABLES = (
 # The fact tables are large enough that an expression on amount/volume alone
 # otherwise invites an expensive full-table scan.
 FACT_TABLE_DATE_INDEXES = {
-    "trade_stock_daily": "idx_stock_daily_date",
     "trade_stock_daily_qfq": "idx_qfq_trade_date",
     "trade_stock_daily_bfq": "idx_bfq_trade_date",
 }
 
 CUTOVER_CODES_SQL = """
 SELECT l12.stock_code
-FROM trade_stock_daily AS l12
+FROM trade_stock_daily_qfq AS l12
 JOIN trade_stock_daily_raw AS r12
   ON r12.stock_code=l12.stock_code AND r12.trade_date=l12.trade_date
-JOIN trade_stock_daily AS l13
+JOIN trade_stock_daily_qfq AS l13
   ON l13.stock_code=l12.stock_code AND l13.trade_date='2026-08-13'
 JOIN trade_stock_daily_raw AS r13
   ON r13.stock_code=l13.stock_code AND r13.trade_date=l13.trade_date

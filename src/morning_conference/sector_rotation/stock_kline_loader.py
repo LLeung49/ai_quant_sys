@@ -124,6 +124,10 @@ def sync_all_kline(start_date: Optional[str] = None,
         stock_filter:  指定股票, None=全部
     返回: 累计写入行数
     """
+    raise RuntimeError(
+        "已废弃：旧 trade_stock_daily 不再维护；板块指数请使用 "
+        "trade_stock_daily_qfq（由 QMT Task 8 维护）。"
+    )
     print(f"\n{'='*70}")
     print(f"  同步个股 K 线到 trade_stock_daily")
     print(f"  模式: {'增量' if incremental else '全量'}, 起始日: {start_date or DEFAULT_START}")

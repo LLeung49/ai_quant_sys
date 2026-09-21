@@ -12,19 +12,19 @@ from .macd_pool_store import persist_macd_entity_daily, persist_macd_pool, sync_
 
 
 def latest_trade_date() -> str:
-    rows = execute_query("SELECT MAX(trade_date) AS latest FROM trade_stock_daily")
+    rows = execute_query("SELECT MAX(trade_date) AS latest FROM trade_stock_daily_qfq")
     if not rows or not rows[0].get("latest"):
-        raise RuntimeError("trade_stock_daily has no trade date")
+        raise RuntimeError("trade_stock_daily_qfq has no trade date")
     return str(rows[0]["latest"])
 
 
 def ensure_trade_date(as_of_date: str) -> None:
     rows = execute_query(
-        "SELECT 1 AS present FROM trade_stock_daily WHERE trade_date=%s LIMIT 1",
+        "SELECT 1 AS present FROM trade_stock_daily_qfq WHERE trade_date=%s LIMIT 1",
         (as_of_date,),
     )
     if not rows:
-        raise ValueError(f"{as_of_date} is not a trading date in trade_stock_daily")
+        raise ValueError(f"{as_of_date} is not a trading date in trade_stock_daily_qfq")
 
 
 def run(as_of_date: str | None = None, model_version: str = "v1", level: int = 2) -> dict[str, object]:

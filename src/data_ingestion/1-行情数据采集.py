@@ -288,6 +288,11 @@ def download_and_save(stock_code, start_date):
 # ============================================================
 
 def main():
+    raise RuntimeError(
+        "已废弃：旧 trade_stock_daily 不再维护；请运行 "
+        "data_ingestion_qmt/8-原始行情与复权数据采集_qmt_bridge.py，"
+        "其前复权数据写入 trade_stock_daily_qfq。"
+    )
     print("=" * 60)
     print("行情数据采集 (MiniQMT -> MySQL)")
     if TEST_MODE:
