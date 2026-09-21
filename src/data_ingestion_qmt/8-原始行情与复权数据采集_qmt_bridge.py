@@ -99,6 +99,41 @@ def _as_trade_date(index_value) -> str:
     return f"{value[:4]}-{value[4:6]}-{value[6:8]}"
 
 
+def _load_turnover_rates(
+    gateway, stock_codes: list[str], start_date: str, end_date: str,
+) -> dict[str, dict[str, float]]:
+    """Read QMT historical turnover without blocking price persistence.
+
+    Missing values stay ``NULL`` in QFQ/BFQ.  They must not be reconstructed
+    from current float shares, which would distort historical factor inputs.
+    """
+    if not stock_codes:
+        return {}
+    try:
+        return gateway.get_turnover_rate(stock_codes, start_date, end_date)
+    except Exception as exc:
+        _progress(
+            f"[换手率缺失] QMT 查询失败 codes={len(stock_codes)} "
+            f"start={start_date} end={end_date} error={type(exc).__name__}: {exc}"
+        )
+        return {}
+
+
+def _apply_turnover_rates(
+    rows: list[dict], rates_by_stock: dict[str, dict[str, float]],
+) -> None:
+    """Apply QMT fractional rates using the table's percentage convention."""
+    for row in rows:
+        compact_date = str(row["trade_date"]).replace("-", "")
+        rate = rates_by_stock.get(str(row["stock_code"]), {}).get(compact_date)
+        try:
+            row["turnover_rate"] = (
+                round(float(rate) * 100, 4) if math.isfinite(float(rate)) else None
+            )
+        except (TypeError, ValueError, OverflowError):
+            row["turnover_rate"] = None
+
+
 def _optional_number(row, key):
     """读取可空数值，并将 pandas/NumPy 的 NaN 统一为 ``None``。"""
     value = row.get(key) if hasattr(row, "get") else row[key]
@@ -124,8 +159,8 @@ def _split_qmt_rows(stock_code: str, dataframe, dividend_type: str) -> tuple[lis
     """把 QMT 行转为固定库表字段，保留原始行情特有的昨收和停牌标记。
 
     三个模式共享 OHLCV/成交额字段；只有 ``none`` 是交易事实，因而额外保存
-    ``preClose`` 和 ``suspendFlag``。复权表的换手率目前没有 QMT 对应字段，显式写
-    ``None``，避免把原始表字段误复制到派生表。
+    ``preClose`` 和 ``suspendFlag``。复权表的换手率在批量下载完成后由
+    ``ContextInfo.get_turnover_rate`` 合并；QMT 未返回时才保留 ``None``。
     """
     rows = []
     dirty_dates = set()
@@ -575,6 +610,16 @@ def download_and_save_batch(
             continue
         for dividend_type in DIVIDEND_TYPES:
             safe_rows[dividend_type].extend(candidate[dividend_type])
+
+    turnover_codes = sorted({row["stock_code"] for row in safe_rows["front"]})
+    turnover_rates = _load_turnover_rates(
+        qmt_gateway,
+        turnover_codes,
+        start_date,
+        date.today().strftime("%Y%m%d"),
+    )
+    for dividend_type in ("front", "back"):
+        _apply_turnover_rates(safe_rows[dividend_type], turnover_rates)
     for dividend_type, rows in safe_rows.items():
         if rows:
             write_daily_rows_batch(dividend_type, rows, adjustment_asofs)

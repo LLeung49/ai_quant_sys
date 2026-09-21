@@ -240,3 +240,39 @@ def test_context_market_data_does_not_require_xtdata_download():
 
     assert result.downloaded == ("600519.SH",)
     assert result.failed == ()
+
+
+def test_turnover_rate_forwards_window_and_preserves_daily_rates():
+    gateway = QMTDataGateway(base_url="http://qmt", token="test")
+    calls = []
+
+    def request(method, url, **kwargs):
+        calls.append((method, url, kwargs["json"]))
+        return _Response({
+            "data": {
+                "600519.SH": {"20250102": 0.0011},
+                "000001.SZ": {"20250102": 0.0022},
+            }
+        })
+
+    gateway._session.request = request
+
+    result = gateway.get_turnover_rate(
+        ["600519.SH", "000001.SZ"], "20250101", "20250131"
+    )
+
+    assert result == {
+        "600519.SH": {"20250102": 0.0011},
+        "000001.SZ": {"20250102": 0.0022},
+    }
+    assert calls == [
+        (
+            "POST",
+            "http://qmt/api/data/turnover_rate",
+            {
+                "stock_list": "600519.SH,000001.SZ",
+                "startTime": "20250101",
+                "endTime": "20250131",
+            },
+        )
+    ]

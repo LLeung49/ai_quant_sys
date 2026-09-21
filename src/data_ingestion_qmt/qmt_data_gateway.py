@@ -344,6 +344,41 @@ class QMTDataGateway:
         )
         return int(body.get("last_volume") or 0)
 
+    def get_turnover_rate(
+        self, stock_list: str | list[str], start_time: str = "", end_time: str = ""
+    ) -> dict[str, dict[str, float]]:
+        """Return ContextInfo historical daily turnover rates.
+
+        QMT returns fractional rates (for example ``0.0011`` for ``0.11%``).
+        Unit conversion belongs to the table-specific collector so this gateway
+        remains a faithful representation of the bridge response.
+        """
+        stocks = [stock_list] if isinstance(stock_list, str) else list(stock_list)
+        if not stocks:
+            return {}
+        body = self._request(
+            "POST",
+            "/api/data/turnover_rate",
+            {
+                "stock_list": ",".join(stocks),
+                "startTime": start_time,
+                "endTime": end_time,
+            },
+        )
+        data = body.get("data") or {}
+        if not isinstance(data, dict):
+            raise QMTBridgeError("turnover_rate response data must be an object")
+        result: dict[str, dict[str, float]] = {}
+        for stock_code, values in data.items():
+            if not isinstance(values, dict):
+                continue
+            result[str(stock_code)] = {
+                str(trade_date): float(rate)
+                for trade_date, rate in values.items()
+                if rate is not None
+            }
+        return result
+
     def get_divid_factors(
         self, stock_code: str, start_time: str = "", end_time: str = ""
     ) -> pd.DataFrame:
