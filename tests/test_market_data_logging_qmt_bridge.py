@@ -1,32 +1,21 @@
-﻿import importlib.util
 from pathlib import Path
 
-import pytest
+
+ROOT = Path(__file__).parents[1]
+LEGACY_PATH = ROOT / "src/data_ingestion_qmt/1-行情数据采集_qmt_bridge.py"
+CANONICAL_PATH = ROOT / "src/data_ingestion_qmt/8-原始行情与复权数据采集_qmt_bridge.py"
 
 
-PATH = Path(__file__).parents[1] / "src/data_ingestion_qmt/1-行情数据采集_qmt_bridge.py"
+def test_legacy_qmt_market_writer_is_retired():
+    assert not LEGACY_PATH.exists()
 
 
-def test_market_copy_exists_without_direct_xtquant_import():
-    assert PATH.exists()
-    source = PATH.read_text(encoding="utf-8")
-    assert "from xtquant import xtdata" not in source
+def test_canonical_qmt_market_collector_uses_the_qfq_table():
+    source = CANONICAL_PATH.read_text(encoding="utf-8")
     assert "QMTDataGateway" in source
+    assert "trade_stock_daily_qfq" in source
 
 
-def test_market_bridge_serializes_http_requests():
-    source = PATH.read_text(encoding="utf-8")
-    assert "NUM_WORKERS = 1" in source
-
-
-def test_market_bridge_rejects_an_empty_combined_stock_pool():
-    spec = importlib.util.spec_from_file_location("market_bridge", PATH)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-
-    class EmptyGateway:
-        def get_stock_list_in_sector(self, sector_name):
-            return []
-
-    with pytest.raises(RuntimeError, match="股票列表为空"):
-        module._load_sector_stock_codes(EmptyGateway(), ["沪深A股", "沪深ETF"])
+def test_canonical_qmt_market_collector_keeps_the_integrity_audit():
+    source = CANONICAL_PATH.read_text(encoding="utf-8")
+    assert "audit_and_repair_projection" in source
