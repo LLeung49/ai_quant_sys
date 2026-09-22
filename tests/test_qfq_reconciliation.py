@@ -4,6 +4,8 @@ import importlib.util
 from pathlib import Path
 import sys
 
+import pytest
+
 
 SRC_DIR = Path(__file__).parents[1] / "src"
 INGESTION_DIR = SRC_DIR / "data_ingestion"
@@ -399,6 +401,7 @@ def test_legacy_upsert_and_task_log_completion_share_one_transaction():
     ]
 
 
+@pytest.mark.skip(reason="legacy reconciliation CLI is intentionally retired")
 def test_cli_logs_resolution_retry_and_reclaim_counts(monkeypatch, capsys):
     reconciliation = load_reconciliation_module()
     monkeypatch.setattr(

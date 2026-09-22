@@ -2,7 +2,7 @@
 """
 新闻事件采集 - AkShare -> MySQL
 
-采集范围：全量A股（trade_stock_daily 中所有股票）
+采集范围：全量A股（trade_stock_daily_qfq 中所有股票）
 数据源：AkShare stock_news_em() - 东方财富个股新闻
 去重方式：按标题去重（批量预加载已有标题到内存，避免逐条查库）
 跳过逻辑：当日已采集过的股票跳过
@@ -75,7 +75,7 @@ def check_important(title):
 
 def get_all_stocks():
     """获取全量股票列表"""
-    rows = execute_query("SELECT DISTINCT stock_code FROM trade_stock_daily")
+    rows = execute_query("SELECT DISTINCT stock_code FROM trade_stock_daily_qfq")
     return [r['stock_code'] for r in rows]
 
 

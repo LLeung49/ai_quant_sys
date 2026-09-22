@@ -14,7 +14,7 @@
   同一券商对同一股票可能每隔几天发布一篇，但评级和目标价不变。
   去重方式：只保存"观点变化"，即同一券商对同一股票的评级或目标价发生变化时才写入。
 
-采集范围：trade_stock_daily 中所有股票
+采集范围：trade_stock_daily_qfq 中所有股票
 跳过逻辑：7天内已采集的股票跳过
 
 # ------------------------------------------------------------
@@ -254,7 +254,7 @@ def save_forecast_to_mysql(stock_code, forecasts):
 
 def get_all_stocks():
     """获取全量股票列表"""
-    rows = execute_query("SELECT DISTINCT stock_code FROM trade_stock_daily")
+    rows = execute_query("SELECT DISTINCT stock_code FROM trade_stock_daily_qfq")
     return [r['stock_code'] for r in rows]
 
 

@@ -95,7 +95,7 @@ def _raw_close_lookup(
 
     rows = query(
         """SELECT stock_code, close_price AS close
-             FROM trade_stock_daily
+             FROM trade_stock_daily_qfq
             WHERE trade_date = %s""",
         (as_of_date,),
     )

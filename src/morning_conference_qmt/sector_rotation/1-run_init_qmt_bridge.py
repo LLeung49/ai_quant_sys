@@ -6,11 +6,11 @@ run_init.py -- 一键全量初始化
 执行顺序:
     1. 建表 (执行 sql/schema.sql, IF NOT EXISTS, 已有不动)
     2. 同步申万一级 + 二级分类到 trade_stock_status
-    3. 全量下载所有股票 K 线到 trade_stock_daily (默认 2024-01-01 起)
-    4. 全量回填 trade_sector_daily (合成板块指数)
+    3. Task 8 已维护 trade_stock_daily_qfq
+    4. 全量回填 trade_sector_daily (以 QFQ 行情合成板块指数)
 
 预期耗时:
-    申万二级 134 个板块, 共 ~5000 只股票, 全量约 30-90 分钟
+    申万二级 134 个板块的指数回填约 30-90 分钟
 
 只需执行一次, 后续每日增量用 run_daily.py
 """
@@ -22,7 +22,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from data_ingestion_qmt.db_config import execute_update
 from industry_meta_qmt_bridge import sync_sw_classification
-from stock_kline_loader_qmt_bridge import sync_all_kline
 from sector_index_builder import rebuild_all_sectors
 
 
@@ -51,10 +50,9 @@ def main():
     parser = argparse.ArgumentParser(description="CASE-A 全量初始化")
     parser.add_argument("--skip-schema", action="store_true", help="跳过建表")
     parser.add_argument("--skip-meta",   action="store_true", help="跳过申万分类同步")
-    parser.add_argument("--skip-kline",  action="store_true", help="跳过 K 线下载")
     parser.add_argument("--skip-index",  action="store_true", help="跳过板块指数合成")
     parser.add_argument("--start", default=None,
-                        help="初始化起始日 YYYYMMDD；同时限制 K 线下载和板块指数回填")
+                        help="初始化起始日 YYYYMMDD；限制板块指数回填")
     parser.add_argument("--level", type=int, choices=[1, 2], default=2,
                         help="板块指数级别 (默认 2 申万二级)")
     args = parser.parse_args()
@@ -73,12 +71,8 @@ def main():
     else:
         print("\n[SKIP] 跳过申万分类同步\n")
 
-    if not args.skip_kline:
-        sync_all_kline(start_date=args.start, incremental=False, level=args.level)
-    else:
-        print("\n[SKIP] 跳过 K 线下载\n")
-
     if not args.skip_index:
+        print("\n[INFO] 假定 Task 8 已维护 trade_stock_daily_qfq\n")
         rebuild_all_sectors(level=args.level, full=True, start_date=args.start)
     else:
         print("\n[SKIP] 跳过板块指数合成\n")

@@ -105,7 +105,7 @@ def load_return_mapping_input(
     )
     stock_rows = query(
         "SELECT daily.stock_code, status.stock_name, daily.trade_date, daily.close_price "
-        "FROM trade_stock_daily AS daily "
+        "FROM trade_stock_daily_qfq AS daily "
         "LEFT JOIN trade_stock_status AS status ON status.stock_code=daily.stock_code "
         "WHERE daily.trade_date IN (" + _placeholders(selected_dates) + ") "
         "ORDER BY daily.stock_code ASC, daily.trade_date ASC",

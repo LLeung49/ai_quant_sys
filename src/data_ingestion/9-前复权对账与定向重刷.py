@@ -530,6 +530,10 @@ def run_pending_legacy_repairs(lease_timeout_minutes: int = 60) -> dict[str, int
 
 
 def main(argv: list[str] | None = None) -> int:
+    raise RuntimeError(
+        "已废弃：旧 trade_stock_daily 不再维护；请使用 "
+        "trade_stock_daily_qfq 及 QMT 原始行情与复权采集任务。"
+    )
     parser = argparse.ArgumentParser(description="对账旧版与独立前复权行情，并按确认结果定向重刷旧表")
     parser.add_argument("--queue-repairs", action="store_true", help="确认并创建旧表定向重刷任务")
     parser.add_argument("--run-repairs", action="store_true", help="执行已确认的旧表重刷任务")

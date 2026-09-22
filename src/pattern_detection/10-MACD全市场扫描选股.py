@@ -56,7 +56,7 @@ def batch_load_recent(days_back=120, end_date=None):
     if end_date:
         ref_date = pd.Timestamp(end_date)
     else:
-        rows = execute_query("SELECT MAX(trade_date) AS latest FROM trade_stock_daily")
+        rows = execute_query("SELECT MAX(trade_date) AS latest FROM trade_stock_daily_qfq")
         if not rows or not rows[0]['latest']:
             return {}
         ref_date = pd.Timestamp(rows[0]['latest'])
@@ -69,7 +69,7 @@ def batch_load_recent(days_back=120, end_date=None):
 
     sql = """
         SELECT stock_code, trade_date, open_price, high_price, low_price, close_price, volume
-        FROM trade_stock_daily
+        FROM trade_stock_daily_qfq
         WHERE trade_date >= %s AND trade_date <= %s
         ORDER BY stock_code, trade_date ASC
     """

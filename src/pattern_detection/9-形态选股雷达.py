@@ -66,7 +66,7 @@ def batch_load_recent(days_back=120, end_date=None):
 
     sql = """
         SELECT stock_code, trade_date, open_price, high_price, low_price, close_price, volume
-        FROM trade_stock_daily
+        FROM trade_stock_daily_qfq
         WHERE trade_date >= %s AND trade_date <= %s
         ORDER BY stock_code, trade_date ASC
     """

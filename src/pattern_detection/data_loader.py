@@ -3,7 +3,7 @@
 数据加载与回测工具模块
 
 功能:
-  - 从MySQL读取K线数据 (trade_stock_daily)
+  - 从MySQL读取K线数据 (trade_stock_daily_qfq)
   - 统一配置Cerebro引擎 (初始资金/手续费/仓位 来自 .env)
   - 自动记录交易和净值 (包装任意策略类)
   - 计算完整绩效指标
@@ -45,7 +45,7 @@ def load_stock_data(stock_code, start_date=None, end_date=None):
 
     sql = f"""
         SELECT trade_date, open_price, high_price, low_price, close_price, volume
-        FROM trade_stock_daily
+        FROM trade_stock_daily_qfq
         WHERE {' AND '.join(conditions)}
         ORDER BY trade_date ASC
     """
@@ -80,7 +80,7 @@ def list_available_symbols(start_date=None, end_date=None):
     if end_date:
         conditions.append("trade_date <= %s")
         params.append(end_date)
-    sql = "SELECT DISTINCT stock_code FROM trade_stock_daily"
+    sql = "SELECT DISTINCT stock_code FROM trade_stock_daily_qfq"
     if conditions:
         sql += " WHERE " + " AND ".join(conditions)
     sql += " ORDER BY stock_code"
@@ -111,7 +111,7 @@ def get_symbol_data_summary(codes, start_date=None, end_date=None):
         conditions.append("trade_date <= %s")
         params.append(end_date)
     sql = (f"SELECT stock_code, YEAR(trade_date) AS yr, COUNT(*) AS cnt "
-           f"FROM trade_stock_daily WHERE {' AND '.join(conditions)} "
+           f"FROM trade_stock_daily_qfq WHERE {' AND '.join(conditions)} "
            f"GROUP BY stock_code, YEAR(trade_date)")
     rows = execute_query(sql, params)
     result = {}

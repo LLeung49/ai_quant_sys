@@ -4,7 +4,6 @@
 ROOT = Path(__file__).parents[1]
 QMT_ROOTS = [ROOT / "src/data_ingestion_qmt", ROOT / "src/morning_conference_qmt"]
 QMT_ENTRYPOINTS = [
-    ROOT / "src/data_ingestion_qmt/1-行情数据采集_qmt_bridge.py",
     ROOT / "src/data_ingestion_qmt/2-财务数据采集_qmt_bridge.py",
     ROOT / "src/data_ingestion_qmt/8-原始行情与复权数据采集_qmt_bridge.py",
     ROOT / "src/morning_conference_qmt/sector_rotation/1-run_init_qmt_bridge.py",
@@ -18,7 +17,6 @@ MOVED_FROM_ORIGINAL = [
     ROOT / "src/data_ingestion/2-财务数据采集_qmt_bridge.py",
     ROOT / "src/data_ingestion/8-原始行情与复权数据采集_qmt_bridge.py",
     ROOT / "src/morning_conference/sector_rotation/industry_meta_qmt_bridge.py",
-    ROOT / "src/morning_conference/sector_rotation/stock_kline_loader_qmt_bridge.py",
     ROOT / "src/morning_conference/sector_rotation2/research/etf_core/providers_qmt_bridge.py",
 ]
 
@@ -70,12 +68,22 @@ def test_qmt_tree_contains_no_legacy_xtdata_transport():
             assert "/api/xtdata/" not in source
 
 
-def test_qmt_morning_entrypoints_select_bridge_loaders_and_keep_cli_options():
+def test_qmt_morning_entrypoints_use_qfq_builder_without_legacy_kline_loader():
     root = ROOT / "src/morning_conference_qmt/sector_rotation"
     init_source = (root / "1-run_init_qmt_bridge.py").read_text(encoding="utf-8")
     daily_source = (root / "2-run_data_daily_qmt_bridge.py").read_text(encoding="utf-8")
     assert "from industry_meta_qmt_bridge import sync_sw_classification" in init_source
-    assert "from stock_kline_loader_qmt_bridge import sync_all_kline" in init_source
     assert "--skip-schema" in init_source and "--skip-meta" in init_source
+    assert "stock_kline_loader_qmt_bridge" not in init_source
+    assert "--skip-kline" not in init_source
     assert "from industry_meta_qmt_bridge import sync_sw_classification" in daily_source
+    assert "stock_kline_loader_qmt_bridge" not in daily_source
     assert "--refresh-meta" in daily_source and "--days" in daily_source
+
+
+def test_qmt_old_daily_writers_do_not_exist():
+    assert not (ROOT / "src/data_ingestion_qmt/1-行情数据采集_qmt_bridge.py").exists()
+    assert not (ROOT / "src/data_ingestion_qmt/9-前复权对账与定向重刷.py").exists()
+    assert not (
+        ROOT / "src/morning_conference_qmt/sector_rotation/stock_kline_loader_qmt_bridge.py"
+    ).exists()

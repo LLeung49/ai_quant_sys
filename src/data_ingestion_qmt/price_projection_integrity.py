@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+import math
 
 try:
     from .db_config import execute_query
@@ -35,11 +36,107 @@ class RawQfqIssue:
     reason: str
 
 
+@dataclass(frozen=True)
+class VerifiedProjectionException:
+    stock_code: str
+    trade_date: str
+    check_code: str
+    status: str = "qmt_verified_exception"
+
+
+@dataclass(frozen=True)
+class ProjectionDecision:
+    """Separate QMT-originated non-affine exceptions from repair cases."""
+
+    hard_issues: list[RawQfqIssue]
+    verified_exceptions: list[VerifiedProjectionException]
+
+
 def _decimal(value) -> Decimal:
     try:
         return Decimal(str(value))
     except (InvalidOperation, ValueError, TypeError) as exc:
         raise ValueError(f"invalid price value: {value!r}") from exc
+
+
+def _row_is_valid(row: dict | None) -> bool:
+    if row is None:
+        return False
+    try:
+        prices = {column: float(row[column]) for column in PRICE_COLUMNS}
+        if not all(math.isfinite(value) for value in prices.values()):
+            return False
+        if not (
+            prices["low_price"] <= min(prices["open_price"], prices["close_price"])
+            <= max(prices["open_price"], prices["close_price"])
+            <= prices["high_price"]
+        ):
+            return False
+        for column in ("volume", "amount"):
+            if column in row and row[column] is not None:
+                if not math.isfinite(float(row[column])) or float(row[column]) < 0:
+                    return False
+    except (KeyError, TypeError, ValueError, OverflowError):
+        return False
+    return True
+
+
+def _same_stored_prices(stored: dict | None, qmt: dict | None) -> bool:
+    """Compare QMT and MySQL price values at the table's six-decimal precision."""
+    if stored is None or qmt is None:
+        return False
+    try:
+        return all(
+            _decimal(stored[column]).quantize(PRICE_TOLERANCE)
+            == _decimal(qmt[column]).quantize(PRICE_TOLERANCE)
+            for column in PRICE_COLUMNS
+        )
+    except (InvalidOperation, ValueError):
+        return False
+
+
+def classify_projection_issues(
+    issues: list[RawQfqIssue],
+    stored_raw_rows: list[dict],
+    stored_qfq_rows: list[dict],
+    qmt_raw_rows: list[dict],
+    qmt_qfq_rows: list[dict],
+) -> ProjectionDecision:
+    """Classify audited rows after querying QMT only for non-affine dates.
+
+    A non-affine raw/QFQ relation is a warning only when the current QMT raw
+    and front rows exactly match what is stored and both pairs remain valid.
+    Every other problem stays fail-closed and is eligible for rebuild.
+    """
+    stored_raw = {str(row["trade_date"]): row for row in stored_raw_rows}
+    stored_qfq = {str(row["trade_date"]): row for row in stored_qfq_rows}
+    qmt_raw = {str(row["trade_date"]): row for row in qmt_raw_rows}
+    qmt_qfq = {str(row["trade_date"]): row for row in qmt_qfq_rows}
+    hard_issues: list[RawQfqIssue] = []
+    verified: list[VerifiedProjectionException] = []
+
+    for issue in issues:
+        if issue.reason != "qfq_ohlc_affine_mismatch":
+            hard_issues.append(issue)
+            continue
+        trade_date = str(issue.trade_date)
+        stored_pair = (stored_raw.get(trade_date), stored_qfq.get(trade_date))
+        qmt_pair = (qmt_raw.get(trade_date), qmt_qfq.get(trade_date))
+        if (
+            all(_row_is_valid(row) for row in (*stored_pair, *qmt_pair))
+            and _same_stored_prices(stored_pair[0], qmt_pair[0])
+            and _same_stored_prices(stored_pair[1], qmt_pair[1])
+        ):
+            verified.append(
+                VerifiedProjectionException(
+                    issue.stock_code, trade_date, "qfq_ohlc_non_affine"
+                )
+            )
+        else:
+            hard_issues.append(
+                RawQfqIssue(issue.stock_code, trade_date, "qmt_storage_mismatch")
+            )
+    return ProjectionDecision(hard_issues, verified)
 
 
 def find_raw_qfq_issues(
@@ -98,7 +195,14 @@ def find_raw_qfq_issues(
 
 def audit_raw_qfq_projection(stock_code: str) -> list[RawQfqIssue]:
     """Read and validate one complete independent raw/QFQ projection pair."""
-    raw_rows = execute_query(SELECT_RAW_ROWS_SQL, (stock_code,))
-    qfq_rows = execute_query(SELECT_QFQ_ROWS_SQL, (stock_code,))
+    raw_rows, qfq_rows = load_raw_qfq_rows(stock_code)
     return find_raw_qfq_issues(raw_rows, qfq_rows)
+
+
+def load_raw_qfq_rows(stock_code: str) -> tuple[list[dict], list[dict]]:
+    """Load stored raw and QFQ projections for source verification."""
+    return (
+        execute_query(SELECT_RAW_ROWS_SQL, (stock_code,)),
+        execute_query(SELECT_QFQ_ROWS_SQL, (stock_code,)),
+    )
 
