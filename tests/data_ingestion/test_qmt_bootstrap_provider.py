@@ -93,3 +93,31 @@ def test_old_listing_with_only_recent_cache_is_rejected_as_incomplete():
     assert not batch.is_complete
     assert "coverage" in batch.failures
     assert "expected_start=2015-01-01" in batch.failures["coverage"]
+
+
+def test_volume_normalization_indexes_each_projection_once():
+    class CountingList(list):
+        def __init__(self, values):
+            super().__init__(values)
+            self.iterations = 0
+
+        def __iter__(self):
+            self.iterations += 1
+            return super().__iter__()
+
+    rows = {
+        mode: CountingList([
+            {
+                "trade_date": f"2026-01-{day:02d}",
+                "volume": 100,
+                "amount": 100000.0,
+                "close_price": 10.0,
+            }
+            for day in range(1, 29)
+        ])
+        for mode in ("none", "front", "back")
+    }
+
+    QMTBootstrapProvider._normalize_batch_volumes(rows)
+
+    assert all(projection.iterations <= 2 for projection in rows.values())

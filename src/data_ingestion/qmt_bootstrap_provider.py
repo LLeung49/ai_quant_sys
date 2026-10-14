@@ -94,7 +94,11 @@ class QMTBootstrapProvider:
 
     @staticmethod
     def _normalize_batch_volumes(rows_by_mode: dict[str, list[dict]]) -> None:
-        raw_by_date = {row["trade_date"]: row for row in rows_by_mode["none"]}
+        indexed = {
+            mode: {row["trade_date"]: row for row in rows_by_mode[mode]}
+            for mode in MODES
+        }
+        raw_by_date = indexed["none"]
         for trade_date, raw in raw_by_date.items():
             source_volume = raw["volume"]
             if source_volume == 0 and raw["amount"] == 0:
@@ -104,10 +108,11 @@ class QMTBootstrapProvider:
                     raw["amount"], raw["close_price"], source_volume
                 )
             for mode in MODES:
-                projected = next(
-                    row for row in rows_by_mode[mode]
-                    if row["trade_date"] == trade_date
-                )
+                projected = indexed[mode].get(trade_date)
+                if projected is None:
+                    raise ValueError(
+                        f"projection date missing: {trade_date}/{mode}"
+                    )
                 if projected["volume"] != source_volume:
                     raise ValueError(
                         f"source volume differs across projections: {trade_date}/{mode}"
