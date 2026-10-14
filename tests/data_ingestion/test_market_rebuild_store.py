@@ -126,3 +126,23 @@ def test_repeat_persist_is_an_idempotent_upsert():
     assert projection_sql
     assert all("ON DUPLICATE KEY UPDATE" in sql for sql in projection_sql)
     assert connection.commits == 2
+
+
+def test_multiple_codes_use_one_transaction_and_three_projection_inserts():
+    connection = Connection()
+    second = complete_batch()
+    second.stock_code = "000001.SZ"
+    second.rows_by_mode = valid_rows("000001.SZ")
+
+    results = RebuildStore(
+        lambda: connection, batch_id="batch-1"
+    ).persist_validated_batches([complete_batch(), second])
+
+    projection_calls = [
+        (sql, values) for kind, sql, values in connection.calls
+        if kind == "executemany" and "trade_stock_daily_" in sql
+    ]
+    assert len(projection_calls) == 3
+    assert all(len(values) == 2 for _, values in projection_calls)
+    assert connection.commits == 1
+    assert [result.stock_code for result in results] == ["600519.SH", "000001.SZ"]

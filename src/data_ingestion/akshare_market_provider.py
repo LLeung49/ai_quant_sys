@@ -44,8 +44,10 @@ class AKShareMarketProvider:
     def __init__(
         self,
         *,
-        stock_fetcher: Callable = ak.stock_zh_a_hist,
-        etf_fetcher: Callable = ak.fund_etf_hist_em,
+        stock_fetcher: Callable | None = None,
+        etf_fetcher: Callable | None = None,
+        stock_fallback_fetcher: Callable | None = None,
+        etf_fallback_fetcher: Callable | None = None,
         max_attempts: int = 3,
         request_timeout: float = 30.0,
         sleeper: Callable[[float], None] = time.sleep,
@@ -55,8 +57,20 @@ class AKShareMarketProvider:
             raise ValueError("max_attempts must be positive")
         if request_timeout <= 0:
             raise ValueError("request_timeout must be positive")
-        self.stock_fetcher = stock_fetcher
-        self.etf_fetcher = etf_fetcher
+        custom_stock = stock_fetcher is not None
+        custom_etf = etf_fetcher is not None
+        self.stock_fetcher = stock_fetcher or ak.stock_zh_a_hist
+        self.etf_fetcher = etf_fetcher or ak.fund_etf_hist_em
+        self.stock_fallback_fetcher = (
+            stock_fallback_fetcher
+            if stock_fallback_fetcher is not None or custom_stock
+            else ak.stock_zh_a_daily
+        )
+        self.etf_fallback_fetcher = (
+            etf_fallback_fetcher
+            if etf_fallback_fetcher is not None or custom_etf
+            else ak.fund_etf_hist_sina
+        )
         self.max_attempts = max_attempts
         self.request_timeout = request_timeout
         self.sleeper = sleeper
@@ -109,7 +123,16 @@ class AKShareMarketProvider:
             raise ValueError(f"schema_drift missing columns: {missing}")
         return resolved
 
-    def _normalize(self, stock_code: str, mode: str, frame) -> tuple[list[dict], list[dict]]:
+    def _normalize(
+        self,
+        stock_code: str,
+        mode: str,
+        frame,
+        start_date: date,
+        end_date: date,
+        *,
+        volume_divisor: int = 1,
+    ) -> tuple[list[dict], list[dict]]:
         if frame is None or len(frame) == 0:
             raise ValueError("empty_response")
         columns = self._column_map(frame)
@@ -117,16 +140,21 @@ class AKShareMarketProvider:
         quarantines: list[dict] = []
         for _, source in frame.iterrows():
             try:
+                trade_date = _date_text(source[columns["trade_date"]])
+                if not start_date.isoformat() <= trade_date <= end_date.isoformat():
+                    continue
                 row = {
                     "stock_code": stock_code,
-                    "trade_date": _date_text(source[columns["trade_date"]]),
+                    "trade_date": trade_date,
                     "open_price": float(source[columns["open_price"]]),
                     "high_price": float(source[columns["high_price"]]),
                     "low_price": float(source[columns["low_price"]]),
                     "close_price": float(source[columns["close_price"]]),
                     # Both stock_zh_a_hist and fund_etf_hist_em report daily
                     # volume in lots and amount in yuan.
-                    "volume": int(float(source[columns["volume"]])),
+                    "volume": int(round(
+                        float(source[columns["volume"]]) / volume_divisor
+                    )),
                     "amount": float(source[columns["amount"]]),
                     "turnover_rate": (
                         float(source[columns["turnover_rate"]])
@@ -158,7 +186,14 @@ class AKShareMarketProvider:
                     "issues": [issue.code for issue in validation.issues],
                 })
             rows.append(row)
+        if not rows:
+            raise ValueError("empty_response_in_requested_range")
         return rows, quarantines
+
+    @staticmethod
+    def _sina_symbol(stock_code: str) -> str:
+        prefix = "sh" if stock_code.endswith(".SH") else "sz"
+        return prefix + stock_code.split(".", 1)[0]
 
     def fetch_batch(
         self, stock_code: str, start_date: date, end_date: date
@@ -167,10 +202,10 @@ class AKShareMarketProvider:
             raise ValueError("start_date must not exceed end_date")
         etf = _is_etf(stock_code)
         fetcher = self.etf_fetcher if etf else self.stock_fetcher
-        interface = "fund_etf_hist_em" if etf else "stock_zh_a_hist"
         rows_by_mode: dict[str, list[dict]] = {}
         failures: dict[str, str] = {}
         quarantines: list[dict] = []
+        interfaces: dict[str, str] = {}
         for mode, adjust in MODE_ADJUST.items():
             kwargs = {
                 "symbol": stock_code.split(".", 1)[0],
@@ -181,11 +216,48 @@ class AKShareMarketProvider:
             }
             try:
                 frame = self._fetch_with_retry(fetcher, kwargs)
-                rows, mode_quarantines = self._normalize(stock_code, mode, frame)
-                rows_by_mode[mode] = rows
-                quarantines.extend(mode_quarantines)
+                rows, mode_quarantines = self._normalize(
+                    stock_code, mode, frame, start_date, end_date
+                )
+                interfaces[mode] = (
+                    "fund_etf_hist_em" if etf else "stock_zh_a_hist"
+                )
             except BaseException as exc:
-                failures[mode] = f"{type(exc).__name__}: {exc}"
+                fallback = (
+                    self.etf_fallback_fetcher if etf
+                    else self.stock_fallback_fetcher
+                )
+                if fallback is None or (etf and adjust):
+                    failures[mode] = f"{type(exc).__name__}: {exc}"
+                    continue
+                fallback_kwargs = {"symbol": self._sina_symbol(stock_code)}
+                if not etf:
+                    fallback_kwargs.update({
+                        "start_date": start_date.strftime("%Y%m%d"),
+                        "end_date": end_date.strftime("%Y%m%d"),
+                        "adjust": adjust,
+                    })
+                try:
+                    frame = self._fetch_with_retry(fallback, fallback_kwargs)
+                    rows, mode_quarantines = self._normalize(
+                        stock_code,
+                        mode,
+                        frame,
+                        start_date,
+                        end_date,
+                        volume_divisor=100 if not etf else 1,
+                    )
+                    interfaces[mode] = (
+                        "fund_etf_hist_sina" if etf else "stock_zh_a_daily"
+                    )
+                except BaseException as fallback_exc:
+                    failures[mode] = (
+                        f"primary={type(exc).__name__}: {exc}; "
+                        f"fallback={type(fallback_exc).__name__}: {fallback_exc}"
+                    )
+                    continue
+            rows_by_mode[mode] = rows
+            quarantines.extend(mode_quarantines)
 
         if len(rows_by_mode) == len(MODE_ADJUST):
             batch_validation = validate_projection_batch(rows_by_mode)
@@ -203,7 +275,8 @@ class AKShareMarketProvider:
             rows_by_mode=rows_by_mode,
             provenance={
                 "provider": "akshare",
-                "interface": interface,
+                "interface": interfaces.get("none", "unavailable"),
+                "interfaces": interfaces,
                 "volume_unit": "lot",
                 "amount_unit": "yuan",
                 "fetched_at": datetime.now(timezone.utc).isoformat(),

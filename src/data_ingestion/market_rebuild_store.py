@@ -80,9 +80,13 @@ WHERE batch_id=%s AND stock_code=%s
 
 GAP_UPSERT_SQL = """
 INSERT INTO trade_market_rebuild_gap
-    (batch_id, stock_code, trade_date, price_mode, reason, detail)
-VALUES (%s, %s, %s, %s, %s, %s)
-ON DUPLICATE KEY UPDATE reason=VALUES(reason), detail=VALUES(detail)
+    (batch_id, stock_code, price_mode, reason, first_trade_date,
+     last_trade_date, gap_count, sample_detail)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+ON DUPLICATE KEY UPDATE
+    first_trade_date=VALUES(first_trade_date),
+    last_trade_date=VALUES(last_trade_date),
+    gap_count=VALUES(gap_count), sample_detail=VALUES(sample_detail)
 """
 
 FAIL_BATCH_SQL = """
@@ -164,30 +168,53 @@ class RebuildStore:
             conn.close()
 
     def persist_validated_batch(self, batch: MarketBatch) -> PersistResult:
-        if not batch.is_complete:
-            raise ValueError(
-                f"incomplete market batch for {batch.stock_code}: {batch.failures}"
-            )
-        validation = validate_projection_batch(batch.rows_by_mode)
-        if not validation.is_valid:
-            reasons = [issue.code for issue in validation.issues if issue.severity == "error"]
-            raise ValueError(f"invalid market batch for {batch.stock_code}: {reasons}")
+        return self.persist_validated_batches([batch])[0]
 
-        fingerprint = str(batch.provenance.get("fingerprint") or hashlib.sha256(
-            json.dumps(batch.rows_by_mode, sort_keys=True, default=str).encode("utf-8")
-        ).hexdigest())
-        source = str(batch.provenance.get("provider", "unknown"))
-        fetched_at = batch.provenance.get("fetched_at") or datetime.now(timezone.utc)
+    def persist_validated_batches(
+        self, batches: list[MarketBatch]
+    ) -> list[PersistResult]:
+        """Persist a provider batch with three bulk inserts and one commit."""
+        if not batches:
+            return []
+        prepared = []
+        for batch in batches:
+            if not batch.is_complete:
+                raise ValueError(
+                    f"incomplete market batch for {batch.stock_code}: {batch.failures}"
+                )
+            validation = validate_projection_batch(batch.rows_by_mode)
+            if not validation.is_valid:
+                reasons = [
+                    issue.code for issue in validation.issues
+                    if issue.severity == "error"
+                ]
+                raise ValueError(
+                    f"invalid market batch for {batch.stock_code}: {reasons}"
+                )
+            fingerprint = str(batch.provenance.get("fingerprint") or hashlib.sha256(
+                json.dumps(
+                    batch.rows_by_mode, sort_keys=True, default=str
+                ).encode("utf-8")
+            ).hexdigest())
+            source = str(batch.provenance.get("provider", "unknown"))
+            fetched_at = (
+                batch.provenance.get("fetched_at")
+                or datetime.now(timezone.utc)
+            )
+            prepared.append((batch, fingerprint, source, fetched_at))
+
         conn = self.connection_factory()
         cursor = conn.cursor()
-        rows_written = 0
         try:
-            cursor.execute(
+            cursor.executemany(
                 START_BATCH_SQL,
-                (
-                    self.batch_id, batch.stock_code, batch.start_date, batch.end_date,
-                    source, fingerprint,
-                ),
+                [
+                    (
+                        self.batch_id, batch.stock_code, batch.start_date,
+                        batch.end_date, source, fingerprint,
+                    )
+                    for batch, fingerprint, source, _ in prepared
+                ],
             )
             raw_values = [
                 (
@@ -197,9 +224,10 @@ class RebuildStore:
                     row.get("suspend_flag"), row.get("data_source", source),
                     self.batch_id, source, fetched_at, fingerprint,
                 )
+                for batch, fingerprint, source, fetched_at in prepared
                 for row in batch.rows_by_mode["none"]
             ]
-            rows_written += cursor.executemany(RAW_UPSERT, raw_values) or 0
+            cursor.executemany(RAW_UPSERT, raw_values)
             for mode in ("front", "back"):
                 values = [
                     (
@@ -208,34 +236,40 @@ class RebuildStore:
                         row["volume"], row["amount"], row.get("turnover_rate"),
                         batch.end_date, self.batch_id, source, fetched_at, fingerprint,
                     )
+                    for batch, fingerprint, source, fetched_at in prepared
                     for row in batch.rows_by_mode[mode]
                 ]
-                rows_written += cursor.executemany(
-                    ADJUSTED_UPSERT_BY_MODE[mode], values
-                ) or 0
-            gap_values = [
-                (
-                    self.batch_id,
-                    str(gap.get("stock_code", batch.stock_code)),
-                    gap.get("trade_date"),
-                    gap.get("mode"),
-                    gap.get("reason", "unknown"),
-                    json.dumps(dict(gap), ensure_ascii=False, default=str),
-                )
-                for gap in batch.gaps
-            ]
+                cursor.executemany(ADJUSTED_UPSERT_BY_MODE[mode], values)
+            gap_groups: dict[tuple[str, str, str], list[dict]] = {}
+            for batch, _, _, _ in prepared:
+                for gap in batch.gaps:
+                    key = (
+                        str(gap.get("stock_code", batch.stock_code)),
+                        str(gap.get("mode", "unknown")),
+                        str(gap.get("reason", "unknown")),
+                    )
+                    gap_groups.setdefault(key, []).append(dict(gap))
+            gap_values = []
+            for (stock_code, mode, reason), gaps in gap_groups.items():
+                dates = sorted(str(gap["trade_date"])[:10] for gap in gaps)
+                gap_values.append((
+                    self.batch_id, stock_code, mode, reason,
+                    dates[0], dates[-1], len(gaps),
+                    json.dumps(gaps[:5], ensure_ascii=False, default=str),
+                ))
             if gap_values:
                 cursor.executemany(GAP_UPSERT_SQL, gap_values)
-            cursor.execute(
+            cursor.executemany(
                 COMPLETE_BATCH_SQL,
-                (
-                    len(batch.rows_by_mode["none"]),
-                    len(batch.rows_by_mode["front"]),
-                    len(batch.rows_by_mode["back"]),
-                    len(batch.gaps),
-                    self.batch_id,
-                    batch.stock_code,
-                ),
+                [
+                    (
+                        len(batch.rows_by_mode["none"]),
+                        len(batch.rows_by_mode["front"]),
+                        len(batch.rows_by_mode["back"]),
+                        len(batch.gaps), self.batch_id, batch.stock_code,
+                    )
+                    for batch, _, _, _ in prepared
+                ],
             )
             conn.commit()
         except Exception:
@@ -244,4 +278,12 @@ class RebuildStore:
         finally:
             cursor.close()
             conn.close()
-        return PersistResult(batch.stock_code, rows_written, len(batch.gaps), fingerprint)
+        return [
+            PersistResult(
+                batch.stock_code,
+                sum(len(rows) for rows in batch.rows_by_mode.values()),
+                len(batch.gaps),
+                fingerprint,
+            )
+            for batch, fingerprint, _, _ in prepared
+        ]

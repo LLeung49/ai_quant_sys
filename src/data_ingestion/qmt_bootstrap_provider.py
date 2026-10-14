@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import hashlib
 import json
 from typing import Sequence
@@ -56,10 +56,6 @@ class QMTBootstrapProvider:
                 continue
             raw_volume = float(source["volume"])
             amount = float(source["amount"])
-            if raw_volume == 0 and amount == 0:
-                volume = 0
-            else:
-                volume = normalize_to_lot(amount, prices[3], raw_volume)
             row = {
                 "stock_code": stock_code,
                 "trade_date": trade_date,
@@ -67,7 +63,9 @@ class QMTBootstrapProvider:
                 "high_price": prices[1],
                 "low_price": prices[2],
                 "close_price": prices[3],
-                "volume": volume,
+                # Normalize after all three modes arrive.  Adjusted prices
+                # cannot classify a shares-vs-lots source volume reliably.
+                "volume": int(raw_volume),
                 "amount": amount,
                 "turnover_rate": None,
             }
@@ -94,6 +92,28 @@ class QMTBootstrapProvider:
             rows.append(row)
         return rows, gaps, quarantines
 
+    @staticmethod
+    def _normalize_batch_volumes(rows_by_mode: dict[str, list[dict]]) -> None:
+        raw_by_date = {row["trade_date"]: row for row in rows_by_mode["none"]}
+        for trade_date, raw in raw_by_date.items():
+            source_volume = raw["volume"]
+            if source_volume == 0 and raw["amount"] == 0:
+                normalized = 0
+            else:
+                normalized = normalize_to_lot(
+                    raw["amount"], raw["close_price"], source_volume
+                )
+            for mode in MODES:
+                projected = next(
+                    row for row in rows_by_mode[mode]
+                    if row["trade_date"] == trade_date
+                )
+                if projected["volume"] != source_volume:
+                    raise ValueError(
+                        f"source volume differs across projections: {trade_date}/{mode}"
+                    )
+                projected["volume"] = normalized
+
     def fetch_batches(
         self, stock_codes: Sequence[str], start_date: date, end_date: date
     ) -> dict[str, MarketBatch]:
@@ -102,6 +122,26 @@ class QMTBootstrapProvider:
             return {}
         if start_date > end_date:
             raise ValueError("start_date must not exceed end_date")
+        expected_ranges = {code: (start_date, end_date) for code in codes}
+        try:
+            details = self.gateway.get_instrument_detail(codes, iscomplete=True)
+        except Exception:
+            details = {}
+        for code in codes:
+            detail = details.get(code) or {}
+            try:
+                open_text = str(int(detail.get("OpenDate") or 0))[:8]
+                open_date = datetime.strptime(open_text, "%Y%m%d").date()
+            except (TypeError, ValueError):
+                open_date = start_date
+            try:
+                expire_text = str(int(detail.get("ExpireDate") or 0))[:8]
+                expire_date = datetime.strptime(expire_text, "%Y%m%d").date()
+            except (TypeError, ValueError):
+                expire_date = end_date
+            expected_ranges[code] = (
+                max(start_date, open_date), min(end_date, expire_date)
+            )
         rows_by_code = {code: {} for code in codes}
         failures_by_code = {code: {} for code in codes}
         gaps_by_code = {code: [] for code in codes}
@@ -144,18 +184,42 @@ class QMTBootstrapProvider:
             modes = rows_by_code[code]
             failures = failures_by_code[code]
             if len(modes) == len(MODES):
-                validation = validate_projection_batch(modes)
-                if not validation.is_valid:
-                    failures["batch"] = "; ".join(
-                        issue.code for issue in validation.issues if issue.severity == "error"
+                try:
+                    self._normalize_batch_volumes(modes)
+                    validation = validate_projection_batch(modes)
+                    if not validation.is_valid:
+                        failures["batch"] = "; ".join(
+                            issue.code for issue in validation.issues if issue.severity == "error"
+                        )
+                except Exception as exc:
+                    failures["batch"] = f"{type(exc).__name__}: {exc}"
+                expected_start, expected_end = expected_ranges[code]
+                raw_dates = sorted(
+                    date.fromisoformat(str(row["trade_date"])[:10])
+                    for row in modes["none"]
+                )
+                if raw_dates and (
+                    raw_dates[0] > expected_start + timedelta(days=31)
+                    or raw_dates[-1] < expected_end - timedelta(days=31)
+                ):
+                    failures["coverage"] = (
+                        f"expected_start={expected_start.isoformat()} "
+                        f"expected_end={expected_end.isoformat()} "
+                        f"actual_start={raw_dates[0].isoformat()} "
+                        f"actual_end={raw_dates[-1].isoformat()}"
                     )
+                elif any(
+                    later - earlier > timedelta(days=180)
+                    for earlier, later in zip(raw_dates, raw_dates[1:])
+                ):
+                    failures["coverage"] = "internal_history_gap_over_180_days"
             fingerprint = hashlib.sha256(
                 json.dumps(modes, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")
             ).hexdigest()
             result[code] = MarketBatch(
                 code,
-                start_date,
-                end_date,
+                expected_ranges[code][0],
+                expected_ranges[code][1],
                 rows_by_mode=modes,
                 provenance={
                     "provider": "qmt_bridge",

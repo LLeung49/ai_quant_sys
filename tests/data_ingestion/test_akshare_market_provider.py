@@ -151,3 +151,36 @@ def test_partial_mode_failure_keeps_batch_incomplete():
     assert not batch.is_complete
     assert set(batch.rows_by_mode) == {"none", "back"}
     assert set(batch.failures) == {"front"}
+
+
+def test_stock_primary_failure_uses_sina_fallback_and_normalizes_share_volume():
+    fallback_calls = []
+
+    def primary(**kwargs):
+        raise ConnectionError("eastmoney unavailable")
+
+    def sina(**kwargs):
+        fallback_calls.append(kwargs)
+        frame = stock_frame().rename(columns={
+            "日期": "date", "开盘": "open", "最高": "high", "最低": "low",
+            "收盘": "close", "成交量": "volume", "成交额": "amount",
+        })
+        frame["volume"] = 12300  # Sina stock volume is shares.
+        return frame
+
+    batch = AKShareMarketProvider(
+        stock_fetcher=primary,
+        etf_fetcher=primary,
+        stock_fallback_fetcher=sina,
+        max_attempts=1,
+    ).fetch_batch("600519.SH", date(2026, 9, 18), date(2026, 9, 18))
+
+    assert batch.is_complete
+    assert [call["adjust"] for call in fallback_calls] == ["", "qfq", "hfq"]
+    assert all(call["symbol"] == "sh600519" for call in fallback_calls)
+    assert batch.rows_by_mode["none"][0]["volume"] == 123
+    assert batch.provenance["interfaces"] == {
+        "none": "stock_zh_a_daily",
+        "front": "stock_zh_a_daily",
+        "back": "stock_zh_a_daily",
+    }

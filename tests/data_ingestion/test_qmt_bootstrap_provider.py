@@ -34,6 +34,12 @@ class Gateway:
             return {}
         return {code: frame() for code in kwargs["stock_list"]}
 
+    def get_instrument_detail(self, stock_list, iscomplete=False):
+        return {
+            code: {"OpenDate": 20260917, "ExpireDate": 99999999}
+            for code in stock_list
+        }
+
 
 def test_zero_fill_rows_are_recorded_as_gaps_and_never_returned_as_prices():
     gateway = Gateway()
@@ -72,3 +78,18 @@ def test_missing_projection_keeps_batch_incomplete():
     assert not batch.is_complete
     assert "front" in batch.failures
     assert set(batch.rows_by_mode) == {"none", "back"}
+
+
+def test_old_listing_with_only_recent_cache_is_rejected_as_incomplete():
+    gateway = Gateway()
+    gateway.get_instrument_detail = lambda stock_list, iscomplete=False: {
+        stock_list[0]: {"OpenDate": 19910403, "ExpireDate": 99999999}
+    }
+
+    batch = QMTBootstrapProvider(gateway=gateway).fetch_batch(
+        "000001.SZ", date(2015, 1, 1), date(2026, 9, 18)
+    )
+
+    assert not batch.is_complete
+    assert "coverage" in batch.failures
+    assert "expected_start=2015-01-01" in batch.failures["coverage"]

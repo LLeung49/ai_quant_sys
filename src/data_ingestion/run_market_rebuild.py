@@ -7,6 +7,7 @@ from datetime import date, datetime
 import json
 from pathlib import Path
 
+from .akshare_market_provider import AKShareMarketProvider
 from .db_config import execute_query
 from .market_rebuild_store import RebuildStore
 from .qmt_bootstrap_provider import QMTBootstrapProvider
@@ -65,6 +66,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.limit is not None:
         codes = codes[:args.limit]
     provider = QMTBootstrapProvider()
+    fallback_provider = AKShareMarketProvider(max_attempts=1, request_timeout=15.0)
     store = RebuildStore(batch_id=args.batch_id)
     if not args.dry_run and not args.no_resume:
         codes = [code for code in codes if code not in store.completed_codes()]
@@ -78,38 +80,73 @@ def main(argv: list[str] | None = None) -> int:
         "requested_codes": len(codes),
         "complete": [],
         "failed": [],
+        "akshare_replacements": [],
         "rows": 0,
         "gaps": 0,
     }
     for code_batch in _chunks(codes, args.batch_size):
         batches = provider.fetch_batches(code_batch, args.start_date, args.end_date)
+        ready = []
         for code in code_batch:
             batch = batches[code]
             if not batch.is_complete:
-                detail = json.dumps(batch.failures, ensure_ascii=False)
-                report["failed"].append({"stock_code": code, "detail": detail})
-                if not args.dry_run:
-                    store.record_failure(
-                        code, args.start_date, args.end_date, "qmt_bridge", detail
-                    )
-                continue
+                qmt_failures = dict(batch.failures)
+                replacement = fallback_provider.fetch_batch(
+                    code, batch.start_date, batch.end_date
+                )
+                if replacement.is_complete:
+                    batch = replacement
+                    report["akshare_replacements"].append({
+                        "stock_code": code,
+                        "qmt_failures": qmt_failures,
+                        "interfaces": replacement.provenance.get("interfaces", {}),
+                    })
+                else:
+                    detail = json.dumps({
+                        "qmt": qmt_failures,
+                        "akshare": replacement.failures,
+                    }, ensure_ascii=False)
+                    report["failed"].append({
+                        "stock_code": code, "detail": detail,
+                    })
+                    if not args.dry_run:
+                        store.record_failure(
+                            code, batch.start_date, batch.end_date,
+                            "qmt_bridge+akshare", detail,
+                        )
+                    continue
             if args.dry_run:
                 report["complete"].append(code)
                 report["rows"] += sum(len(rows) for rows in batch.rows_by_mode.values())
                 report["gaps"] += len(batch.gaps)
                 continue
+            ready.append(batch)
+        if ready and not args.dry_run:
             try:
-                result = store.persist_validated_batch(batch)
+                results = store.persist_validated_batches(ready)
             except Exception as exc:
-                detail = f"{type(exc).__name__}: {exc}"
-                report["failed"].append({"stock_code": code, "detail": detail})
-                store.record_failure(
-                    code, args.start_date, args.end_date, "qmt_bridge", detail
-                )
+                # Preserve per-code visibility if a bulk transaction fails.
+                for batch in ready:
+                    try:
+                        result = store.persist_validated_batch(batch)
+                    except Exception as isolated_exc:
+                        detail = f"{type(isolated_exc).__name__}: {isolated_exc}"
+                        report["failed"].append({
+                            "stock_code": batch.stock_code, "detail": detail,
+                        })
+                        store.record_failure(
+                            batch.stock_code, args.start_date, args.end_date,
+                            "qmt_bridge", detail,
+                        )
+                    else:
+                        report["complete"].append(batch.stock_code)
+                        report["rows"] += result.rows_written
+                        report["gaps"] += result.gaps_recorded
             else:
-                report["complete"].append(code)
-                report["rows"] += result.rows_written
-                report["gaps"] += result.gaps_recorded
+                for result in results:
+                    report["complete"].append(result.stock_code)
+                    report["rows"] += result.rows_written
+                    report["gaps"] += result.gaps_recorded
         print(
             f"[重建进度] complete={len(report['complete'])} "
             f"failed={len(report['failed'])} rows={report['rows']} gaps={report['gaps']}",

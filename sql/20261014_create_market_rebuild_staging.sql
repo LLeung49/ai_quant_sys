@@ -90,10 +90,12 @@ CREATE TABLE IF NOT EXISTS trade_market_rebuild_batch (
 CREATE TABLE IF NOT EXISTS trade_market_rebuild_gap (
   batch_id varchar(64) NOT NULL,
   stock_code varchar(16) NOT NULL,
-  trade_date date NOT NULL,
   price_mode varchar(8) NOT NULL,
   reason varchar(64) NOT NULL,
-  detail json DEFAULT NULL,
-  PRIMARY KEY (batch_id, stock_code, trade_date, price_mode),
+  first_trade_date date NOT NULL,
+  last_trade_date date NOT NULL,
+  gap_count int unsigned NOT NULL,
+  sample_detail json DEFAULT NULL,
+  PRIMARY KEY (batch_id, stock_code, price_mode, reason),
   KEY idx_market_rebuild_gap_reason (batch_id, reason)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
