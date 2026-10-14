@@ -5,6 +5,11 @@ import math
 
 import akshare as ak
 
+try:
+    from .market_row_validation import validate_market_row
+except ImportError:  # Direct collector-script execution.
+    from market_row_validation import validate_market_row
+
 
 MODE_ADJUST = {"none": "", "front": "qfq", "back": "hfq"}
 REQUIRED_FIELDS = ("open", "high", "low", "close", "volume", "amount")
@@ -67,7 +72,9 @@ def _valid_number(value) -> float | None:
     return number if math.isfinite(number) else None
 
 
-def _select_target_rows(frame, target_dates: set[str]) -> tuple[dict[str, dict], dict[str, str]]:
+def _select_target_rows(
+    frame, target_dates: set[str], *, allow_negative_price: bool = False,
+) -> tuple[dict[str, dict], dict[str, str]]:
     rows = {}
     invalid_dates = set()
     if frame is not None:
@@ -77,6 +84,18 @@ def _select_target_rows(frame, target_dates: set[str]) -> tuple[dict[str, dict],
                 continue
             values = {field: _valid_number(row.get(field)) for field in REQUIRED_FIELDS}
             if any(value is None for value in values.values()):
+                invalid_dates.add(trade_date)
+                continue
+            validation_row = {
+                "stock_code": "",
+                "trade_date": trade_date,
+                **{f"{field}_price": values[field] for field in ("open", "high", "low", "close")},
+                "volume": values["volume"],
+                "amount": values["amount"],
+            }
+            if not validate_market_row(
+                validation_row, allow_negative_price=allow_negative_price
+            ).is_valid:
                 invalid_dates.add(trade_date)
                 continue
             values["volume"] = int(values["volume"])
@@ -119,8 +138,12 @@ def _fetch_sina(stock_code: str, start_date: str, end_date: str, adjust: str):
     )
 
 
-def _merge_provider_rows(rows, failures, frame, target_dates):
-    provider_rows, provider_failures = _select_target_rows(frame, target_dates)
+def _merge_provider_rows(
+    rows, failures, frame, target_dates, *, allow_negative_price=False,
+):
+    provider_rows, provider_failures = _select_target_rows(
+        frame, target_dates, allow_negative_price=allow_negative_price
+    )
     rows.update(provider_rows)
     return rows, {
         trade_date: provider_failures[trade_date]
@@ -146,7 +169,8 @@ def fetch_valid_rows(
             stock_code, start_date, end_date, MODE_ADJUST[dividend_type]
         )
         rows, failures = _merge_provider_rows(
-            rows, {}, _normalize_market_columns(frame), target_dates
+            rows, {}, _normalize_market_columns(frame), target_dates,
+            allow_negative_price=(dividend_type == "front"),
         )
     except Exception as exc:
         failures = {trade_date: f"Eastmoney failed: {type(exc).__name__}: {exc}" for trade_date in target_dates}
@@ -157,7 +181,8 @@ def fetch_valid_rows(
             stock_code, start_date, end_date, MODE_ADJUST[dividend_type]
         )
         return _merge_provider_rows(
-            rows, failures, _normalize_market_columns(frame), target_dates
+            rows, failures, _normalize_market_columns(frame), target_dates,
+            allow_negative_price=(dividend_type == "front"),
         )
     except Exception as exc:
         return rows, {

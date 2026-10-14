@@ -9,8 +9,10 @@ from datetime import date
 
 try:  # Package import for tests and application modules.
     from .db_config import execute_many, execute_query
+    from .market_row_validation import validate_market_row
 except ImportError:  # Direct ``python 8-...py`` execution.
     from db_config import execute_many, execute_query
+    from market_row_validation import validate_market_row
 
 
 TABLE_BY_DIVIDEND_TYPE = {
@@ -87,6 +89,24 @@ def table_for_mode(dividend_type: str) -> str:
         raise ValueError(f"Unsupported dividend type: {dividend_type}") from exc
 
 
+def _validate_rows(dividend_type: str, rows: list[dict]) -> None:
+    """Reject the complete write when any row could corrupt persisted prices."""
+    failures = []
+    for row in rows:
+        result = validate_market_row(
+            row, allow_negative_price=(dividend_type == "front")
+        )
+        failures.extend(issue for issue in result.issues if issue.severity == "error")
+    if failures:
+        detail = "; ".join(
+            f"{issue.stock_code}/{issue.trade_date}/{issue.field}: {issue.code}"
+            for issue in failures[:10]
+        )
+        if len(failures) > 10:
+            detail += f"; ... {len(failures) - 10} more"
+        raise ValueError(f"market row validation failed: {detail}")
+
+
 def get_existing_latest_dates(dividend_type: str) -> dict[str, str]:
     """取得一种模式中每个代码的最新落库日期，供上层决定增量起点。"""
     table_for_mode(dividend_type)
@@ -109,6 +129,7 @@ def write_daily_rows(
     if not rows:
         return 0
     table_for_mode(dividend_type)
+    _validate_rows(dividend_type, rows)
     if dividend_type == "none":
         values = [
             (
@@ -149,6 +170,7 @@ def write_daily_rows_batch(
     if chunk_size <= 0:
         raise ValueError("chunk_size must be greater than zero")
     table_for_mode(dividend_type)
+    _validate_rows(dividend_type, rows)
     if dividend_type == "none":
         values = [
             (
