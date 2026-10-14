@@ -7,6 +7,7 @@ from datetime import date, datetime
 import hashlib
 import json
 from pathlib import Path
+import shutil
 
 from .akshare_market_provider import AKShareMarketProvider
 from .db_config import execute_query
@@ -43,6 +44,10 @@ def _load_codes(explicit: list[str] | None, codes_file: Path | None) -> list[str
     return sorted(set(codes))
 
 
+def has_minimum_free_space(path: Path | str, minimum_gib: float) -> bool:
+    return shutil.disk_usage(path).free >= minimum_gib * 1024**3
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Rebuild market prices into staging tables")
     parser.add_argument("--provider", choices=("qmt-bootstrap",), default="qmt-bootstrap")
@@ -56,6 +61,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-resume", action="store_true")
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--disk-path", type=Path, default=Path.cwd().anchor or Path("."))
+    parser.add_argument("--min-free-gib", type=float, default=5.0)
     return parser
 
 
@@ -92,6 +99,15 @@ def main(argv: list[str] | None = None) -> int:
         "gaps": 0,
     }
     for code_batch in _chunks(codes, args.batch_size):
+        if not has_minimum_free_space(args.disk_path, args.min_free_gib):
+            report["failed"].append({
+                "stock_code": "__disk_guard__",
+                "detail": (
+                    f"free space below {args.min_free_gib:.2f} GiB "
+                    f"on {args.disk_path}"
+                ),
+            })
+            break
         batches = provider.fetch_batches(code_batch, args.start_date, args.end_date)
         ready = []
         for code in code_batch:
