@@ -49,6 +49,11 @@ def has_minimum_free_space(path: Path | str, minimum_gib: float) -> bool:
     return shutil.disk_usage(path).free >= minimum_gib * 1024**3
 
 
+def remaining_codes(codes: list[str], store: RebuildStore) -> list[str]:
+    completed = store.completed_codes()
+    return [code for code in codes if code not in completed]
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Rebuild market prices into staging tables")
     parser.add_argument("--provider", choices=("qmt-bootstrap",), default="qmt-bootstrap")
@@ -59,6 +64,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--codes-file", type=Path)
     parser.add_argument("--batch-size", type=int, default=20)
     parser.add_argument("--limit", type=int)
+    parser.add_argument("--max-batches", type=int)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-resume", action="store_true")
     parser.add_argument("--report", type=Path)
@@ -83,7 +89,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.dry_run:
         universe_sha256 = store.prepare_universe(codes)
     if not args.dry_run and not args.no_resume:
-        codes = [code for code in codes if code not in store.completed_codes()]
+        codes = remaining_codes(codes, store)
 
     report_path = args.report or Path("reports/market-rebuild") / args.batch_id / "run.json"
     progress_path = report_path.with_suffix(".progress.jsonl")
@@ -114,7 +120,10 @@ def main(argv: list[str] | None = None) -> int:
         "gaps": 0,
         "batch_timings": [],
     }
-    for code_batch in _chunks(codes, args.batch_size):
+    for batch_number, code_batch in enumerate(_chunks(codes, args.batch_size), start=1):
+        if args.max_batches is not None and batch_number > args.max_batches:
+            emit_progress("session_limit_reached", max_batches=args.max_batches)
+            break
         if not has_minimum_free_space(args.disk_path, args.min_free_gib):
             report["failed"].append({
                 "stock_code": "__disk_guard__",
