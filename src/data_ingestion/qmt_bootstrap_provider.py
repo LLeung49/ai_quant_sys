@@ -25,8 +25,7 @@ def _trade_date(value: object) -> str:
     return f"{text[:4]}-{text[4:6]}-{text[6:8]}"
 
 
-def _optional_float(row, field: str) -> float | None:
-    value = row.get(field)
+def _optional_float(value: object) -> float | None:
     if value is None or value != value:
         return None
     return float(value)
@@ -42,20 +41,23 @@ class QMTBootstrapProvider:
         rows: list[dict] = []
         gaps: list[dict] = []
         quarantines: list[dict] = []
-        for index_value, source in frame.iterrows():
+        column_offset = {name: index + 1 for index, name in enumerate(frame.columns)}
+        for source in frame.itertuples(index=True, name=None):
+            index_value = source[0]
+            value = lambda field: source[column_offset[field]]
             trade_date = _trade_date(index_value)
-            prices = [float(source[field]) for field in ("open", "high", "low", "close")]
+            prices = [float(value(field)) for field in ("open", "high", "low", "close")]
             if all(price == 0 for price in prices):
                 gaps.append({
                     "stock_code": stock_code,
                     "trade_date": trade_date,
                     "mode": mode,
                     "reason": "zero_price_fill",
-                    "suspend_flag": _optional_float(source, "suspendFlag"),
+                    "suspend_flag": _optional_float(value("suspendFlag")),
                 })
                 continue
-            raw_volume = float(source["volume"])
-            amount = float(source["amount"])
+            raw_volume = float(value("volume"))
+            amount = float(value("amount"))
             row = {
                 "stock_code": stock_code,
                 "trade_date": trade_date,
@@ -71,9 +73,9 @@ class QMTBootstrapProvider:
             }
             if mode == "none":
                 row.update({
-                    "pre_close": _optional_float(source, "preClose"),
+                    "pre_close": _optional_float(value("preClose")),
                     "suspend_flag": (
-                        int(value) if (value := _optional_float(source, "suspendFlag")) is not None
+                        int(flag) if (flag := _optional_float(value("suspendFlag"))) is not None
                         else None
                     ),
                     "data_source": "qmt_bridge_rebuild",

@@ -70,6 +70,20 @@ def test_provider_fetches_multiple_codes_in_three_bridge_calls():
     assert all(call["stock_list"] == ["000001.SZ", "600519.SH"] for call in gateway.calls)
 
 
+def test_provider_normalizes_frames_without_pandas_iterrows(monkeypatch):
+    def forbidden_iterrows(_self):
+        raise AssertionError("iterrows is too slow for full-market rebuilds")
+
+    monkeypatch.setattr(pd.DataFrame, "iterrows", forbidden_iterrows)
+
+    batch = QMTBootstrapProvider(gateway=Gateway()).fetch_batch(
+        "000001.SZ", date(2026, 9, 17), date(2026, 9, 18)
+    )
+
+    assert batch.is_complete
+    assert len(batch.rows_by_mode["none"]) == 1
+
+
 def test_missing_projection_keeps_batch_incomplete():
     batch = QMTBootstrapProvider(gateway=Gateway(missing_mode="front")).fetch_batch(
         "000001.SZ", date(2026, 9, 17), date(2026, 9, 18)
