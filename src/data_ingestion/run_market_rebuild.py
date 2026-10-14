@@ -85,6 +85,20 @@ def main(argv: list[str] | None = None) -> int:
     if not args.dry_run and not args.no_resume:
         codes = [code for code in codes if code not in store.completed_codes()]
 
+    report_path = args.report or Path("reports/market-rebuild") / args.batch_id / "run.json"
+    progress_path = report_path.with_suffix(".progress.jsonl")
+    progress_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def emit_progress(event: str, **detail) -> None:
+        record = {
+            "timestamp": datetime.now().isoformat(timespec="seconds"),
+            "event": event,
+            **detail,
+        }
+        with progress_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+    emit_progress("session_start", remaining_codes=len(codes))
     report = {
         "batch_id": args.batch_id,
         "provider": "qmt_bridge",
@@ -116,9 +130,14 @@ def main(argv: list[str] | None = None) -> int:
             f"last={code_batch[-1]} codes={len(code_batch)}",
             flush=True,
         )
+        emit_progress(
+            "fetch_start", first_code=code_batch[0], last_code=code_batch[-1],
+            codes=len(code_batch),
+        )
         batches = provider.fetch_batches(code_batch, args.start_date, args.end_date)
         fetch_seconds = time.perf_counter() - batch_started
         print(f"[重建阶段] qmt_fetch_done seconds={fetch_seconds:.2f}", flush=True)
+        emit_progress("qmt_fetch_done", seconds=round(fetch_seconds, 3))
         ready = []
         for code in code_batch:
             batch = batches[code]
@@ -158,6 +177,7 @@ def main(argv: list[str] | None = None) -> int:
         if ready and not args.dry_run:
             persist_started = time.perf_counter()
             print(f"[重建阶段] persist_start codes={len(ready)}", flush=True)
+            emit_progress("persist_start", codes=len(ready))
             try:
                 results = store.persist_validated_batches(ready)
             except Exception as exc:
@@ -195,12 +215,16 @@ def main(argv: list[str] | None = None) -> int:
             "persist_seconds": round(persist_seconds, 3),
             "total_seconds": round(time.perf_counter() - batch_started, 3),
         })
+        emit_progress(
+            "batch_done", complete=len(report["complete"]),
+            failed=len(report["failed"]), rows=report["rows"],
+            gaps=report["gaps"], timing=report["batch_timings"][-1],
+        )
         print(
             f"[重建进度] complete={len(report['complete'])} "
             f"failed={len(report['failed'])} rows={report['rows']} gaps={report['gaps']}",
             flush=True,
         )
-    report_path = args.report or Path("reports/market-rebuild") / args.batch_id / "run.json"
     report_path.parent.mkdir(parents=True, exist_ok=True)
     report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
     return 1 if report["failed"] else 0
