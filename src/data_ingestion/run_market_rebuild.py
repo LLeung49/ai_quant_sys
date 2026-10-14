@@ -8,6 +8,7 @@ import hashlib
 import json
 from pathlib import Path
 import shutil
+import time
 
 from .akshare_market_provider import AKShareMarketProvider
 from .db_config import execute_query
@@ -97,6 +98,7 @@ def main(argv: list[str] | None = None) -> int:
         "akshare_replacements": [],
         "rows": 0,
         "gaps": 0,
+        "batch_timings": [],
     }
     for code_batch in _chunks(codes, args.batch_size):
         if not has_minimum_free_space(args.disk_path, args.min_free_gib):
@@ -108,7 +110,15 @@ def main(argv: list[str] | None = None) -> int:
                 ),
             })
             break
+        batch_started = time.perf_counter()
+        print(
+            f"[重建阶段] fetch_start first={code_batch[0]} "
+            f"last={code_batch[-1]} codes={len(code_batch)}",
+            flush=True,
+        )
         batches = provider.fetch_batches(code_batch, args.start_date, args.end_date)
+        fetch_seconds = time.perf_counter() - batch_started
+        print(f"[重建阶段] qmt_fetch_done seconds={fetch_seconds:.2f}", flush=True)
         ready = []
         for code in code_batch:
             batch = batches[code]
@@ -144,7 +154,10 @@ def main(argv: list[str] | None = None) -> int:
                 report["gaps"] += len(batch.gaps)
                 continue
             ready.append(batch)
+        fallback_seconds = time.perf_counter() - batch_started - fetch_seconds
         if ready and not args.dry_run:
+            persist_started = time.perf_counter()
+            print(f"[重建阶段] persist_start codes={len(ready)}", flush=True)
             try:
                 results = store.persist_validated_batches(ready)
             except Exception as exc:
@@ -170,6 +183,18 @@ def main(argv: list[str] | None = None) -> int:
                     report["complete"].append(result.stock_code)
                     report["rows"] += result.rows_written
                     report["gaps"] += result.gaps_recorded
+            persist_seconds = time.perf_counter() - persist_started
+        else:
+            persist_seconds = 0.0
+        report["batch_timings"].append({
+            "first_code": code_batch[0],
+            "last_code": code_batch[-1],
+            "codes": len(code_batch),
+            "qmt_fetch_seconds": round(fetch_seconds, 3),
+            "fallback_seconds": round(fallback_seconds, 3),
+            "persist_seconds": round(persist_seconds, 3),
+            "total_seconds": round(time.perf_counter() - batch_started, 3),
+        })
         print(
             f"[重建进度] complete={len(report['complete'])} "
             f"failed={len(report['failed'])} rows={report['rows']} gaps={report['gaps']}",
