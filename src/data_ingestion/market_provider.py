@@ -16,6 +16,7 @@ class MarketBatch:
     provenance: dict[str, object] = field(default_factory=dict)
     failures: dict[str, str] = field(default_factory=dict)
     quarantines: tuple[Mapping[str, object], ...] = ()
+    gaps: tuple[Mapping[str, object], ...] = ()
 
     @property
     def is_complete(self) -> bool:
