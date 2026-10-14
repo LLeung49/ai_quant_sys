@@ -44,16 +44,20 @@ class Cursor:
             raise RuntimeError("simulated insert failure")
         return len(values)
 
+    def fetchall(self):
+        return list(self.owner.fetchall_result)
+
     def close(self):
         pass
 
 
 class Connection:
-    def __init__(self, fail_on_insert=None):
+    def __init__(self, fail_on_insert=None, fetchall_result=()):
         self.calls = []
         self.commits = 0
         self.rollbacks = 0
         self.fail_on_insert = fail_on_insert
+        self.fetchall_result = fetchall_result
 
     def cursor(self):
         return Cursor(self, self.fail_on_insert)
@@ -146,3 +150,30 @@ def test_multiple_codes_use_one_transaction_and_three_projection_inserts():
     assert all(len(values) == 2 for _, values in projection_calls)
     assert connection.commits == 1
     assert [result.stock_code for result in results] == ["600519.SH", "000001.SZ"]
+
+
+def test_prepare_universe_persists_sorted_manifest_and_hash():
+    connection = Connection()
+    digest = RebuildStore(
+        lambda: connection, batch_id="market-full-1"
+    ).prepare_universe(["600519.SH", "000001.SZ", "600519.SH"])
+
+    inserts = [
+        values for kind, sql, values in connection.calls
+        if kind == "executemany" and "trade_market_rebuild_expected_code" in sql
+    ]
+    assert len(inserts) == 1
+    assert [row[1] for row in inserts[0]] == ["000001.SZ", "600519.SH"]
+    assert all(row[2] == digest for row in inserts[0])
+    assert connection.commits == 1
+
+
+def test_prepare_universe_rejects_changed_manifest_on_resume():
+    connection = Connection(fetchall_result=[("000001.SZ", "old-hash")])
+
+    with pytest.raises(ValueError, match="universe manifest differs"):
+        RebuildStore(
+            lambda: connection, batch_id="market-full-1"
+        ).prepare_universe(["000001.SZ", "600519.SH"])
+
+    assert connection.commits == 0

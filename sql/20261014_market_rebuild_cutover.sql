@@ -7,12 +7,47 @@ CREATE PROCEDURE cutover_market_rebuild(IN p_batch_id varchar(64))
 BEGIN
   DECLARE bad_count bigint DEFAULT 0;
   DECLARE complete_count bigint DEFAULT 0;
+  DECLARE expected_count bigint DEFAULT 0;
+
+  IF p_batch_id LIKE 'pilot-%' OR p_batch_id LIKE 'qmt-cache-validation%' THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='sample batch ids cannot be cut over';
+  END IF;
+
+  SELECT COUNT(*) INTO expected_count
+  FROM trade_market_rebuild_expected_code WHERE batch_id=p_batch_id;
+  IF expected_count = 0 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='approved rebuild batch has no expected universe';
+  END IF;
 
   SELECT COUNT(*) INTO complete_count
   FROM trade_market_rebuild_batch
   WHERE batch_id=p_batch_id AND status='complete';
-  IF complete_count = 0 THEN
-    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='approved rebuild batch has no completed codes';
+  IF complete_count <> expected_count THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='completed codes differ from expected universe';
+  END IF;
+
+  SELECT COUNT(*) INTO bad_count FROM (
+    SELECT current_codes.stock_code
+    FROM (
+      SELECT stock_code FROM trade_stock_daily_raw
+      UNION SELECT stock_code FROM trade_stock_daily_qfq
+      UNION SELECT stock_code FROM trade_stock_daily_bfq
+    ) current_codes
+    LEFT JOIN trade_market_rebuild_expected_code e
+      ON e.batch_id=p_batch_id AND e.stock_code=current_codes.stock_code
+    WHERE e.stock_code IS NULL
+    UNION ALL
+    SELECT e.stock_code
+    FROM trade_market_rebuild_expected_code e
+    LEFT JOIN (
+      SELECT stock_code FROM trade_stock_daily_raw
+      UNION SELECT stock_code FROM trade_stock_daily_qfq
+      UNION SELECT stock_code FROM trade_stock_daily_bfq
+    ) current_codes ON current_codes.stock_code=e.stock_code
+    WHERE e.batch_id=p_batch_id AND current_codes.stock_code IS NULL
+  ) universe_diff;
+  IF bad_count <> 0 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='expected universe differs from canonical universe';
   END IF;
 
   SELECT COUNT(*) INTO bad_count

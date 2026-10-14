@@ -89,3 +89,20 @@ def test_cutover_sql_is_guarded_reversible_and_never_truncates():
     assert "RENAME TABLE" in sql
     assert "rollback_20261014" in sql
     assert "TRUNCATE" not in sql.upper()
+    assert "trade_market_rebuild_expected_code" in sql
+    assert "pilot-%" in sql
+    assert "qmt-cache-validation%" in sql
+    assert "expected universe differs from canonical universe" in sql
+
+
+def test_universe_or_foreign_batch_mismatch_blocks_cutover():
+    report = assess_rebuild_metrics({
+        "missing_expected_codes": 1,
+        "unexpected_completed_codes": 0,
+        "canonical_universe_mismatches": 0,
+        "staging_code_mismatches": 0,
+        "foreign_batch_rows": 0,
+    }, comparisons=[])
+
+    assert not report.can_cutover
+    assert "missing_expected_codes=1" in report.hard_failures

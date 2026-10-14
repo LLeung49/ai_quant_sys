@@ -127,6 +127,42 @@ class RebuildStore:
         except KeyError as exc:
             raise ValueError(f"unsupported rebuild mode: {mode}") from exc
 
+    def prepare_universe(self, stock_codes: list[str]) -> str:
+        """Persist one immutable expected-code manifest for this batch."""
+        codes = sorted({str(code).strip() for code in stock_codes if str(code).strip()})
+        if not codes:
+            raise ValueError("rebuild universe must not be empty")
+        digest = hashlib.sha256("".join(f"{code}\n" for code in codes).encode("utf-8")).hexdigest()
+        conn = self.connection_factory()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT stock_code, universe_hash "
+                "FROM trade_market_rebuild_expected_code WHERE batch_id=%s "
+                "ORDER BY stock_code",
+                (self.batch_id,),
+            )
+            existing = list(cursor.fetchall())
+            if existing:
+                existing_codes = [str(row[0]) for row in existing]
+                existing_hashes = {str(row[1]) for row in existing}
+                if existing_codes != codes or existing_hashes != {digest}:
+                    raise ValueError("universe manifest differs from existing batch")
+                return digest
+            cursor.executemany(
+                "INSERT INTO trade_market_rebuild_expected_code "
+                "(batch_id, stock_code, universe_hash) VALUES (%s, %s, %s)",
+                [(self.batch_id, code, digest) for code in codes],
+            )
+            conn.commit()
+            return digest
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
     def completed_codes(self) -> set[str]:
         conn = self.connection_factory()
         cursor = conn.cursor()

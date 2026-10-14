@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from datetime import date, datetime
+import hashlib
 import json
 from pathlib import Path
 
@@ -68,6 +69,11 @@ def main(argv: list[str] | None = None) -> int:
     provider = QMTBootstrapProvider()
     fallback_provider = AKShareMarketProvider(max_attempts=1, request_timeout=15.0)
     store = RebuildStore(batch_id=args.batch_id)
+    universe_sha256 = hashlib.sha256(
+        "".join(f"{code}\n" for code in codes).encode("utf-8")
+    ).hexdigest()
+    if not args.dry_run:
+        universe_sha256 = store.prepare_universe(codes)
     if not args.dry_run and not args.no_resume:
         codes = [code for code in codes if code not in store.completed_codes()]
 
@@ -78,6 +84,7 @@ def main(argv: list[str] | None = None) -> int:
         "end_date": args.end_date.isoformat(),
         "dry_run": args.dry_run,
         "requested_codes": len(codes),
+        "universe_sha256": universe_sha256,
         "complete": [],
         "failed": [],
         "akshare_replacements": [],
