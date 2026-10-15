@@ -26,6 +26,11 @@ def test_refresh_cli_help_is_dedicated_from_candidate_runner() -> None:
 
     assert args.as_of_date == "2026-08-18"
     assert args.provider == "auto"
+    with pytest.raises(SystemExit):
+        parser.parse_args([
+            "--as-of-date", "2026-08-18", "--level", "2",
+            "--config-hash", "cfg", "--provider", "miniqmt",
+        ])
 
 
 def test_refresh_cli_main_explicitly_invokes_mapping_refresh_runner() -> None:
@@ -79,7 +84,7 @@ def test_audited_basket_json_produces_a_qualified_mapping() -> None:
     count = refresh_daily.run_refresh(
         target_date=TARGET,
         sector_level=2,
-        provider_name="miniqmt",
+        provider_name="akshare",
         min_coverage=0.8,
         mapping_version="exposure_v1",
         config_hash="cfg",
@@ -98,7 +103,7 @@ def test_audited_basket_json_produces_a_qualified_mapping() -> None:
     assert persisted[0]["assessment"].eligible[0].etf_code == "512480.SH"
 
 
-def test_auto_refresh_selects_periodic_akshare_aging_mapping_and_reports_summary(
+def test_auto_refresh_uses_only_akshare_and_reports_summary(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     class Provider:
@@ -111,15 +116,6 @@ def test_auto_refresh_selects_periodic_akshare_aging_mapping_and_reports_summary
             assert target_date == TARGET
             return self.basket
 
-    miniqmt = Provider(ETFBasketInput(
-        baskets={"510300": ({"stock_code": "600000", "weight": 85.0},)},
-        as_of_date=date(2026, 6, 30),
-        weight_unit="percent",
-        source_provider="miniqmt",
-        source_reference="miniqmt:2026Q1",
-        basket_source_priority="miniqmt_exact",
-        constituent_codes={"510300": ("600000",)},
-    ))
     akshare = Provider(ETFBasketInput(
         baskets={"510300": ({"stock_code": "600000", "weight": 100.0},)},
         as_of_date=date(2026, 5, 19),
@@ -154,19 +150,17 @@ def test_auto_refresh_selects_periodic_akshare_aging_mapping_and_reports_summary
         config_hash="cfg",
         query=lambda *_: [{"sector_name": "Bank"}],
         membership_provider=MembershipProvider(),
-        miniqmt_provider=miniqmt,
         akshare_provider=akshare,
         ensure_schema=lambda: None,
         refresh=refresh_with_capture,
     )
 
     assert count == 1
-    assert miniqmt.calls == 1
     assert akshare.calls == 1
     assert persisted[0]["source_provider"] == "akshare"
     assert persisted[0]["constituent_reported_date"] == date(2026, 5, 19)
     assert persisted[0]["basket_source_priority"] == "akshare_disclosed"
-    assert persisted[0]["cross_check_status"] == "matched"
+    assert persisted[0]["cross_check_status"] == "not_run"
     assert capsys.readouterr().out == (
         "2026-08-18: refreshed 1 mapping rows across 1 sectors; "
         "chosen_source=akshare; fresh=0 aging=1 stale=0 quality_failure=0\n"
@@ -196,14 +190,14 @@ def test_refresh_summary_counts_persisted_quality_failures(
         def load(self, target_date: date) -> ETFBasketInput:
             assert target_date == TARGET
             return ETFBasketInput.unavailable(
-                source_provider="miniqmt",
+                source_provider="akshare",
                 issue=refresh_daily.ProviderQualityIssue("missing_weight", "fixture"),
             )
 
     count = refresh_daily.run_refresh(
         target_date=TARGET,
         sector_level=2,
-        provider_name="miniqmt",
+        provider_name="akshare",
         min_coverage=0.8,
         mapping_version="exposure_v1",
         config_hash="cfg",
@@ -220,7 +214,7 @@ def test_refresh_summary_counts_persisted_quality_failures(
     assert count == 1
     assert capsys.readouterr().out == (
         "2026-08-18: refreshed 1 mapping rows across 1 sectors; "
-        "chosen_source=miniqmt; fresh=0 aging=0 stale=0 quality_failure=1\n"
+        "chosen_source=akshare; fresh=0 aging=0 stale=0 quality_failure=1\n"
     )
 
 
@@ -237,7 +231,7 @@ def test_run_refresh_enumerates_local_sectors_and_refreshes_each_with_one_basket
         def load(self, target_date: date) -> ETFBasketInput:
             self.calls += 1
             return ETFBasketInput.unavailable(
-                source_provider="miniqmt",
+                source_provider="akshare",
                 issue=refresh_daily.ProviderQualityIssue("missing_weight", "fixture"),
             )
 
@@ -250,7 +244,7 @@ def test_run_refresh_enumerates_local_sectors_and_refreshes_each_with_one_basket
     count = refresh_daily.run_refresh(
         target_date=TARGET,
         sector_level=2,
-        provider_name="miniqmt",
+        provider_name="akshare",
         min_coverage=0.8,
         mapping_version="exposure_v1",
         config_hash="cfg",
@@ -285,9 +279,9 @@ def test_run_refresh_reports_provider_and_sector_progress() -> None:
         baskets={"510300": ({"stock_code": "600000", "weight": 100.0},)},
         as_of_date=TARGET,
         weight_unit="percent",
-        source_provider="miniqmt",
-        source_reference="miniqmt:fixture",
-        basket_source_priority="miniqmt_exact",
+        source_provider="akshare",
+        source_reference="akshare:fixture",
+        basket_source_priority="akshare_disclosed",
     )
 
     class BasketProvider:
@@ -298,7 +292,7 @@ def test_run_refresh_reports_provider_and_sector_progress() -> None:
     refresh_daily.run_refresh(
         target_date=TARGET,
         sector_level=2,
-        provider_name="miniqmt",
+        provider_name="akshare",
         min_coverage=0.8,
         mapping_version="exposure_v1",
         config_hash="cfg",
@@ -313,9 +307,9 @@ def test_run_refresh_reports_provider_and_sector_progress() -> None:
     assert progress == [
         "[refresh] mapping schema ready",
         "[refresh] loaded 1 SW2 sectors",
-        "[refresh] loading MiniQMT ETF baskets",
-        "[refresh] MiniQMT: available; eligible_etfs=1/1; undercovered=0; reported_date=2026-08-18",
-        "[refresh] selected MiniQMT ETF baskets; etfs=1; reported_date=2026-08-18",
+        "[refresh] loading AKShare ETF baskets",
+        "[refresh] AKShare: available; eligible_etfs=1/1; undercovered=0; reported_date=2026-08-18",
+        "[refresh] selected AKShare ETF baskets; etfs=1; reported_date=2026-08-18",
         "[refresh] sector 1/1: Bank",
         "[refresh] sector 1/1: persisted 1 rows",
     ]

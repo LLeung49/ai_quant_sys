@@ -21,11 +21,9 @@ from .providers import (
     ETFBasketInput,
     LocalSWMembershipProvider,
     MembershipProvider,
-    MiniQMTETFProvider,
     ProviderQualityIssue,
     basket_coverage_summary,
     refresh_sector_etf_mapping,
-    select_freshest_basket,
 )
 
 
@@ -109,7 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--as-of-date", required=True)
     parser.add_argument("--level", type=int, choices=(1, 2), required=True)
-    parser.add_argument("--provider", choices=("auto", "miniqmt", "akshare"), default="auto")
+    parser.add_argument("--provider", choices=("auto", "akshare"), default="auto")
     parser.add_argument("--min-coverage", type=float, default=0.80)
     parser.add_argument("--mapping-version", default="exposure_v1")
     parser.add_argument("--config-hash", required=True)
@@ -136,7 +134,6 @@ def run_refresh(
     query: Callable[[str, tuple[object, ...]], list[dict[str, Any]]] | None = None,
     membership_provider: MembershipProvider | None = None,
     basket_provider: BasketProvider | None = None,
-    miniqmt_provider: BasketProvider | None = None,
     akshare_provider: BasketProvider | None = None,
     ensure_schema: Callable[[], None] | None = None,
     refresh: Callable[..., object] = refresh_sector_etf_mapping,
@@ -148,7 +145,7 @@ def run_refresh(
         raise ValueError("min_coverage must be between zero and one")
     if sector_level not in (1, 2):
         raise ValueError("sector_level must be 1 or 2")
-    if provider_name not in {"auto", "miniqmt", "akshare"}:
+    if provider_name not in {"auto", "akshare"}:
         raise ValueError(f"unsupported ETF provider: {provider_name}")
 
     if query is None:
@@ -186,21 +183,15 @@ def run_refresh(
         report("[refresh] loading audited JSON ETF baskets")
         basket_input = AuditedJSONBasketProvider(basket_json_path).load(target_date)
     elif provider_name == "auto":
-        report("[refresh] loading MiniQMT ETF baskets")
-        miniqmt_input = (miniqmt_provider or MiniQMTETFProvider()).load(target_date)
-        report(_basket_progress("MiniQMT", miniqmt_input, min_coverage=min_coverage))
         report("[refresh] loading AKShare ETF baskets")
-        akshare_input = (akshare_provider or AKShareETFProvider(progress=report)).load(target_date)
-        report(_basket_progress("AKShare", akshare_input, min_coverage=min_coverage))
-        basket_input = select_freshest_basket(
-            miniqmt_input,
-            akshare_input,
-            target_date,
-            min_coverage=min_coverage,
+        basket_input = (
+            akshare_provider or AKShareETFProvider(progress=report)
+        ).load(target_date)
+        report(
+            _basket_progress(
+                "AKShare", basket_input, min_coverage=min_coverage
+            )
         )
-    elif provider_name == "miniqmt" and miniqmt_provider is not None:
-        report("[refresh] loading MiniQMT ETF baskets")
-        basket_input = miniqmt_provider.load(target_date)
     elif provider_name == "akshare" and akshare_provider is not None:
         report("[refresh] loading AKShare ETF baskets")
         basket_input = akshare_provider.load(target_date)
@@ -268,8 +259,6 @@ def main(
 
 
 def _configured_basket_provider(provider_name: str) -> BasketProvider:
-    if provider_name == "miniqmt":
-        return MiniQMTETFProvider()
     return AKShareETFProvider()
 
 
@@ -306,7 +295,7 @@ def _selected_basket_progress(basket: ETFBasketInput) -> str:
 def _provider_label(value: str) -> str:
     """Format known provider identifiers consistently in operator output."""
 
-    return {"miniqmt": "MiniQMT", "akshare": "AKShare"}.get(value.casefold(), value)
+    return {"akshare": "AKShare"}.get(value.casefold(), value)
 
 
 def _strict_iso_date(value: object) -> date:
