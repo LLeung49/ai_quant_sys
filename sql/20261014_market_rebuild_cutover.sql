@@ -14,16 +14,31 @@ BEGIN
   END IF;
 
   SELECT COUNT(*) INTO expected_count
-  FROM trade_market_rebuild_expected_code WHERE batch_id=p_batch_id;
+  FROM trade_market_rebuild_expected_code e
+  LEFT JOIN trade_market_rebuild_excluded_code x
+    ON x.batch_id=e.batch_id AND x.stock_code=e.stock_code
+  WHERE e.batch_id=p_batch_id AND x.stock_code IS NULL;
   IF expected_count = 0 THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='approved rebuild batch has no expected universe';
   END IF;
 
   SELECT COUNT(*) INTO complete_count
-  FROM trade_market_rebuild_batch
-  WHERE batch_id=p_batch_id AND status='complete';
+  FROM trade_market_rebuild_batch b
+  LEFT JOIN trade_market_rebuild_excluded_code x
+    ON x.batch_id=b.batch_id AND x.stock_code=b.stock_code
+  WHERE b.batch_id=p_batch_id AND b.status='complete' AND x.stock_code IS NULL;
   IF complete_count <> expected_count THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='completed codes differ from expected universe';
+  END IF;
+
+  SELECT COUNT(*) INTO bad_count
+  FROM trade_market_rebuild_excluded_code x
+  LEFT JOIN trade_market_rebuild_expected_code e
+    ON e.batch_id=x.batch_id AND e.stock_code=x.stock_code
+  WHERE x.batch_id=p_batch_id
+    AND (e.stock_code IS NULL OR TRIM(x.reason)='' OR JSON_LENGTH(x.evidence)=0);
+  IF bad_count <> 0 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='invalid excluded-code evidence';
   END IF;
 
   SELECT COUNT(*) INTO bad_count
@@ -62,8 +77,10 @@ BEGIN
   END IF;
 
   SELECT COUNT(*) INTO bad_count
-  FROM trade_market_rebuild_batch
-  WHERE batch_id=p_batch_id AND status<>'complete';
+  FROM trade_market_rebuild_batch b
+  LEFT JOIN trade_market_rebuild_excluded_code x
+    ON x.batch_id=b.batch_id AND x.stock_code=b.stock_code
+  WHERE b.batch_id=p_batch_id AND b.status<>'complete' AND x.stock_code IS NULL;
   IF bad_count <> 0 THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='approved rebuild batch contains incomplete codes';
   END IF;
@@ -98,6 +115,26 @@ BEGIN
   INTO bad_count;
   IF bad_count <> 0 THEN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='invalid price or foreign batch rows found in rebuild tables';
+  END IF;
+
+  SELECT
+    (SELECT COUNT(*) FROM trade_stock_daily_raw_rebuild s
+     JOIN trade_market_rebuild_excluded_code x
+       ON x.batch_id=p_batch_id AND x.stock_code=s.stock_code
+     WHERE s.rebuild_batch_id=p_batch_id)
+    +
+    (SELECT COUNT(*) FROM trade_stock_daily_qfq_rebuild s
+     JOIN trade_market_rebuild_excluded_code x
+       ON x.batch_id=p_batch_id AND x.stock_code=s.stock_code
+     WHERE s.rebuild_batch_id=p_batch_id)
+    +
+    (SELECT COUNT(*) FROM trade_stock_daily_bfq_rebuild s
+     JOIN trade_market_rebuild_excluded_code x
+       ON x.batch_id=p_batch_id AND x.stock_code=s.stock_code
+     WHERE s.rebuild_batch_id=p_batch_id)
+  INTO bad_count;
+  IF bad_count <> 0 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='excluded code has staging rows';
   END IF;
 
   SELECT COUNT(*) INTO bad_count

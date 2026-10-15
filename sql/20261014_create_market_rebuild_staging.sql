@@ -108,3 +108,13 @@ CREATE TABLE IF NOT EXISTS trade_market_rebuild_expected_code (
   PRIMARY KEY (batch_id, stock_code),
   KEY idx_market_rebuild_expected_hash (batch_id, universe_hash)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS trade_market_rebuild_excluded_code (
+  batch_id varchar(64) NOT NULL,
+  stock_code varchar(16) NOT NULL,
+  reason varchar(64) NOT NULL,
+  evidence json NOT NULL,
+  created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (batch_id, stock_code),
+  KEY idx_market_rebuild_exclusion_reason (batch_id, reason)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

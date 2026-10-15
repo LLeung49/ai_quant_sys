@@ -14,6 +14,7 @@ from .market_row_validation import validate_projection_batch
 HARD_METRICS = (
     "missing_expected_codes",
     "unexpected_completed_codes",
+    "exclusion_manifest_mismatches",
     "canonical_universe_mismatches",
     "staging_code_mismatches",
     "foreign_batch_rows",
@@ -153,24 +154,45 @@ def assess_rebuild_metrics(
 def audit_rebuild(batch_id: str) -> RebuildAuditReport:
     """Read structural metrics from staging; AKShare comparisons are added separately."""
     incomplete = execute_query(
-        "SELECT COUNT(*) AS n FROM trade_market_rebuild_batch "
-        "WHERE batch_id=%s AND status<>'complete'", (batch_id,)
+        "SELECT COUNT(*) AS n FROM trade_market_rebuild_batch b "
+        "LEFT JOIN trade_market_rebuild_excluded_code x "
+        "ON x.batch_id=b.batch_id AND x.stock_code=b.stock_code "
+        "WHERE b.batch_id=%s AND b.status<>'complete' AND x.stock_code IS NULL",
+        (batch_id,),
     )[0]["n"]
     universe = execute_query(
         """
         SELECT
           (SELECT COUNT(*) FROM trade_market_rebuild_expected_code e
+           LEFT JOIN trade_market_rebuild_excluded_code x
+             ON x.batch_id=e.batch_id AND x.stock_code=e.stock_code
            LEFT JOIN trade_market_rebuild_batch b
              ON b.batch_id=e.batch_id AND b.stock_code=e.stock_code AND b.status='complete'
-           WHERE e.batch_id=%s AND b.stock_code IS NULL) AS missing_expected_codes,
+           WHERE e.batch_id=%s AND x.stock_code IS NULL AND b.stock_code IS NULL)
+             AS missing_expected_codes,
           (SELECT COUNT(*) FROM trade_market_rebuild_batch b
            LEFT JOIN trade_market_rebuild_expected_code e
              ON e.batch_id=b.batch_id AND e.stock_code=b.stock_code
-           WHERE b.batch_id=%s AND b.status='complete' AND e.stock_code IS NULL)
+           LEFT JOIN trade_market_rebuild_excluded_code x
+             ON x.batch_id=b.batch_id AND x.stock_code=b.stock_code
+           WHERE b.batch_id=%s AND b.status='complete'
+             AND (e.stock_code IS NULL OR x.stock_code IS NOT NULL))
             AS unexpected_completed_codes
         """,
         (batch_id, batch_id),
     )[0]
+    exclusions = execute_query(
+        """
+        SELECT COUNT(*) AS n
+        FROM trade_market_rebuild_excluded_code x
+        LEFT JOIN trade_market_rebuild_expected_code e
+          ON e.batch_id=x.batch_id AND e.stock_code=x.stock_code
+        WHERE x.batch_id=%s
+          AND (e.stock_code IS NULL OR TRIM(x.reason)=''
+            OR JSON_LENGTH(x.evidence)=0)
+        """,
+        (batch_id,),
+    )[0]["n"]
     canonical = execute_query(
         """
         SELECT COUNT(*) AS n FROM (
@@ -205,14 +227,19 @@ def audit_rebuild(batch_id: str) -> RebuildAuditReport:
           SELECT
             (SELECT COUNT(*) FROM (
               SELECT e.stock_code FROM trade_market_rebuild_expected_code e
+              LEFT JOIN trade_market_rebuild_excluded_code x
+                ON x.batch_id=e.batch_id AND x.stock_code=e.stock_code
               LEFT JOIN (SELECT DISTINCT stock_code FROM trade_stock_daily_raw_rebuild
                          WHERE rebuild_batch_id=%s) s ON s.stock_code=e.stock_code
-              WHERE e.batch_id=%s AND s.stock_code IS NULL
+              WHERE e.batch_id=%s AND x.stock_code IS NULL AND s.stock_code IS NULL
               UNION ALL
               SELECT DISTINCT s.stock_code FROM trade_stock_daily_raw_rebuild s
               LEFT JOIN trade_market_rebuild_expected_code e
                 ON e.batch_id=%s AND e.stock_code=s.stock_code
-              WHERE s.rebuild_batch_id=%s AND e.stock_code IS NULL
+              LEFT JOIN trade_market_rebuild_excluded_code x
+                ON x.batch_id=e.batch_id AND x.stock_code=e.stock_code
+              WHERE s.rebuild_batch_id=%s
+                AND (e.stock_code IS NULL OR x.stock_code IS NOT NULL)
             ) d) AS code_mismatch,
             (SELECT COUNT(*) FROM trade_stock_daily_raw_rebuild
              WHERE rebuild_batch_id<>%s) AS foreign_rows
@@ -220,14 +247,19 @@ def audit_rebuild(batch_id: str) -> RebuildAuditReport:
           SELECT
             (SELECT COUNT(*) FROM (
               SELECT e.stock_code FROM trade_market_rebuild_expected_code e
+              LEFT JOIN trade_market_rebuild_excluded_code x
+                ON x.batch_id=e.batch_id AND x.stock_code=e.stock_code
               LEFT JOIN (SELECT DISTINCT stock_code FROM trade_stock_daily_qfq_rebuild
                          WHERE rebuild_batch_id=%s) s ON s.stock_code=e.stock_code
-              WHERE e.batch_id=%s AND s.stock_code IS NULL
+              WHERE e.batch_id=%s AND x.stock_code IS NULL AND s.stock_code IS NULL
               UNION ALL
               SELECT DISTINCT s.stock_code FROM trade_stock_daily_qfq_rebuild s
               LEFT JOIN trade_market_rebuild_expected_code e
                 ON e.batch_id=%s AND e.stock_code=s.stock_code
-              WHERE s.rebuild_batch_id=%s AND e.stock_code IS NULL
+              LEFT JOIN trade_market_rebuild_excluded_code x
+                ON x.batch_id=e.batch_id AND x.stock_code=e.stock_code
+              WHERE s.rebuild_batch_id=%s
+                AND (e.stock_code IS NULL OR x.stock_code IS NOT NULL)
             ) d),
             (SELECT COUNT(*) FROM trade_stock_daily_qfq_rebuild
              WHERE rebuild_batch_id<>%s)
@@ -235,14 +267,19 @@ def audit_rebuild(batch_id: str) -> RebuildAuditReport:
           SELECT
             (SELECT COUNT(*) FROM (
               SELECT e.stock_code FROM trade_market_rebuild_expected_code e
+              LEFT JOIN trade_market_rebuild_excluded_code x
+                ON x.batch_id=e.batch_id AND x.stock_code=e.stock_code
               LEFT JOIN (SELECT DISTINCT stock_code FROM trade_stock_daily_bfq_rebuild
                          WHERE rebuild_batch_id=%s) s ON s.stock_code=e.stock_code
-              WHERE e.batch_id=%s AND s.stock_code IS NULL
+              WHERE e.batch_id=%s AND x.stock_code IS NULL AND s.stock_code IS NULL
               UNION ALL
               SELECT DISTINCT s.stock_code FROM trade_stock_daily_bfq_rebuild s
               LEFT JOIN trade_market_rebuild_expected_code e
                 ON e.batch_id=%s AND e.stock_code=s.stock_code
-              WHERE s.rebuild_batch_id=%s AND e.stock_code IS NULL
+              LEFT JOIN trade_market_rebuild_excluded_code x
+                ON x.batch_id=e.batch_id AND x.stock_code=e.stock_code
+              WHERE s.rebuild_batch_id=%s
+                AND (e.stock_code IS NULL OR x.stock_code IS NOT NULL)
             ) d),
             (SELECT COUNT(*) FROM trade_stock_daily_bfq_rebuild
              WHERE rebuild_batch_id<>%s)
@@ -379,6 +416,7 @@ def audit_rebuild(batch_id: str) -> RebuildAuditReport:
     metrics = {
         "missing_expected_codes": int(universe.get("missing_expected_codes") or 0),
         "unexpected_completed_codes": int(universe.get("unexpected_completed_codes") or 0),
+        "exclusion_manifest_mismatches": int(exclusions or 0),
         "canonical_universe_mismatches": int(canonical or 0),
         "staging_code_mismatches": int(staging.get("staging_code_mismatches") or 0),
         "foreign_batch_rows": int(staging.get("foreign_batch_rows") or 0),

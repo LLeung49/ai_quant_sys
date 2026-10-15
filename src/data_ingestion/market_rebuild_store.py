@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import json
-from typing import Callable
+from typing import Callable, Mapping
 
 from .db_config import get_connection
 from .market_provider import MarketBatch
@@ -173,6 +173,54 @@ class RebuildStore:
                 (self.batch_id,),
             )
             return {str(row[0]) for row in cursor.fetchall()}
+        finally:
+            cursor.close()
+            conn.close()
+
+    def excluded_codes(self) -> set[str]:
+        conn = self.connection_factory()
+        cursor = conn.cursor()
+        try:
+            cursor.execute(
+                "SELECT stock_code FROM trade_market_rebuild_excluded_code "
+                "WHERE batch_id=%s",
+                (self.batch_id,),
+            )
+            return {str(row[0]) for row in cursor.fetchall()}
+        finally:
+            cursor.close()
+            conn.close()
+
+    def record_exclusions(
+        self, exclusions: Mapping[str, Mapping[str, object]]
+    ) -> None:
+        """Persist reviewed removals without mutating the immutable universe."""
+        values = []
+        for stock_code, detail in sorted(exclusions.items()):
+            reason = str(detail.get("reason") or "").strip()
+            evidence = detail.get("evidence")
+            if not stock_code.strip() or not reason or not isinstance(evidence, Mapping):
+                raise ValueError("each exclusion requires code, reason, and evidence")
+            values.append((
+                self.batch_id,
+                stock_code.strip(),
+                reason,
+                json.dumps(dict(evidence), ensure_ascii=False, sort_keys=True, default=str),
+            ))
+        if not values:
+            raise ValueError("at least one exclusion is required")
+        conn = self.connection_factory()
+        cursor = conn.cursor()
+        try:
+            cursor.executemany(
+                "INSERT INTO trade_market_rebuild_excluded_code "
+                "(batch_id, stock_code, reason, evidence) VALUES (%s, %s, %s, %s)",
+                values,
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
         finally:
             cursor.close()
             conn.close()

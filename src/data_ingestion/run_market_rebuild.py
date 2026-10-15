@@ -50,8 +50,8 @@ def has_minimum_free_space(path: Path | str, minimum_gib: float) -> bool:
 
 
 def remaining_codes(codes: list[str], store: RebuildStore) -> list[str]:
-    completed = store.completed_codes()
-    return [code for code in codes if code not in completed]
+    finished = store.completed_codes() | store.excluded_codes()
+    return [code for code in codes if code not in finished]
 
 
 def build_parser() -> argparse.ArgumentParser:

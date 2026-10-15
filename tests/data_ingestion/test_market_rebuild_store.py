@@ -177,3 +177,36 @@ def test_prepare_universe_rejects_changed_manifest_on_resume():
         ).prepare_universe(["000001.SZ", "600519.SH"])
 
     assert connection.commits == 0
+
+
+def test_record_exclusions_persists_reason_and_json_evidence():
+    connection = Connection()
+    store = RebuildStore(lambda: connection, batch_id="market-full-1")
+
+    store.record_exclusions({
+        "158036.SZ": {
+            "reason": "invalid_legacy_zero_only_code",
+            "evidence": {"qmt_instrument_detail": "absent", "zero_rows": 486},
+        }
+    })
+
+    inserts = [
+        values for kind, sql, values in connection.calls
+        if kind == "executemany" and "trade_market_rebuild_excluded_code" in sql
+    ]
+    assert len(inserts) == 1
+    assert inserts[0][0][0:3] == (
+        "market-full-1", "158036.SZ", "invalid_legacy_zero_only_code"
+    )
+    assert '"zero_rows": 486' in inserts[0][0][3]
+    assert connection.commits == 1
+
+
+def test_excluded_codes_are_read_for_resume():
+    connection = Connection(fetchall_result=[("158036.SZ",), ("159047.SZ",)])
+
+    codes = RebuildStore(
+        lambda: connection, batch_id="market-full-1"
+    ).excluded_codes()
+
+    assert codes == {"158036.SZ", "159047.SZ"}

@@ -99,6 +99,8 @@ def test_cutover_sql_is_guarded_reversible_and_never_truncates():
     assert "metadata row counts differ from staging" in sql
     assert "adjusted table contains rows absent from raw" in sql
     assert "rebuild_batch_id IS NULL" in sql
+    assert "trade_market_rebuild_excluded_code" in sql
+    assert "excluded code has staging rows" in sql
 
 
 def test_universe_or_foreign_batch_mismatch_blocks_cutover():
@@ -121,6 +123,7 @@ def test_proof_backed_integrity_metrics_block_cutover():
         "batch_row_count_mismatches": 1,
         "extra_adjusted_rows": 1,
         "rollback_table_collisions": 1,
+        "exclusion_manifest_mismatches": 1,
     }, comparisons=[])
 
     assert not report.can_cutover
@@ -130,7 +133,16 @@ def test_proof_backed_integrity_metrics_block_cutover():
         "batch_row_count_mismatches=1",
         "extra_adjusted_rows=1",
         "rollback_table_collisions=1",
+        "exclusion_manifest_mismatches=1",
     }
+
+
+def test_staging_schema_supports_audited_universe_exclusions():
+    sql = (Path(__file__).parents[2] / "sql" / "20261014_create_market_rebuild_staging.sql").read_text(encoding="utf-8")
+
+    assert "CREATE TABLE IF NOT EXISTS trade_market_rebuild_excluded_code" in sql
+    assert "reason varchar(64) NOT NULL" in sql
+    assert "evidence json NOT NULL" in sql
 
 
 def test_audit_source_has_no_hardcoded_zero_integrity_metrics():

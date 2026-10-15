@@ -23,17 +23,23 @@ def test_rebuild_parser_defaults_to_five_gib_disk_guard():
 
 def test_resume_reads_completed_codes_once():
     class Store:
-        calls = 0
+        completed_calls = 0
+        excluded_calls = 0
 
         def completed_codes(self):
-            self.calls += 1
+            self.completed_calls += 1
             return {"000002.SZ"}
+
+        def excluded_codes(self):
+            self.excluded_calls += 1
+            return {"000003.SZ"}
 
     store = Store()
 
     remaining = run_market_rebuild.remaining_codes(
-        ["000001.SZ", "000002.SZ", "600519.SH"], store
+        ["000001.SZ", "000002.SZ", "000003.SZ", "600519.SH"], store
     )
 
     assert remaining == ["000001.SZ", "600519.SH"]
-    assert store.calls == 1
+    assert store.completed_calls == 1
+    assert store.excluded_calls == 1
