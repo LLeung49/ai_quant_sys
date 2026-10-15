@@ -137,6 +137,19 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='excluded code has staging rows';
   END IF;
 
+  SELECT COALESCE(SUM(g.gap_count), 0) INTO bad_count
+  FROM trade_market_rebuild_gap g
+  JOIN trade_market_rebuild_batch b
+    ON b.batch_id=g.batch_id AND b.stock_code=g.stock_code
+  LEFT JOIN trade_market_rebuild_excluded_code x
+    ON x.batch_id=b.batch_id AND x.stock_code=b.stock_code
+  WHERE g.batch_id=p_batch_id AND b.status='complete' AND x.stock_code IS NULL
+    AND (g.reason<>'zero_price_fill'
+      OR NOT(g.last_trade_date < b.start_date OR g.first_trade_date > b.end_date));
+  IF bad_count <> 0 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='unresolved zero-fill gaps overlap expected history';
+  END IF;
+
   SELECT COUNT(*) INTO bad_count
   FROM trade_market_rebuild_batch m
   LEFT JOIN (

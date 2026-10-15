@@ -15,6 +15,7 @@ HARD_METRICS = (
     "missing_expected_codes",
     "unexpected_completed_codes",
     "exclusion_manifest_mismatches",
+    "unresolved_gap_rows",
     "canonical_universe_mismatches",
     "staging_code_mismatches",
     "foreign_batch_rows",
@@ -193,6 +194,26 @@ def audit_rebuild(batch_id: str) -> RebuildAuditReport:
         """,
         (batch_id,),
     )[0]["n"]
+    gaps = execute_query(
+        """
+        SELECT
+          COALESCE(SUM(CASE
+            WHEN g.reason='zero_price_fill'
+             AND (g.last_trade_date < b.start_date OR g.first_trade_date > b.end_date)
+            THEN 0 ELSE g.gap_count END), 0) AS unresolved_gap_rows,
+          COALESCE(SUM(CASE
+            WHEN g.reason='zero_price_fill'
+             AND (g.last_trade_date < b.start_date OR g.first_trade_date > b.end_date)
+            THEN g.gap_count ELSE 0 END), 0) AS outside_expected_gap_rows
+        FROM trade_market_rebuild_gap g
+        JOIN trade_market_rebuild_batch b
+          ON b.batch_id=g.batch_id AND b.stock_code=g.stock_code
+        LEFT JOIN trade_market_rebuild_excluded_code x
+          ON x.batch_id=b.batch_id AND x.stock_code=b.stock_code
+        WHERE g.batch_id=%s AND b.status='complete' AND x.stock_code IS NULL
+        """,
+        (batch_id,),
+    )[0]
     canonical = execute_query(
         """
         SELECT COUNT(*) AS n FROM (
@@ -417,6 +438,8 @@ def audit_rebuild(batch_id: str) -> RebuildAuditReport:
         "missing_expected_codes": int(universe.get("missing_expected_codes") or 0),
         "unexpected_completed_codes": int(universe.get("unexpected_completed_codes") or 0),
         "exclusion_manifest_mismatches": int(exclusions or 0),
+        "unresolved_gap_rows": int(gaps.get("unresolved_gap_rows") or 0),
+        "outside_expected_gap_rows": int(gaps.get("outside_expected_gap_rows") or 0),
         "canonical_universe_mismatches": int(canonical or 0),
         "staging_code_mismatches": int(staging.get("staging_code_mismatches") or 0),
         "foreign_batch_rows": int(staging.get("foreign_batch_rows") or 0),
