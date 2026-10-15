@@ -19,11 +19,14 @@ HARD_METRICS = (
     "foreign_batch_rows",
     "incomplete_batches",
     "duplicate_rows",
+    "batch_row_count_mismatches",
     "zero_price_rows",
     "non_finite_rows",
     "invalid_ohlc_rows",
     "mode_date_mismatches",
+    "extra_adjusted_rows",
     "mode_volume_amount_mismatches",
+    "rollback_table_collisions",
 )
 
 
@@ -249,26 +252,77 @@ def audit_rebuild(batch_id: str) -> RebuildAuditReport:
          batch_id, batch_id, batch_id, batch_id, batch_id,
          batch_id, batch_id, batch_id, batch_id, batch_id),
     )[0]
+    duplicates = execute_query(
+        """
+        SELECT COALESCE(SUM(duplicate_count), 0) AS n FROM (
+          SELECT COUNT(*) - 1 AS duplicate_count
+          FROM trade_stock_daily_raw_rebuild WHERE rebuild_batch_id=%s
+          GROUP BY stock_code, trade_date HAVING COUNT(*) > 1
+          UNION ALL
+          SELECT COUNT(*) - 1
+          FROM trade_stock_daily_qfq_rebuild WHERE rebuild_batch_id=%s
+          GROUP BY stock_code, trade_date HAVING COUNT(*) > 1
+          UNION ALL
+          SELECT COUNT(*) - 1
+          FROM trade_stock_daily_bfq_rebuild WHERE rebuild_batch_id=%s
+          GROUP BY stock_code, trade_date HAVING COUNT(*) > 1
+        ) duplicates
+        """,
+        (batch_id, batch_id, batch_id),
+    )[0]["n"]
+    batch_counts = execute_query(
+        """
+        SELECT COUNT(*) AS n
+        FROM trade_market_rebuild_batch b
+        LEFT JOIN (
+          SELECT stock_code, COUNT(*) AS n FROM trade_stock_daily_raw_rebuild
+          WHERE rebuild_batch_id=%s GROUP BY stock_code
+        ) r ON r.stock_code=b.stock_code
+        LEFT JOIN (
+          SELECT stock_code, COUNT(*) AS n FROM trade_stock_daily_qfq_rebuild
+          WHERE rebuild_batch_id=%s GROUP BY stock_code
+        ) q ON q.stock_code=b.stock_code
+        LEFT JOIN (
+          SELECT stock_code, COUNT(*) AS n FROM trade_stock_daily_bfq_rebuild
+          WHERE rebuild_batch_id=%s GROUP BY stock_code
+        ) h ON h.stock_code=b.stock_code
+        WHERE b.batch_id=%s AND b.status='complete'
+          AND (b.raw_rows<>COALESCE(r.n, 0)
+            OR b.qfq_rows<>COALESCE(q.n, 0)
+            OR b.hfq_rows<>COALESCE(h.n, 0))
+        """,
+        (batch_id, batch_id, batch_id, batch_id),
+    )[0]["n"]
     aggregate = execute_query(
         """
         SELECT
           SUM(zero_price) AS zero_price_rows,
+          SUM(non_finite) AS non_finite_rows,
           SUM(invalid_ohlc) AS invalid_ohlc_rows
         FROM (
           SELECT
             (open_price=0 OR high_price=0 OR low_price=0 OR close_price=0) zero_price,
+            (NOT (open_price <=> open_price) OR NOT (high_price <=> high_price)
+             OR NOT (low_price <=> low_price) OR NOT (close_price <=> close_price)
+             OR NOT (amount <=> amount)) non_finite,
             (low_price>high_price OR low_price>LEAST(open_price,close_price)
              OR high_price<GREATEST(open_price,close_price)) invalid_ohlc
           FROM trade_stock_daily_raw_rebuild WHERE rebuild_batch_id=%s
           UNION ALL
           SELECT
             (open_price=0 OR high_price=0 OR low_price=0 OR close_price=0),
+            (NOT (open_price <=> open_price) OR NOT (high_price <=> high_price)
+             OR NOT (low_price <=> low_price) OR NOT (close_price <=> close_price)
+             OR NOT (amount <=> amount)),
             (low_price>high_price OR low_price>LEAST(open_price,close_price)
              OR high_price<GREATEST(open_price,close_price))
           FROM trade_stock_daily_qfq_rebuild WHERE rebuild_batch_id=%s
           UNION ALL
           SELECT
             (open_price=0 OR high_price=0 OR low_price=0 OR close_price=0),
+            (NOT (open_price <=> open_price) OR NOT (high_price <=> high_price)
+             OR NOT (low_price <=> low_price) OR NOT (close_price <=> close_price)
+             OR NOT (amount <=> amount)),
             (low_price>high_price OR low_price>LEAST(open_price,close_price)
              OR high_price<GREATEST(open_price,close_price))
           FROM trade_stock_daily_bfq_rebuild WHERE rebuild_batch_id=%s
@@ -292,6 +346,36 @@ def audit_rebuild(batch_id: str) -> RebuildAuditReport:
         """,
         (batch_id, batch_id, batch_id),
     )[0]
+    extra_adjusted = execute_query(
+        """
+        SELECT
+          (SELECT COUNT(*) FROM trade_stock_daily_qfq_rebuild q
+           LEFT JOIN trade_stock_daily_raw_rebuild r
+             ON r.stock_code=q.stock_code AND r.trade_date=q.trade_date
+                AND r.rebuild_batch_id=%s
+           WHERE q.rebuild_batch_id=%s AND r.stock_code IS NULL)
+          +
+          (SELECT COUNT(*) FROM trade_stock_daily_bfq_rebuild b
+           LEFT JOIN trade_stock_daily_raw_rebuild r
+             ON r.stock_code=b.stock_code AND r.trade_date=b.trade_date
+                AND r.rebuild_batch_id=%s
+           WHERE b.rebuild_batch_id=%s AND r.stock_code IS NULL) AS n
+        """,
+        (batch_id, batch_id, batch_id, batch_id),
+    )[0]["n"]
+    rollback_collisions = execute_query(
+        """
+        SELECT COUNT(*) AS n FROM information_schema.tables
+        WHERE table_schema=DATABASE() AND table_name IN (
+          'trade_stock_daily_raw_rollback_20261014',
+          'trade_stock_daily_qfq_rollback_20261014',
+          'trade_stock_daily_bfq_rollback_20261014',
+          'trade_stock_daily_raw_rejected_20261014',
+          'trade_stock_daily_qfq_rejected_20261014',
+          'trade_stock_daily_bfq_rejected_20261014'
+        )
+        """
+    )[0]["n"]
     metrics = {
         "missing_expected_codes": int(universe.get("missing_expected_codes") or 0),
         "unexpected_completed_codes": int(universe.get("unexpected_completed_codes") or 0),
@@ -299,11 +383,14 @@ def audit_rebuild(batch_id: str) -> RebuildAuditReport:
         "staging_code_mismatches": int(staging.get("staging_code_mismatches") or 0),
         "foreign_batch_rows": int(staging.get("foreign_batch_rows") or 0),
         "incomplete_batches": int(incomplete or 0),
-        "duplicate_rows": 0,
+        "duplicate_rows": int(duplicates or 0),
+        "batch_row_count_mismatches": int(batch_counts or 0),
         "zero_price_rows": int(aggregate.get("zero_price_rows") or 0),
-        "non_finite_rows": 0,
+        "non_finite_rows": int(aggregate.get("non_finite_rows") or 0),
         "invalid_ohlc_rows": int(aggregate.get("invalid_ohlc_rows") or 0),
         "mode_date_mismatches": int(alignment.get("mode_date_mismatches") or 0),
+        "extra_adjusted_rows": int(extra_adjusted or 0),
         "mode_volume_amount_mismatches": int(alignment.get("mode_volume_amount_mismatches") or 0),
+        "rollback_table_collisions": int(rollback_collisions or 0),
     }
     return assess_rebuild_metrics(metrics, [])

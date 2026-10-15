@@ -85,7 +85,8 @@ def test_cutover_sql_is_guarded_reversible_and_never_truncates():
     sql = (Path(__file__).parents[2] / "sql" / "20261014_market_rebuild_cutover.sql").read_text(encoding="utf-8")
 
     assert "SIGNAL SQLSTATE '45000'" in sql
-    assert "zero_price" in sql
+    assert "open_price=0" in sql
+    assert "invalid price or foreign batch rows found in rebuild tables" in sql
     assert "RENAME TABLE" in sql
     assert "rollback_20261014" in sql
     assert "TRUNCATE" not in sql.upper()
@@ -93,6 +94,11 @@ def test_cutover_sql_is_guarded_reversible_and_never_truncates():
     assert "pilot-%" in sql
     assert "qmt-cache-validation%" in sql
     assert "expected universe differs from canonical universe" in sql
+    assert "rollback table name already exists" in sql
+    assert "rejected table name already exists" in sql
+    assert "metadata row counts differ from staging" in sql
+    assert "adjusted table contains rows absent from raw" in sql
+    assert "rebuild_batch_id IS NULL" in sql
 
 
 def test_universe_or_foreign_batch_mismatch_blocks_cutover():
@@ -106,3 +112,29 @@ def test_universe_or_foreign_batch_mismatch_blocks_cutover():
 
     assert not report.can_cutover
     assert "missing_expected_codes=1" in report.hard_failures
+
+
+def test_proof_backed_integrity_metrics_block_cutover():
+    report = assess_rebuild_metrics({
+        "duplicate_rows": 1,
+        "non_finite_rows": 1,
+        "batch_row_count_mismatches": 1,
+        "extra_adjusted_rows": 1,
+        "rollback_table_collisions": 1,
+    }, comparisons=[])
+
+    assert not report.can_cutover
+    assert set(report.hard_failures) == {
+        "duplicate_rows=1",
+        "non_finite_rows=1",
+        "batch_row_count_mismatches=1",
+        "extra_adjusted_rows=1",
+        "rollback_table_collisions=1",
+    }
+
+
+def test_audit_source_has_no_hardcoded_zero_integrity_metrics():
+    source = (Path(__file__).parents[2] / "src" / "data_ingestion" / "market_rebuild_audit.py").read_text(encoding="utf-8")
+
+    assert '"duplicate_rows": 0' not in source
+    assert '"non_finite_rows": 0' not in source
