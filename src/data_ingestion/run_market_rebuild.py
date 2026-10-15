@@ -54,6 +54,29 @@ def remaining_codes(codes: list[str], store: RebuildStore) -> list[str]:
     return [code for code in codes if code not in finished]
 
 
+def initialize_session_codes(
+    codes: list[str],
+    store: RebuildStore,
+    *,
+    dry_run: bool,
+    no_resume: bool,
+    limit: int | None,
+) -> tuple[list[str], str]:
+    """Persist/hash the full universe before limiting one session's work."""
+
+    universe_sha256 = hashlib.sha256(
+        "".join(f"{code}\n" for code in codes).encode("utf-8")
+    ).hexdigest()
+    session_codes = list(codes)
+    if not dry_run:
+        universe_sha256 = store.prepare_universe(codes)
+        if not no_resume:
+            session_codes = remaining_codes(codes, store)
+    if limit is not None:
+        session_codes = session_codes[:limit]
+    return session_codes, universe_sha256
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Rebuild market prices into staging tables")
     parser.add_argument("--provider", choices=("qmt-bootstrap",), default="qmt-bootstrap")
@@ -78,18 +101,16 @@ def main(argv: list[str] | None = None) -> int:
     if args.batch_size <= 0 or args.start_date > args.end_date:
         return 2
     codes = _load_codes(args.stock_codes, args.codes_file)
-    if args.limit is not None:
-        codes = codes[:args.limit]
     provider = QMTBootstrapProvider()
     fallback_provider = AKShareMarketProvider(max_attempts=1, request_timeout=15.0)
     store = RebuildStore(batch_id=args.batch_id)
-    universe_sha256 = hashlib.sha256(
-        "".join(f"{code}\n" for code in codes).encode("utf-8")
-    ).hexdigest()
-    if not args.dry_run:
-        universe_sha256 = store.prepare_universe(codes)
-    if not args.dry_run and not args.no_resume:
-        codes = remaining_codes(codes, store)
+    codes, universe_sha256 = initialize_session_codes(
+        codes,
+        store,
+        dry_run=args.dry_run,
+        no_resume=args.no_resume,
+        limit=args.limit,
+    )
 
     report_path = args.report or Path("reports/market-rebuild") / args.batch_id / "run.json"
     progress_path = report_path.with_suffix(".progress.jsonl")
