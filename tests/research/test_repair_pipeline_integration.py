@@ -187,7 +187,7 @@ def test_run_daily_pipeline_skips_collector_when_flagged() -> None:
 
 
 def test_run_daily_pipeline_collector_failure_does_not_skip_repair() -> None:
-    """A collector exception must not abort the repair stage."""
+    """A collector exception must not abort repair or report overall success."""
 
     from data_ingestion import run_daily_pipeline
 
@@ -203,7 +203,26 @@ def test_run_daily_pipeline_collector_failure_does_not_skip_repair() -> None:
                 "--allow-estimated-pit",
             ])
     assert repair_mock.call_count == 1
-    assert rc == 0  # 0 because the only completed stage succeeded
+    assert rc == 1
+
+
+def test_run_daily_pipeline_propagates_collector_nonzero_return() -> None:
+    """A clean collector return must still preserve its failure status."""
+
+    from data_ingestion import run_daily_pipeline
+
+    with mock.patch.object(
+        run_daily_pipeline, "run_collector", return_value=7,
+    ):
+        with mock.patch.object(
+            run_daily_pipeline, "run_repair_runner", return_value=0,
+        ) as repair_mock:
+            rc = run_daily_pipeline.main([
+                "--as-of-date", "2026-08-17", "--mode", "backfill",
+                "--allow-estimated-pit",
+            ])
+    assert repair_mock.call_count == 1
+    assert rc == 1
 
 
 def test_migration_sql_dedupe_via_source_hash() -> None:

@@ -27,9 +27,9 @@ Usage
     python -m data_ingestion.run_daily_pipeline \\
         --as-of-date 2026-08-17 --mode backfill --sector "专业服务"
 
-The pipeline is best-effort: a failure in the collector does not abort
-the Repair Alpha run, and vice versa.  Operator can scan the printed
-counters to confirm both stages emitted the expected row counts.
+The pipeline attempts both stages even if one fails.  Its process exit
+status is non-zero when either enabled stage fails, so schedulers cannot
+mistake a partial run for success.
 """
 
 from __future__ import annotations
@@ -109,12 +109,12 @@ def run_collector(args: argparse.Namespace) -> int:
     saved_argv = sys.argv
     sys.argv = ["2-财务数据采集"]
     try:
-        module.main()
+        rc = module.main()
     finally:
         sys.argv = saved_argv
     elapsed = time.time() - t0
     print(f"[1/2] Collector done in {elapsed:.1f}s")
-    return 0
+    return 0 if rc is None else int(rc)
 
 
 def run_repair_runner(args: argparse.Namespace) -> int:
@@ -169,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
             rc_repair = run_repair_runner(args)
         except Exception as exc:
             print(f"[2/2] Repair runner failed: {exc!r}")
-    return 0 if (args.skip_repair or rc_repair == 0) else 1
+    return 0 if rc_collector == 0 and rc_repair == 0 else 1
 
 
 if __name__ == "__main__":
