@@ -18,6 +18,7 @@ from .market_volume_contract import assess_volume
 
 MODES = ("none", "front", "back")
 FIELDS = ("open", "high", "low", "close", "volume", "amount", "preClose", "suspendFlag")
+MIN_DOMINANT_VOLUME_UNIT_RATIO = 0.97
 
 
 def _trade_date(value: object) -> str:
@@ -117,7 +118,7 @@ class QMTBootstrapProvider:
                 units.append(assessment.unit)
         unit_counts = Counter(units)
         dominant_unit = unit_counts.most_common(1)[0] if unit_counts else ("lot", 0)
-        if units and dominant_unit[1] / len(units) < 0.99:
+        if units and dominant_unit[1] / len(units) < MIN_DOMINANT_VOLUME_UNIT_RATIO:
             raise ValueError(f"inconsistent volume unit: {dict(unit_counts)}")
         if eligible and (not units or len(units) / len(eligible) < 0.80):
             raise ValueError(
@@ -207,12 +208,12 @@ class QMTBootstrapProvider:
                 except Exception as exc:
                     failures_by_code[code][mode] = f"{type(exc).__name__}: {exc}"
                     continue
+                gaps_by_code[code].extend(gaps)
+                quarantines_by_code[code].extend(quarantines)
                 if not rows:
                     failures_by_code[code][mode] = "no_valid_rows_after_zero_fill_filter"
                     continue
                 rows_by_code[code][mode] = rows
-                gaps_by_code[code].extend(gaps)
-                quarantines_by_code[code].extend(quarantines)
 
         fetched_at = datetime.now(timezone.utc).isoformat()
         result: dict[str, MarketBatch] = {}

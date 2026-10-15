@@ -2,7 +2,6 @@
 
 import importlib
 import sys
-from datetime import date
 from typing import Any
 from unittest import mock
 
@@ -10,8 +9,6 @@ import pytest
 
 from morning_conference.sector_rotation2.research.financial.pit import PITStatus
 from morning_conference.sector_rotation2.research.financial.raw_store import FinancialRawStore
-from morning_conference.sector_rotation2.research.financial.providers import MiniQMTProvider
-from morning_conference.sector_rotation2.research.snapshot import InMemorySnapshotStore
 
 
 def _sample_records(code: str = "600000.SH", periods: int = 4) -> list[dict[str, Any]]:
@@ -51,65 +48,63 @@ def _import_collector():
     return importlib.import_module("data_ingestion.2-财务数据采集")
 
 
-from uuid import uuid4
+class _RecordingRawStore:
+    """In-memory PIT writer used to keep integration tests off the real DB."""
+
+    def __init__(self) -> None:
+        self.rows: list[dict[str, Any]] = []
+        self._source_hashes: set[str] = set()
+
+    def insert_raw(self, row: dict[str, Any]) -> int:
+        source_hash = row["source_hash"]
+        if source_hash in self._source_hashes:
+            return 0
+        self._source_hashes.add(source_hash)
+        self.rows.append(row)
+        return 1
 
 
-def test_commit_records_to_pit_writes_expected_rows() -> None:
+@pytest.fixture
+def pit_writer(monkeypatch):
+    collector = _import_collector()
+    store = _RecordingRawStore()
+    monkeypatch.setattr(collector, "FinancialRawStore", lambda: store)
+    return collector, store
+
+
+def test_commit_records_to_pit_writes_expected_rows(pit_writer) -> None:
     """The dual-write helper produces one PIT row per legacy record."""
 
-    collector = _import_collector()
-    code = f"TEST_{uuid4().hex[:8]}.SH"
+    collector, store = pit_writer
+    code = "600000.SH"
     records_by_code = {code: _sample_records(code=code)}
     count = collector._commit_records_to_pit(records_by_code=records_by_code)
     assert count == 4
+    assert len(store.rows) == 4
 
 
-def test_commit_records_to_pit_dedupes_on_source_hash() -> None:
+def test_commit_records_to_pit_dedupes_on_source_hash(pit_writer) -> None:
     """Calling the helper twice with identical records is idempotent."""
 
-    collector = _import_collector()
-    code = f"TEST_{uuid4().hex[:8]}.SH"
+    collector, store = pit_writer
+    code = "600000.SH"
     records_by_code = {code: _sample_records(code=code, periods=2)}
     first = collector._commit_records_to_pit(records_by_code=records_by_code)
     second = collector._commit_records_to_pit(records_by_code=records_by_code)
     assert first == 2
     assert second == 0  # INSERT IGNORE dedupes
+    assert len(store.rows) == 2
 
 
-def test_commit_records_to_pit_marks_pit_estimated() -> None:
+def test_commit_records_to_pit_marks_pit_estimated(pit_writer) -> None:
     """Legacy rows have no announcement_date, so they fall back to PIT_ESTIMATED."""
 
-    collector = _import_collector()
-    code = f"TEST_{uuid4().hex[:8]}.SH"
+    collector, store = pit_writer
+    code = "600000.SH"
     records_by_code = {code: _sample_records(code=code, periods=1)}
-    store = FinancialRawStore()
     collector._commit_records_to_pit(records_by_code=records_by_code)
-    # Read back via the provider.
-    provider = MiniQMTProvider(
-        fetch=lambda sql, params: [
-            {
-                "stock_code": "600000.SH",
-                "source_table": "miniqmt",
-                "report_date": date(2026, 3, 31),
-                "period_type": "quarterly",
-                "announcement_date": None,
-                "first_seen_at": date(2026, 3, 31),
-                "source_hash": "x",
-                "is_restated": 0,
-                "source_verified": 0,
-                "data_source": "qmt",
-                "revenue": 100.0,
-                "net_profit": 10.0,
-                "total_assets": 1000.0,
-                "total_equity": 400.0,
-                "operating_cash_flow": 20.0,
-            }
-        ]
-    )
-    rows = list(provider.iter_raw_rows(as_of_date=date(2026, 8, 17), stock_codes=["600000.SH"]))
-    # The test only validates that the helper ran (no exception).  The
-    # ``pit_status`` payload is asserted in the unit test above.
-    assert isinstance(rows, list)
+    assert len(store.rows) == 1
+    assert store.rows[0]["pit_status"] == PITStatus.ESTIMATED.value
 
 
 def test_dual_write_does_not_break_legacy_table() -> None:

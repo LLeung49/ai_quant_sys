@@ -57,6 +57,29 @@ def test_zero_fill_rows_are_recorded_as_gaps_and_never_returned_as_prices():
     assert all(call["fill_data"] is False for call in gateway.calls)
 
 
+def test_all_zero_response_preserves_gap_evidence_on_incomplete_batch():
+    class AllZeroGateway(Gateway):
+        def get_market_data_ex(self, **kwargs):
+            self.calls.append(kwargs)
+            zero = pd.DataFrame(
+                [{
+                    "open": 0, "high": 0, "low": 0, "close": 0,
+                    "volume": 0, "amount": 0, "preClose": 0,
+                    "suspendFlag": 1,
+                }],
+                index=["20260917"],
+            )
+            return {code: zero for code in kwargs["stock_list"]}
+
+    batch = QMTBootstrapProvider(gateway=AllZeroGateway()).fetch_batch(
+        "000001.SZ", date(2026, 9, 17), date(2026, 9, 18)
+    )
+
+    assert not batch.is_complete
+    assert len(batch.gaps) == 3
+    assert {gap["mode"] for gap in batch.gaps} == {"none", "front", "back"}
+
+
 def test_provider_fetches_multiple_codes_in_three_bridge_calls():
     gateway = Gateway()
     provider = QMTBootstrapProvider(gateway=gateway)
@@ -212,6 +235,37 @@ def test_volume_unit_ignores_one_conflicting_low_value_row_in_large_batch():
         "amount": 100000.0,
         "close_price": 10.0,
     })
+    rows = {
+        mode: [dict(row) for row in raw_rows]
+        for mode in ("none", "front", "back")
+    }
+
+    QMTBootstrapProvider._normalize_batch_volumes(rows)
+
+    assert rows["none"][-1]["volume"] == 10000
+
+
+def test_volume_unit_accepts_three_percent_classification_noise():
+    """Money-market ETF history can contain a small noisy minority."""
+
+    raw_rows = [
+        {
+            "trade_date": f"2026-{1 + (offset // 28):02d}-{1 + (offset % 28):02d}",
+            "volume": 100,
+            "amount": 100000.0,
+            "close_price": 10.0,
+        }
+        for offset in range(97)
+    ]
+    raw_rows.extend(
+        {
+            "trade_date": f"2026-04-{18 + offset:02d}",
+            "volume": 10000,
+            "amount": 100000.0,
+            "close_price": 10.0,
+        }
+        for offset in range(3)
+    )
     rows = {
         mode: [dict(row) for row in raw_rows]
         for mode in ("none", "front", "back")
