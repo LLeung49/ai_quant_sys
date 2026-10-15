@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "batch_id": "market-full-qmt-20261014",
+  "classification": "invalid_legacy_zero_only_code",
+  "verified_at": "2026-10-15",
+  "summary": {
+    "code_count": 13,
+    "qmt_instrument_detail": "absent",
+    "canonical_rows_per_table_per_code": 486,
+    "canonical_zero_rows_per_table_per_code": 486,
+    "canonical_date_range": [
+      "2024-09-23",
+      "2026-09-22"
+    ],
+    "canonical_raw_source": "qmt_context",
+    "staging_rows": 0
+  },
+  "codes": [
+    "158036.SZ",
+    "158037.SZ",
+    "158043.SZ",
+    "158047.SZ",
+    "158051.SZ",
+    "158052.SZ",
+    "158055.SZ",
+    "158062.SZ",
+    "158066.SZ",
+    "158067.SZ",
+    "158072.SZ",
+    "159047.SZ",
+    "159089.SZ"
+  ],
+  "decision": {
+    "action": "exclude_from_cutover_active_universe",
+    "manifest_preserved": true,
+    "evidence_table": "trade_market_rebuild_excluded_code"
+  },
+  "safety": {
+    "canonical_tables_modified": false,
+    "production_cutover_performed": false
+  }
+}
