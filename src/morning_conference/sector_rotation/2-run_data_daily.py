@@ -43,7 +43,6 @@ from numpy import full
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from industry_meta import sync_sw_classification
-from stock_kline_loader import sync_all_kline
 from sector_index_builder import rebuild_all_sectors
 
 
@@ -63,8 +62,6 @@ def main():
 
     if args.refresh_meta:
         sync_sw_classification()
-
-    # sync_all_kline(incremental=True, level=args.level)
 
     rebuild_all_sectors(level=args.level, days=args.days, full=False)
 

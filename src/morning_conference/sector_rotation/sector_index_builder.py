@@ -296,7 +296,7 @@ def rebuild_all_sectors(level: int = 2,
 
     all_dates = get_all_trade_dates()
     if not all_dates:
-        print("[ERROR] trade_stock_daily_qfq 没有任何数据, 请先跑 stock_kline_loader.py")
+        print("[ERROR] trade_stock_daily_qfq 没有任何数据，请先运行 8-原始行情与复权数据采集.py")
         return 0
 
     if full:

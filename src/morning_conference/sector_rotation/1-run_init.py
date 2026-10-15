@@ -22,7 +22,6 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from data_ingestion.db_config import execute_update
 from industry_meta import sync_sw_classification
-from stock_kline_loader import sync_all_kline
 from sector_index_builder import rebuild_all_sectors
 
 
@@ -74,9 +73,12 @@ def main():
         print("\n[SKIP] 跳过申万分类同步\n")
 
     if not args.skip_kline:
-        sync_all_kline(start_date=args.start, incremental=False, level=args.level)
+        print(
+            "\n[INFO] 个股行情由 data_ingestion/8-原始行情与复权数据采集.py "
+            "预先写入 trade_stock_daily_qfq；初始化流程不再自行下载。\n"
+        )
     else:
-        print("\n[SKIP] 跳过 K 线下载\n")
+        print("\n[SKIP] 跳过行情前置说明\n")
 
     if not args.skip_index:
         rebuild_all_sectors(level=args.level, full=True, start_date=args.start)
