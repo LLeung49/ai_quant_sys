@@ -135,3 +135,88 @@ def test_volume_normalization_indexes_each_projection_once():
     QMTBootstrapProvider._normalize_batch_volumes(rows)
 
     assert all(projection.iterations <= 2 for projection in rows.values())
+
+
+def test_volume_unit_uses_batch_consensus_for_isolated_amount_noise():
+    raw_rows = [
+        {
+            "trade_date": f"2026-01-{day:02d}",
+            "volume": 100,
+            "amount": 100000.0,
+            "close_price": 10.0,
+        }
+        for day in range(1, 21)
+    ]
+    raw_rows.append({
+        "trade_date": "2026-01-21",
+        "volume": 1,
+        "amount": 11.0,
+        "close_price": 0.809,
+    })
+    rows = {
+        mode: [dict(row) for row in raw_rows]
+        for mode in ("none", "front", "back")
+    }
+
+    QMTBootstrapProvider._normalize_batch_volumes(rows)
+
+    assert rows["none"][-1]["volume"] == 1
+    assert all(
+        projection[-1]["volume"] == 1
+        for projection in rows.values()
+    )
+
+
+def test_volume_unit_rejects_a_materially_mixed_batch():
+    raw_rows = []
+    for day in range(1, 11):
+        raw_rows.append({
+            "trade_date": f"2026-01-{day:02d}",
+            "volume": 100,
+            "amount": 100000.0,
+            "close_price": 10.0,
+        })
+    for day in range(11, 21):
+        raw_rows.append({
+            "trade_date": f"2026-01-{day:02d}",
+            "volume": 10000,
+            "amount": 100000.0,
+            "close_price": 10.0,
+        })
+    rows = {
+        mode: [dict(row) for row in raw_rows]
+        for mode in ("none", "front", "back")
+    }
+
+    try:
+        QMTBootstrapProvider._normalize_batch_volumes(rows)
+    except ValueError as exc:
+        assert "inconsistent volume unit" in str(exc)
+    else:
+        raise AssertionError("mixed lot/share volume units must be rejected")
+
+
+def test_volume_unit_ignores_one_conflicting_low_value_row_in_large_batch():
+    raw_rows = [
+        {
+            "trade_date": f"2026-{1 + (offset // 28):02d}-{1 + (offset % 28):02d}",
+            "volume": 100,
+            "amount": 100000.0,
+            "close_price": 10.0,
+        }
+        for offset in range(100)
+    ]
+    raw_rows.append({
+        "trade_date": "2026-04-17",
+        "volume": 10000,
+        "amount": 100000.0,
+        "close_price": 10.0,
+    })
+    rows = {
+        mode: [dict(row) for row in raw_rows]
+        for mode in ("none", "front", "back")
+    }
+
+    QMTBootstrapProvider._normalize_batch_volumes(rows)
+
+    assert rows["none"][-1]["volume"] == 10000
