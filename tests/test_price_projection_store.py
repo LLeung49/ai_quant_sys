@@ -94,7 +94,7 @@ def test_raw_rows_preserve_pre_close_and_suspend_flag(monkeypatch):
     sql, rows = written[0]
     assert "INSERT INTO trade_stock_daily_raw" in sql
     assert rows == [
-        ("600519.SH", "2025-01-02", 10.0, 11.0, 9.0, 10.5, 100, 1000.0, 9.8, 0, "xtquant")
+        ("600519.SH", "2025-01-02", 10.0, 11.0, 9.0, 10.5, 100, 1000.0, 9.8, 0, "akshare")
     ]
 
 

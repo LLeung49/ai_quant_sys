@@ -136,7 +136,7 @@ def write_daily_rows(
                 row["stock_code"], row["trade_date"], row["open_price"],
                 row["high_price"], row["low_price"], row["close_price"],
                 row["volume"], row["amount"], row.get("pre_close"),
-                row.get("suspend_flag"), row.get("data_source", "xtquant"),
+                row.get("suspend_flag"), row.get("data_source", "akshare"),
             )
             for row in rows
         ]
@@ -177,7 +177,7 @@ def write_daily_rows_batch(
                 row["stock_code"], row["trade_date"], row["open_price"],
                 row["high_price"], row["low_price"], row["close_price"],
                 row["volume"], row["amount"], row.get("pre_close"),
-                row.get("suspend_flag"), row.get("data_source", "xtquant"),
+                row.get("suspend_flag"), row.get("data_source", "akshare"),
             )
             for row in rows
         ]
