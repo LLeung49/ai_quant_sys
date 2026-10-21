@@ -126,6 +126,7 @@ def _load_candidates(
                   ) AS current_rank
                   FROM research_candidate_snapshot AS s
                  WHERE as_of_date=%s AND sector_level=%s AND snapshot_mode=%s
+                   AND NOT (strategy_type='stock_repair' AND validation_status='rejected')
                    AND strategy_type IN ({placeholders}) {sector_filter}
               ) AS current_snapshot
               LEFT JOIN trade_stock_status AS stock_status

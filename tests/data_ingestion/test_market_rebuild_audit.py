@@ -102,6 +102,7 @@ def test_cutover_sql_is_guarded_reversible_and_never_truncates():
     assert "trade_market_rebuild_excluded_code" in sql
     assert "excluded code has staging rows" in sql
     assert "unresolved zero-fill gaps overlap expected history" in sql
+    assert "staging rows fall outside approved code date range" in sql
 
 
 def test_universe_or_foreign_batch_mismatch_blocks_cutover():
@@ -126,6 +127,7 @@ def test_proof_backed_integrity_metrics_block_cutover():
         "rollback_table_collisions": 1,
         "exclusion_manifest_mismatches": 1,
         "unresolved_gap_rows": 1,
+        "rows_outside_batch_range": 1,
     }, comparisons=[])
 
     assert not report.can_cutover
@@ -137,6 +139,7 @@ def test_proof_backed_integrity_metrics_block_cutover():
         "rollback_table_collisions=1",
         "exclusion_manifest_mismatches=1",
         "unresolved_gap_rows=1",
+        "rows_outside_batch_range=1",
     }
 
 

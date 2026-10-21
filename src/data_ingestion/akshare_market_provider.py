@@ -16,7 +16,7 @@ from .market_row_validation import validate_market_row, validate_projection_batc
 
 
 MODE_ADJUST = {"none": "", "front": "qfq", "back": "hfq"}
-ETF_CODE_PREFIXES = ("15", "16", "50", "51", "56", "58")
+ETF_CODE_PREFIXES = ("15", "16", "50", "51", "52", "53", "55", "56", "58")
 COLUMN_ALIASES = {
     "trade_date": ("日期", "date", "trade_date"),
     "open_price": ("开盘", "open", "open_price"),
@@ -47,7 +47,9 @@ class AKShareMarketProvider:
         stock_fetcher: Callable | None = None,
         etf_fetcher: Callable | None = None,
         stock_fallback_fetcher: Callable | None = None,
+        stock_secondary_fallback_fetcher: Callable | None = None,
         etf_fallback_fetcher: Callable | None = None,
+        etf_dividend_fetcher: Callable | None = None,
         max_attempts: int = 3,
         request_timeout: float = 30.0,
         sleeper: Callable[[float], None] = time.sleep,
@@ -66,10 +68,20 @@ class AKShareMarketProvider:
             if stock_fallback_fetcher is not None or custom_stock
             else ak.stock_zh_a_daily
         )
+        self.stock_secondary_fallback_fetcher = (
+            stock_secondary_fallback_fetcher
+            if stock_secondary_fallback_fetcher is not None or custom_stock
+            else ak.stock_zh_a_hist_tx
+        )
         self.etf_fallback_fetcher = (
             etf_fallback_fetcher
             if etf_fallback_fetcher is not None or custom_etf
             else ak.fund_etf_hist_sina
+        )
+        self.etf_dividend_fetcher = (
+            etf_dividend_fetcher
+            if etf_dividend_fetcher is not None or custom_etf
+            else ak.fund_etf_dividend_sina
         )
         self.max_attempts = max_attempts
         self.request_timeout = request_timeout
@@ -195,6 +207,42 @@ class AKShareMarketProvider:
         prefix = "sh" if stock_code.endswith(".SH") else "sz"
         return prefix + stock_code.split(".", 1)[0]
 
+    def _adjust_sina_etf_frame(self, frame, dividends, mode: str, end_date: date):
+        """Apply AKShare/Sina cumulative cash dividends to ETF OHLC rows."""
+
+        if mode == "none":
+            return frame
+        if dividends is None:
+            raise ValueError("ETF dividend response is unavailable")
+        events: list[tuple[str, float]] = []
+        if len(dividends):
+            if len(dividends.columns) < 2:
+                raise ValueError("ETF dividend schema drift")
+            date_column = dividends.columns[0]
+            value_column = dividends.columns[-1]
+            for _, event in dividends.iterrows():
+                event_date = _date_text(event[date_column])
+                if event_date <= end_date.isoformat():
+                    events.append((event_date, float(event[value_column])))
+        events.sort()
+        latest = events[-1][1] if events else 0.0
+        adjusted = frame.copy(deep=True)
+        columns = self._column_map(adjusted)
+        for index, source in adjusted.iterrows():
+            row_date = _date_text(source[columns["trade_date"]])
+            cumulative = 0.0
+            for event_date, value in events:
+                if event_date > row_date:
+                    break
+                cumulative = value
+            offset = cumulative if mode == "back" else cumulative - latest
+            for field in ("open_price", "high_price", "low_price", "close_price"):
+                column = columns[field]
+                adjusted.at[index, column] = round(
+                    float(source[column]) + offset, 6
+                )
+        return adjusted
+
     def fetch_batch(
         self, stock_code: str, start_date: date, end_date: date
     ) -> MarketBatch:
@@ -206,6 +254,8 @@ class AKShareMarketProvider:
         failures: dict[str, str] = {}
         quarantines: list[dict] = []
         interfaces: dict[str, str] = {}
+        etf_dividends = None
+        etf_dividends_loaded = False
         for mode, adjust in MODE_ADJUST.items():
             kwargs = {
                 "symbol": stock_code.split(".", 1)[0],
@@ -227,7 +277,7 @@ class AKShareMarketProvider:
                     self.etf_fallback_fetcher if etf
                     else self.stock_fallback_fetcher
                 )
-                if fallback is None or (etf and adjust):
+                if fallback is None:
                     failures[mode] = f"{type(exc).__name__}: {exc}"
                     continue
                 fallback_kwargs = {"symbol": self._sina_symbol(stock_code)}
@@ -239,23 +289,69 @@ class AKShareMarketProvider:
                     })
                 try:
                     frame = self._fetch_with_retry(fallback, fallback_kwargs)
+                    if etf and mode != "none":
+                        if self.etf_dividend_fetcher is None:
+                            raise ValueError("ETF dividend fallback is unavailable")
+                        if not etf_dividends_loaded:
+                            etf_dividends = self._fetch_with_retry(
+                                self.etf_dividend_fetcher,
+                                {"symbol": self._sina_symbol(stock_code)},
+                            )
+                            etf_dividends_loaded = True
+                        frame = self._adjust_sina_etf_frame(
+                            frame, etf_dividends, mode, end_date
+                        )
                     rows, mode_quarantines = self._normalize(
                         stock_code,
                         mode,
                         frame,
                         start_date,
                         end_date,
-                        volume_divisor=100 if not etf else 1,
+                        volume_divisor=100,
                     )
                     interfaces[mode] = (
-                        "fund_etf_hist_sina" if etf else "stock_zh_a_daily"
+                        (
+                            "fund_etf_hist_sina"
+                            if mode == "none"
+                            else "fund_etf_hist_sina+fund_etf_dividend_sina"
+                        )
+                        if etf else "stock_zh_a_daily"
                     )
                 except BaseException as fallback_exc:
-                    failures[mode] = (
-                        f"primary={type(exc).__name__}: {exc}; "
-                        f"fallback={type(fallback_exc).__name__}: {fallback_exc}"
-                    )
-                    continue
+                    secondary = self.stock_secondary_fallback_fetcher if not etf else None
+                    if secondary is None:
+                        failures[mode] = (
+                            f"primary={type(exc).__name__}: {exc}; "
+                            f"fallback={type(fallback_exc).__name__}: {fallback_exc}"
+                        )
+                        continue
+                    try:
+                        frame = self._fetch_with_retry(secondary, {
+                            "symbol": self._sina_symbol(stock_code),
+                            "start_date": start_date.strftime("%Y%m%d"),
+                            "end_date": end_date.strftime("%Y%m%d"),
+                            "adjust": adjust,
+                        })
+                        rows, mode_quarantines = self._normalize(
+                            stock_code,
+                            mode,
+                            frame,
+                            start_date,
+                            end_date,
+                            volume_divisor=(
+                                10000
+                                if stock_code.split(".", 1)[0].startswith("689")
+                                else 100
+                            ),
+                        )
+                        interfaces[mode] = "stock_zh_a_hist_tx"
+                    except BaseException as secondary_exc:
+                        failures[mode] = (
+                            f"primary={type(exc).__name__}: {exc}; "
+                            f"fallback={type(fallback_exc).__name__}: {fallback_exc}; "
+                            f"secondary={type(secondary_exc).__name__}: {secondary_exc}"
+                        )
+                        continue
             rows_by_mode[mode] = rows
             quarantines.extend(mode_quarantines)
 

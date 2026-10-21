@@ -8,12 +8,14 @@ by writing zero prices.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal, ROUND_HALF_UP
 import math
 from typing import Mapping, Sequence
 
 
 PRICE_FIELDS = ("open_price", "high_price", "low_price", "close_price")
 REQUIRED_MODES = ("none", "front", "back")
+STORAGE_PRICE_QUANTUM = Decimal("0.000001")
 
 
 @dataclass(frozen=True)
@@ -74,6 +76,16 @@ def validate_market_row(
             issues.append(ValidationIssue(
                 "zero_price", f"{field} must not be zero", stock_code,
                 trade_date, field,
+            ))
+        elif Decimal(str(number)).quantize(
+            STORAGE_PRICE_QUANTUM, rounding=ROUND_HALF_UP
+        ) == 0:
+            issues.append(ValidationIssue(
+                "zero_price_after_storage_rounding",
+                f"{field} would be stored as zero",
+                stock_code,
+                trade_date,
+                field,
             ))
         elif number < 0:
             if allow_negative_price:

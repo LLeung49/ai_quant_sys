@@ -93,7 +93,7 @@ def test_raw_rows_preserve_pre_close_and_suspend_flag(monkeypatch):
 
     sql, rows = written[0]
     assert "INSERT INTO trade_stock_daily_raw" in sql
-    assert rows == [
+    assert [row[:11] for row in rows] == [
         ("600519.SH", "2025-01-02", 10.0, 11.0, 9.0, 10.5, 100, 1000.0, 9.8, 0, "akshare")
     ]
 
@@ -111,7 +111,7 @@ def test_raw_rows_persist_the_actual_fallback_source(monkeypatch):
 
     sql, rows = written[0]
     assert "data_source" in sql
-    assert rows[0][-1] == "akshare"
+    assert rows[0][10] == "akshare"
 
 
 @pytest.mark.parametrize(
@@ -142,7 +142,7 @@ def test_adjusted_rows_write_adjustment_asof_to_its_own_table(monkeypatch, mode,
 
     sql, rows = written[0]
     assert f"INSERT INTO {table_name}" in sql
-    assert rows[-1][-1] == date(2025, 1, 3)
+    assert rows[-1][9] == date(2025, 1, 3)
 
 
 def test_batch_adjusted_rows_keep_each_stock_own_adjustment_asof(monkeypatch):
@@ -172,7 +172,7 @@ def test_batch_adjusted_rows_keep_each_stock_own_adjustment_asof(monkeypatch):
 
     sql, values = written[0]
     assert "INSERT INTO trade_stock_daily_qfq" in sql
-    assert [row[-1] for row in values] == [date(2025, 1, 1), date(2025, 1, 2)]
+    assert [row[9] for row in values] == [date(2025, 1, 1), date(2025, 1, 2)]
 
 
 def test_batch_write_splits_large_row_sets_into_database_chunks(monkeypatch):
@@ -195,3 +195,104 @@ def test_batch_write_splits_large_row_sets_into_database_chunks(monkeypatch):
         "front", rows, {"600519.SH": date(2025, 1, 1)}, chunk_size=2
     ) == 5
     assert [len(chunk) for chunk in calls] == [2, 2, 1]
+
+
+def test_projection_batch_rolls_back_all_modes_if_one_write_fails(monkeypatch):
+    events = []
+    class Cursor:
+        def executemany(self, sql, values):
+            events.append(sql)
+            if 'trade_stock_daily_bfq' in sql:
+                raise RuntimeError('last projection failed')
+            return len(values)
+        def close(self): pass
+    class Connection:
+        def cursor(self): return Cursor()
+        def commit(self): events.append('commit')
+        def rollback(self): events.append('rollback')
+        def close(self): pass
+    monkeypatch.setattr(store, 'get_connection', lambda: Connection())
+    row = {
+        'stock_code': '600519.SH', 'trade_date': '2026-09-18',
+        'open_price': 10, 'high_price': 11, 'low_price': 9,
+        'close_price': 10.5, 'volume': 100, 'amount': 1000,
+    }
+    with pytest.raises(RuntimeError, match='last projection failed'):
+        store.write_projection_batch({mode: [dict(row)] for mode in ('none', 'front', 'back')},
+                                     date(2026, 9, 18))
+    assert len([event for event in events if 'INSERT INTO' in event]) == 3
+    assert 'rollback' in events
+    assert 'commit' not in events
+
+
+def test_projection_batch_rejects_zero_before_opening_transaction(monkeypatch):
+    monkeypatch.setattr(store, 'get_connection', lambda: pytest.fail('database touched'))
+    row = {
+        'stock_code': '600519.SH', 'trade_date': '2026-09-18',
+        'open_price': 0, 'high_price': 0, 'low_price': 0,
+        'close_price': 0, 'volume': 0, 'amount': 0,
+    }
+    with pytest.raises(ValueError, match='market row validation failed'):
+        store.write_projection_batch({mode: [dict(row)] for mode in ('none', 'front', 'back')},
+                                     date(2026, 9, 18))
+
+
+def test_projection_batch_supplies_metadata_required_by_cutover_schema(monkeypatch):
+    writes = []
+
+    class Cursor:
+        def executemany(self, sql, values):
+            writes.append((sql, list(values)))
+            return len(values)
+
+        def close(self):
+            pass
+
+    class Connection:
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            pass
+
+        def rollback(self):
+            pytest.fail("valid projection should commit")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(store, "get_connection", lambda: Connection())
+    row = {
+        "stock_code": "000001.SZ",
+        "trade_date": "2026-10-16",
+        "open_price": 10,
+        "high_price": 11,
+        "low_price": 9,
+        "close_price": 10.5,
+        "volume": 100,
+        "amount": 1000,
+        "data_source": "akshare",
+    }
+
+    store.write_projection_batch(
+        {mode: [dict(row)] for mode in ("none", "front", "back")},
+        date(2026, 10, 18),
+    )
+
+    assert len(writes) == 3
+    for sql, values in writes:
+        assert "rebuild_batch_id" in sql
+        assert "rebuild_source" in sql
+        assert "rebuild_fetched_at" in sql
+        assert "rebuild_fingerprint" in sql
+        assert "rebuild_validation_status" in sql
+        value = values[0]
+        assert "daily-akshare-20261018" in value
+        assert "akshare_daily" in value
+        assert any(isinstance(item, __import__("datetime").datetime) for item in value)
+        assert any(
+            isinstance(item, str)
+            and len(item) == 64
+            and set(item) <= set("0123456789abcdef")
+            for item in value
+        )

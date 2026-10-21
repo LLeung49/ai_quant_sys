@@ -23,6 +23,13 @@ class Cursor:
     def executemany(self, sql: str, rows: list[tuple[object, ...]]) -> None:
         self.executemany_calls.append((sql, rows))
 
+    def execute(self, sql, params):
+        self.parameters = params
+
+    def fetchall(self):
+        return [(source_id, "backfill" if source_id == 101 else "delayed_shadow")
+                for source_id in self.parameters]
+
     def close(self) -> None: pass
 
 
@@ -97,6 +104,14 @@ def test_persisted_label_carries_provenance_and_non_null_benchmark_identity() ->
 def test_forward_label_requires_snapshot_identity() -> None:
     with pytest.raises(ValueError, match="source_snapshot_id"):
         persist_forward_labels(Connection(), [label(source_snapshot_id=None)], context())
+
+
+def test_label_write_rechecks_snapshot_eligibility_before_insert():
+    connection = Connection()
+    connection.cursor_instance.fetchall = lambda: []
+    affected = persist_forward_labels(connection, [label()], context())
+    assert affected == 0
+    assert connection.cursor_instance.executemany_calls == []
 
 
 def test_delayed_sector_not_matured_then_unsupported_updates_one_row_idempotently() -> None:

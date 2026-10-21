@@ -49,7 +49,7 @@ class FinancialRawStore:
                 row["pit_status"], row["source_updated_at"], row["source_hash"],
                 1 if row.get("is_restated") else 0,
                 1 if row.get("source_verified") else 0,
-                row.get("data_source", "miniqmt"),
+                row.get("data_source", "akshare"),
             ),
         )
 
@@ -63,7 +63,7 @@ class FinancialRawStore:
                 row["stock_code"], row["report_date"], row["announcement_date"],
                 row.get("total_shares"), row.get("circulating_shares"),
                 row["pit_status"], row["source_hash"],
-                row.get("data_source", "miniqmt"),
+                row.get("data_source", "akshare"),
             ),
         )
 

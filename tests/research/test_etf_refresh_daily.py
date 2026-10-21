@@ -25,7 +25,7 @@ def test_refresh_cli_help_is_dedicated_from_candidate_runner() -> None:
     ])
 
     assert args.as_of_date == "2026-08-18"
-    assert args.provider == "auto"
+    assert args.provider == "akshare"
     with pytest.raises(SystemExit):
         parser.parse_args([
             "--as-of-date", "2026-08-18", "--level", "2",
@@ -53,7 +53,7 @@ def test_refresh_cli_main_explicitly_invokes_mapping_refresh_runner() -> None:
     assert captured == {
         "target_date": TARGET,
         "sector_level": 2,
-        "provider_name": "auto",
+        "provider_name": "akshare",
         "min_coverage": 0.85,
         "mapping_version": "exposure_v2",
         "config_hash": "cfg",
@@ -308,7 +308,6 @@ def test_run_refresh_reports_provider_and_sector_progress() -> None:
         "[refresh] mapping schema ready",
         "[refresh] loaded 1 SW2 sectors",
         "[refresh] loading AKShare ETF baskets",
-        "[refresh] AKShare: available; eligible_etfs=1/1; undercovered=0; reported_date=2026-08-18",
         "[refresh] selected AKShare ETF baskets; etfs=1; reported_date=2026-08-18",
         "[refresh] sector 1/1: Bank",
         "[refresh] sector 1/1: persisted 1 rows",

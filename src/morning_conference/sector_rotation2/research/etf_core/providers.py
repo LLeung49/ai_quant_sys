@@ -8,10 +8,8 @@ stale holdings from silently becoming daily exposure mappings.
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import date
-import hashlib
-import json
 import math
 import re
 import time
@@ -218,41 +216,6 @@ class LocalSWMembershipProvider:
         )
 
 
-class MiniQMTETFProvider:
-    """Extract weighted ETF baskets from MiniQMT redemption-list records.
-
-    ``xtdata.get_etf_info`` commonly exposes only ``成份股代码`` in
-    ``成份股信息``.  Such rows are unusable for exposure and are rejected; no
-    equal weight or redemption quantity is ever substituted.
-    """
-
-    def __init__(
-        self,
-        *,
-        client: object | None = None,
-        provenance: ProviderProvenance | None = None,
-    ) -> None:
-        self._client = client
-        self._provenance = provenance
-
-    def load(self, target_date: date) -> ETFBasketInput:
-        try:
-            client = self._client
-            if client is None:
-                from xtquant import xtdata
-
-                client = xtdata
-            client.download_etf_info()
-            raw = client.get_etf_info()
-        except Exception as exc:
-            return _basket_unavailable("miniqmt", "provider_error", str(exc))
-        if not isinstance(raw, Mapping) or not raw:
-            return _basket_unavailable("miniqmt", "missing_etf_universe", "get_etf_info returned no ETF records")
-        return _parse_miniqmt_records(
-            raw,
-            target_date=target_date,
-            provenance=self._provenance,
-        )
 
 
 class AKShareETFProvider:
@@ -358,68 +321,6 @@ class AKShareETFProvider:
         )
 
 
-def select_freshest_basket(
-    miniqmt: ETFBasketInput,
-    akshare: ETFBasketInput,
-    target_date: date,
-    *,
-    min_coverage: float = 0.8,
-) -> ETFBasketInput:
-    """Choose the newest complete, non-future weighted basket.
-
-    Every ETF in a source must meet the configured normalized weight coverage.
-    Recency is compared only between complete sources, with MiniQMT exact
-    preferred on equal reported dates.  MiniQMT and AKShare are always
-    cross-checked against each other, regardless of which source is selected.
-    """
-
-    if not 0 <= min_coverage <= 1:
-        raise ValueError("min_coverage must be between zero and one")
-    candidates = [
-        _retain_complete_baskets(basket, min_coverage=min_coverage)
-        for basket in (miniqmt, akshare)
-        if (
-            basket.available
-            and basket.as_of_date is not None
-            and basket.as_of_date <= target_date
-            and _complete_basket_codes(basket, min_coverage=min_coverage)
-        )
-    ]
-    cross_check_status, cross_check_detail = _cross_check_miniqmt_codes(
-        miniqmt,
-        akshare,
-    )
-    if not candidates:
-        details = "; ".join(
-            f"{basket.source_provider}: "
-            f"{basket.quality_issue.code if basket.quality_issue else 'incomplete_weight_coverage'}"
-            for basket in (miniqmt, akshare)
-        )
-        return ETFBasketInput.unavailable(
-            source_provider="auto",
-            issue=ProviderQualityIssue(
-                "missing_complete_weighted_basket",
-                details or "no complete weighted basket is available",
-            ),
-            cross_check_status=cross_check_status,
-            cross_check_detail=cross_check_detail,
-        )
-    chosen = max(
-        candidates,
-        key=lambda basket: (
-            basket.as_of_date,
-            basket.basket_source_priority == "miniqmt_exact",
-        ),
-    )
-    priority = chosen.basket_source_priority or (
-        "miniqmt_exact" if chosen.source_provider == "miniqmt" else "akshare_disclosed"
-    )
-    return replace(
-        chosen,
-        basket_source_priority=priority,
-        cross_check_status=cross_check_status,
-        cross_check_detail=cross_check_detail,
-    )
 
 
 def refresh_sector_etf_mapping(
@@ -490,8 +391,7 @@ def refresh_sector_etf_mapping(
         )
     persist_fn = persist or _default_persist()
     basket_source_priority = baskets.basket_source_priority or (
-        "miniqmt_exact" if baskets.source_provider == "miniqmt"
-        else "akshare_disclosed" if baskets.source_provider == "akshare"
+        "akshare_disclosed" if baskets.source_provider == "akshare"
         else "audited_json_override"
     )
     count = persist_fn(
@@ -573,109 +473,10 @@ def _persist_unavailable(
     )
 
 
-def _parse_miniqmt_records(
-    raw: Mapping[object, object],
-    *,
-    target_date: date,
-    provenance: ProviderProvenance | None,
-) -> ETFBasketInput:
-    baskets: dict[str, tuple[dict[str, object], ...]] = {}
-    etf_codes, constituent_codes = _miniqmt_code_metadata(raw)
-    common_date: date | None = None
-    common_unit: WeightUnit | None = None
-    common_reference: str | None = None
-    for key, value in raw.items():
-        if not isinstance(value, Mapping):
-            return _basket_unavailable("miniqmt", "invalid_etf_record", f"ETF record {key!r} is not a mapping")
-        etf_code = _first_value(value, ("etf_code", "stock_code", "code", "基金代码")) or key
-        if etf_code is None or not str(etf_code).strip():
-            return _basket_unavailable("miniqmt", "missing_etf_code", "ETF record has no recognized code")
-        source_date, unit, source_reference, issue = _resolve_provenance(
-            explicit=provenance,
-            payload=value,
-            target_date=target_date,
-            default_source_reference=None,
-        )
-        if issue is not None:
-            return ETFBasketInput.unavailable(
-                source_provider="miniqmt", issue=issue, as_of_date=source_date,
-                weight_unit=unit, source_reference=source_reference,
-                etf_codes=etf_codes, constituent_codes=constituent_codes,
-            )
-        if common_date is not None and source_date != common_date:
-            return _basket_unavailable("miniqmt", "inconsistent_source_dates", "ETF records have different source dates")
-        if common_unit is not None and unit != common_unit:
-            return _basket_unavailable("miniqmt", "inconsistent_weight_units", "ETF records have different weight units", source_date)
-        if common_reference is not None and source_reference != common_reference:
-            return _basket_unavailable("miniqmt", "inconsistent_source_references", "ETF records have different source references", source_date, unit)
-        common_date, common_unit, common_reference = source_date, unit, source_reference
-        components = _first_value(value, ("成份股信息", "components", "constituents"))
-        component_rows = _component_records(components)
-        if not component_rows:
-            return _basket_unavailable("miniqmt", "missing_etf_components", f"{etf_code} has no recognized component rows", source_date, unit, source_reference)
-        parsed: list[dict[str, object]] = []
-        for component_key, component in component_rows:
-            stock_code = _first_value(component, ("成份股代码", "stock_code", "code", "证券代码")) or component_key
-            weight = _first_value(component, ("weight", "权重", "成份股权重", "持仓占比"))
-            if stock_code is None or not str(stock_code).strip():
-                return _basket_unavailable("miniqmt", "missing_constituent_code", f"{etf_code} has a component without a recognized code", source_date, unit, source_reference)
-            if weight is None:
-                return _basket_unavailable(
-                    "miniqmt", "missing_constituent_weight",
-                    f"{etf_code}/{stock_code} has no recognized weight",
-                    source_date, unit, source_reference,
-                    etf_codes=etf_codes, constituent_codes=constituent_codes,
-                )
-            try:
-                numeric_weight = _numeric_weight(weight)
-            except ValueError:
-                return _basket_unavailable("miniqmt", "invalid_constituent_weight", f"{etf_code}/{stock_code} has invalid weight", source_date, unit, source_reference)
-            parsed.append({"stock_code": str(stock_code), "weight": numeric_weight})
-        baskets[str(etf_code)] = tuple(parsed)
-    return ETFBasketInput(
-        baskets=baskets,
-        as_of_date=common_date,
-        weight_unit=common_unit,
-        source_provider="miniqmt",
-        source_reference=common_reference,
-        basket_source_priority="miniqmt_exact",
-        etf_codes=etf_codes,
-        constituent_codes=constituent_codes,
-    )
 
 
-def _miniqmt_code_metadata(
-    raw: Mapping[object, object],
-) -> tuple[tuple[str, ...], dict[str, tuple[str, ...]]]:
-    etf_codes: list[str] = []
-    constituent_codes: dict[str, tuple[str, ...]] = {}
-    for key, value in raw.items():
-        if not isinstance(value, Mapping):
-            continue
-        etf_code = _first_value(value, ("etf_code", "stock_code", "code", "基金代码")) or key
-        if etf_code is None or not str(etf_code).strip():
-            continue
-        code = str(etf_code)
-        etf_codes.append(code)
-        components = _first_value(value, ("成份股信息", "components", "constituents"))
-        stocks: list[str] = []
-        for component_key, component in _component_records(components):
-            stock_code = _first_value(
-                component, ("成份股代码", "stock_code", "code", "证券代码")
-            ) or component_key
-            if stock_code is not None and str(stock_code).strip():
-                stocks.append(str(stock_code))
-        if stocks:
-            constituent_codes[code] = tuple(stocks)
-    return tuple(etf_codes), constituent_codes
 
 
-def _component_records(value: object) -> list[tuple[object | None, Mapping[str, object]]]:
-    if isinstance(value, Mapping):
-        return [(key, item) for key, item in value.items() if isinstance(item, Mapping)]
-    if isinstance(value, Sequence) and not isinstance(value, (str, bytes)):
-        return [(None, item) for item in value if isinstance(item, Mapping)]
-    return []
 
 
 def _records(data: object) -> list[Mapping[str, object]]:
@@ -866,86 +667,10 @@ def _complete_basket_codes(
     return tuple(eligible)
 
 
-def _retain_complete_baskets(
-    basket: ETFBasketInput,
-    *,
-    min_coverage: float,
-) -> ETFBasketInput:
-    """Remove undercovered ETFs without fabricating missing constituent weight."""
-
-    eligible_codes = _complete_basket_codes(basket, min_coverage=min_coverage)
-    return replace(
-        basket,
-        baskets={code: basket.baskets[code] for code in eligible_codes},
-        etf_codes=eligible_codes,
-        constituent_codes={
-            code: basket.constituent_codes[code]
-            for code in eligible_codes if code in basket.constituent_codes
-        },
-    )
 
 
-def _cross_check_miniqmt_codes(
-    miniqmt: ETFBasketInput,
-    akshare: ETFBasketInput,
-) -> tuple[str, str]:
-    mini_codes = _normalized_constituent_codes(miniqmt)
-    if not mini_codes:
-        return "not_available", "MiniQMT component codes were not available for comparison"
-    akshare_codes = _normalized_constituent_codes(akshare)
-    if not akshare_codes:
-        return "not_available", "AKShare component codes were not available for comparison"
-    miniqmt_only = sorted(mini_codes.keys() - akshare_codes.keys())
-    akshare_only = sorted(akshare_codes.keys() - mini_codes.keys())
-    constituent_mismatch = sorted(
-        etf_code for etf_code in mini_codes.keys() & akshare_codes.keys()
-        if mini_codes[etf_code] != akshare_codes[etf_code]
-    )
-    discrepancy = {
-        "akshare_only": akshare_only,
-        "constituent_mismatch": [
-            {
-                "akshare": sorted(akshare_codes[etf_code]),
-                "etf_code": etf_code,
-                "miniqmt": sorted(mini_codes[etf_code]),
-            }
-            for etf_code in constituent_mismatch
-        ],
-        "miniqmt_only": miniqmt_only,
-    }
-    canonical = json.dumps(
-        discrepancy, ensure_ascii=True, separators=(",", ":"), sort_keys=True,
-    )
-    digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
-    sample_items = [
-        *(f"miniqmt_only:{code}" for code in miniqmt_only[:2]),
-        *(f"akshare_only:{code}" for code in akshare_only[:2]),
-        *(f"constituent_mismatch:{code}" for code in constituent_mismatch[:2]),
-    ]
-    detail = (
-        f"miniqmt_only={len(miniqmt_only)}; akshare_only={len(akshare_only)}; "
-        f"constituent_mismatch={len(constituent_mismatch)}; sha256={digest}; "
-        f"sample={','.join(sample_items) or 'none'}"
-    )
-    status = "mismatch" if miniqmt_only or akshare_only or constituent_mismatch else "matched"
-    return status, detail
 
 
-def _normalized_constituent_codes(basket: ETFBasketInput) -> dict[str, frozenset[str]]:
-    raw = basket.constituent_codes or {
-        etf_code: tuple(str(row.get("stock_code") or row.get("code") or "") for row in rows)
-        for etf_code, rows in basket.baskets.items()
-    }
-    normalized: dict[str, frozenset[str]] = {}
-    for etf_code, stock_codes in raw.items():
-        try:
-            normalized_etf = normalize_stock_code(str(etf_code))
-            normalized[normalized_etf] = frozenset(
-                normalize_stock_code(stock_code) for stock_code in stock_codes
-            )
-        except ValueError:
-            continue
-    return normalized
 
 
 def _load_injected_akshare_client(client: object | None) -> object:

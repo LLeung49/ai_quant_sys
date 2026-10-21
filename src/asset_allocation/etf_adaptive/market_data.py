@@ -93,9 +93,21 @@ ACTIONS_SQL = """
 SELECT stock_code, ex_date, cash_dividend_per_share,
        stock_bonus_per_share, stock_gift_per_share,
        rights_issue_per_share, rights_issue_price, share_reform_flag
-FROM trade_corporate_action
-WHERE stock_code = %s AND ex_date BETWEEN %s AND %s
-  AND event_status = 'effective' AND data_source = 'xtquant'
+FROM (
+  SELECT stock_code, ex_date, cash_dividend_per_share,
+         stock_bonus_per_share, stock_gift_per_share,
+         rights_issue_per_share, rights_issue_price, share_reform_flag,
+         ROW_NUMBER() OVER (
+           PARTITION BY stock_code, ex_date
+           ORDER BY CASE data_source WHEN 'akshare' THEN 0 ELSE 1 END,
+                    last_seen_at DESC, id DESC
+         ) AS source_rank
+  FROM trade_corporate_action
+  WHERE stock_code = %s AND ex_date BETWEEN %s AND %s
+    AND event_status = 'effective'
+    AND data_source IN ('akshare', 'xtquant')
+) AS preferred_actions
+WHERE source_rank = 1
 ORDER BY ex_date
 """
 

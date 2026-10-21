@@ -3,13 +3,12 @@
 This script is the operator-facing entry point for the Phase 4 / Repair
 Alpha pipeline.  It runs two stages in order:
 
-1. :mod:`data_ingestion.2-财务数据采集` -- the legacy financial data
-   collector.  This script writes to ``trade_stock_financial`` AND, after
-   the Phase 4.5 dual-write patch, to ``trade_stock_financial_raw_pit``.
+1. :mod:`data_ingestion.2-财务数据采集` -- the AKShare financial data
+   collector. It archives the source response and appends validated versions
+   to ``trade_stock_financial_raw_pit`` and ``trade_stock_capital_pit``.
 2. :mod:`morning_conference.sector_rotation2.research.stock_alpha.run_repair_daily`
-   -- the Repair Alpha runner.  By default the runner uses
-   ``PIT_ESTIMATED`` rows (the legacy collector does not have
-   announcement_date).  Pass ``--allow-estimated-pit`` to consume them.
+   -- the Repair Alpha runner. It uses strict PIT rows by default;
+   ``--allow-estimated-pit`` is an explicit research opt-in.
 
 Usage
 -----
@@ -27,9 +26,8 @@ Usage
     python -m data_ingestion.run_daily_pipeline \\
         --as-of-date 2026-08-17 --mode backfill --sector "专业服务"
 
-The pipeline attempts both stages even if one fails.  Its process exit
-status is non-zero when either enabled stage fails, so schedulers cannot
-mistake a partial run for success.
+The repair stage runs only when the financial collection stage succeeds.
+The process exits non-zero on either failure.
 """
 
 from __future__ import annotations
@@ -91,27 +89,20 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def run_collector(args: argparse.Namespace) -> int:
-    """Invoke the legacy financial collector as ``2-财务数据采集.main``.
-
-    The collector is a module under :mod:`data_ingestion`.  We import it
-    dynamically so the pipeline can run before the legacy script has
-    been invoked manually.
-    """
+    """Invoke the canonical AKShare financial collector."""
 
     print("=" * 60)
     print(f"[1/2] Financial data collection start: {datetime.now().isoformat()}")
     print("=" * 60)
     t0 = time.time()
     module = importlib.import_module("data_ingestion.2-财务数据采集")
-    # The collector's main() ignores CLI args; it always runs in full
-    # (or test-mode) mode.  We call it directly so the entry point
-    # propagates sys.argv cleanly.
-    saved_argv = sys.argv
-    sys.argv = ["2-财务数据采集"]
-    try:
-        rc = module.main()
-    finally:
-        sys.argv = saved_argv
+    collector_args: list[str] = []
+    if args.as_of_date:
+        collector_args += ["--as-of-date", args.as_of_date]
+    collector_args += ["--workers", str(args.workers)]
+    if args.dry_run:
+        collector_args.append("--dry-run")
+    rc = module.main(collector_args)
     elapsed = time.time() - t0
     print(f"[1/2] Collector done in {elapsed:.1f}s")
     return 0 if rc is None else int(rc)
@@ -164,6 +155,9 @@ def main(argv: list[str] | None = None) -> int:
             rc_collector = run_collector(args)
         except Exception as exc:
             print(f"[1/2] Collector failed: {exc!r}")
+        if rc_collector != 0:
+            print("[2/2] Repair Alpha skipped: financial collection failed")
+            return 1
     if not args.skip_repair:
         try:
             rc_repair = run_repair_runner(args)

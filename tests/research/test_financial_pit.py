@@ -106,7 +106,7 @@ def test_resolve_latest_visible_allows_estimated_with_flag() -> None:
     assert out.source_hash == row.source_hash
 
 
-def test_resolve_latest_visible_prefers_non_restated() -> None:
+def test_resolve_latest_visible_uses_dated_restated_version_after_announcement() -> None:
     rows = [
         _row(report_date=date(2026, 6, 30), announcement_date=date(2026, 7, 25),
              source_hash="restated", is_restated=True),
@@ -115,7 +115,40 @@ def test_resolve_latest_visible_prefers_non_restated() -> None:
     ]
     out = resolve_latest_visible(rows, as_of_date=date(2026, 8, 1))
     assert out is not None
-    assert out.source_hash == "original"
+    assert out.source_hash == "restated"
+
+
+def test_restated_version_with_announcement_is_exact() -> None:
+    row = _row(source_table="qmt_native_composite", data_source="qmt",
+               is_restated=True, pit_status="EXACT")
+    assert classify_pit(row) == PITStatus.EXACT
+    assert resolve_latest_visible([row], as_of_date=date(2026, 7, 24)) is None
+    assert resolve_latest_visible([row], as_of_date=date(2026, 7, 25)) == row
+
+
+def test_latest_period_wins_over_late_revision_of_older_period() -> None:
+    rows = [
+        _row(report_date=date(2025, 12, 31),
+             announcement_date=date(2026, 8, 1), source_hash="old_revised",
+             is_restated=True),
+        _row(report_date=date(2026, 6, 30),
+             announcement_date=date(2026, 7, 25), source_hash="new_period"),
+    ]
+    assert resolve_latest_visible(rows, as_of_date=date(2026, 8, 2)).source_hash == "new_period"
+
+
+def test_dated_qmt_version_has_priority_over_akshare_same_period() -> None:
+    rows = [
+        _row(source_table="qmt_native_composite", data_source="qmt",
+             report_date=date(2026, 3, 31), announcement_date=date(2026, 4, 29),
+             source_hash="qmt"),
+        _row(source_table="akshare_eastmoney_financial", data_source="akshare",
+             report_date=date(2026, 3, 31), announcement_date=date(2026, 5, 2),
+             source_hash="akshare"),
+    ]
+    assert resolve_latest_visible(rows, as_of_date=date(2026, 4, 28)) is None
+    assert resolve_latest_visible(rows, as_of_date=date(2026, 4, 30)).source_hash == "qmt"
+    assert resolve_latest_visible(rows, as_of_date=date(2026, 5, 3)).source_hash == "qmt"
 
 
 def test_filter_strict_keeps_only_exact_and_verified() -> None:
@@ -126,6 +159,38 @@ def test_filter_strict_keeps_only_exact_and_verified() -> None:
     ]
     out = filter_strict(rows)
     assert len(out) == 2
+
+
+@pytest.mark.parametrize("explicit_status", [None, "pit_exact", "EXACT"])
+def test_legacy_qmt_period_date_is_not_an_announcement(explicit_status) -> None:
+    row = _row(
+        source_table="trade_stock_financial",
+        data_source="qmt",
+        report_date=date(2025, 12, 31),
+        announcement_date=date(2025, 12, 31),
+        first_seen_at=date(2026, 2, 27),
+        source_verified=True,
+        pit_status=explicit_status,
+    )
+    assert classify_pit(row) == PITStatus.ESTIMATED
+    assert filter_strict([row]) == []
+    assert resolve_latest_visible([row], as_of_date=date(2026, 1, 15)) is None
+    assert resolve_latest_visible(
+        [row], as_of_date=date(2026, 1, 15), allow_estimated_pit=True
+    ) is None
+    assert resolve_latest_visible(
+        [row], as_of_date=date(2026, 3, 1), allow_estimated_pit=True
+    ) == row
+
+
+def test_same_day_announcement_from_independent_source_remains_visible() -> None:
+    row = _row(
+        source_table="akshare_eastmoney_financial",
+        data_source="akshare",
+        report_date=date(2025, 12, 31),
+        announcement_date=date(2025, 12, 31),
+    )
+    assert classify_pit(row) == PITStatus.EXACT
 
 
 def test_pit_status_enum_values() -> None:

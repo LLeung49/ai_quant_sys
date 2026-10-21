@@ -12,6 +12,8 @@ from pathlib import Path
 import sys
 import types
 
+import pandas as pd
+
 
 ROOT_DIR = Path(__file__).parents[1]
 SRC_DIR = ROOT_DIR / "src"
@@ -66,22 +68,6 @@ class OnePriceRow:
         }
 
 
-class OneFactorRow:
-    def __init__(self, cash):
-        self.cash = cash
-
-    def iterrows(self):
-        yield date(2026, 7, 1), {
-            "interest": self.cash,
-            "stockBonus": 0,
-            "stockGift": 0,
-            "allotNum": 0,
-            "allotPrice": None,
-            "gugai": 0,
-            "dr": Decimal("0.9900000000000000"),
-        }
-
-
 def _stored_event(cash):
     return {
         "stock_code": "000001.SZ",
@@ -92,66 +78,25 @@ def _stored_event(cash):
         "rights_issue_per_share": "0.00000000",
         "rights_issue_price": None,
         "share_reform_flag": 0,
-        "qmt_dr_factor": "0.9900000000000000",
+        "qmt_dr_factor": None,
         "event_status": "effective",
-        "data_source": "xtquant",
+        "data_source": "akshare",
         "source_payload": {},
     }
-
-
-def test_daily_collection_routes_qmt_none_front_back_to_independent_tables(monkeypatch):
-    """A wrong dividend-mode/table mapping must fail this workflow test."""
-    qmt_calls = []
-    fake_xtdata = types.SimpleNamespace(
-        download_history_data=lambda *args, **kwargs: None,
-        get_market_data_ex=lambda **kwargs: qmt_calls.append(kwargs)
-        or {"000001.SZ": OnePriceRow()},
-    )
-    collector = _load_script(
-        "dual_track_collector_workflow",
-        COLLECTOR_PATH,
-        fake_xtdata=fake_xtdata,
-    )
-    database_writes = []
-    monkeypatch.setattr(
-        projection_store,
-        "execute_many",
-        lambda sql, values: database_writes.append((sql, list(values))) or len(values),
-    )
-
-    counts = collector.download_and_save_all_modes(
-        "000001.SZ",
-        "20260724",
-        adjustment_asof=date(2026, 7, 24),
-    )
-
-    assert counts == {"none": 1, "front": 1, "back": 1}
-    assert [call["dividend_type"] for call in qmt_calls] == ["none", "front", "back"]
-    assert [
-        next(
-            table
-            for table in (
-                "trade_stock_daily_raw",
-                "trade_stock_daily_qfq",
-                "trade_stock_daily_bfq",
-            )
-            if f"INSERT INTO {table}" in sql
-        )
-        for sql, _ in database_writes
-    ] == [
-        "trade_stock_daily_raw",
-        "trade_stock_daily_qfq",
-        "trade_stock_daily_bfq",
-    ]
-    assert database_writes[0][1][0][-3:] == (9.8, 0, "xtquant")
-    assert database_writes[1][1][0][-1] == date(2026, 7, 24)
-    assert database_writes[2][1][0][-1] == date(2026, 7, 24)
 
 
 def test_factor_snapshot_routes_new_and_corrected_events_to_exact_refresh_ranges():
     """New events must not rewrite bfq history; corrections must rewrite from ex-date."""
     data_start = date(2015, 1, 1)
-    current = actions.normalize_qmt_factors("000001.SZ", OneFactorRow(0.12))
+    current = actions.normalize_akshare_stock_actions(
+        "000001.SZ",
+        pd.DataFrame([{
+            "除权除息日": date(2026, 7, 1),
+            "现金分红-现金分红比例": Decimal("1.2"),
+            "送转股份-送股比例": 0,
+            "送转股份-转股比例": 0,
+        }]),
+    )
 
     new_plan = actions.plan_factor_snapshot(current, [], data_start)
     corrected_plan = actions.plan_factor_snapshot(

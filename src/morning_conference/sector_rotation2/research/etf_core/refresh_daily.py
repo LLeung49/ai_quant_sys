@@ -107,7 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--as-of-date", required=True)
     parser.add_argument("--level", type=int, choices=(1, 2), required=True)
-    parser.add_argument("--provider", choices=("auto", "akshare"), default="auto")
+    parser.add_argument("--provider", choices=("auto", "akshare"), default="akshare")
     parser.add_argument("--min-coverage", type=float, default=0.80)
     parser.add_argument("--mapping-version", default="exposure_v1")
     parser.add_argument("--config-hash", required=True)
@@ -182,25 +182,14 @@ def run_refresh(
     elif basket_json_path is not None:
         report("[refresh] loading audited JSON ETF baskets")
         basket_input = AuditedJSONBasketProvider(basket_json_path).load(target_date)
-    elif provider_name == "auto":
+    else:
         report("[refresh] loading AKShare ETF baskets")
         basket_input = (
             akshare_provider or AKShareETFProvider(progress=report)
         ).load(target_date)
-        report(
-            _basket_progress(
-                "AKShare", basket_input, min_coverage=min_coverage
-            )
-        )
-    elif provider_name == "akshare" and akshare_provider is not None:
-        report("[refresh] loading AKShare ETF baskets")
-        basket_input = akshare_provider.load(target_date)
-    else:
-        report(f"[refresh] loading {_provider_label(provider_name)} ETF baskets")
-        basket_input = _configured_basket_provider(provider_name).load(target_date)
-    if provider_name != "auto":
+    if basket_provider is None and basket_json_path is None:
         report(_basket_progress(
-            basket_input.source_provider or provider_name,
+            "AKShare",
             basket_input,
             min_coverage=min_coverage,
         ))
@@ -256,10 +245,6 @@ def main(
         refresh_kwargs["basket_json_path"] = args.basket_json
     run_refresh_fn(**refresh_kwargs, progress=print)
     return 0
-
-
-def _configured_basket_provider(provider_name: str) -> BasketProvider:
-    return AKShareETFProvider()
 
 
 def _is_quality_failure(result: object) -> bool:

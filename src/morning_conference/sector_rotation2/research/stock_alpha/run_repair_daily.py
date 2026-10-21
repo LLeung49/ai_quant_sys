@@ -163,10 +163,6 @@ def run_one_date(
     run_id = "dry-run" if dry_run else str(uuid4())
     store = None if dry_run else MySQLSnapshotStore()
     if store is not None:
-        if force_replace:
-            deleted = _delete_existing_repair_snapshots(as_of_date, level, mode)
-            if deleted:
-                print(f"{as_of_date}: --force-replace deleted {deleted} stock_repair rows")
         store.ensure_schema()
         create_run(
             run_id, as_of_date, level, config.model_version,
@@ -201,23 +197,33 @@ def run_one_date(
         if store is not None:
             mark_run_failed(run_id, str(exc))
         raise
-    if snapshots and mode is SnapshotMode.DELAYED_SHADOW:
-        availability = _delayed_availability(target, level, as_shanghai_naive(now), query)
-        snapshots = [
-            replace(
-                snapshot,
-                data_available_at=availability.data_available_at,
-                run_at=availability.run_at,
-                execution_eligible_at=availability.execution_eligible_at,
-                availability_basis=availability.availability_basis,
-            )
-            for snapshot in snapshots
-        ]
-    if store is not None:
-        persist_repair_candidates(store, snapshots)
-    if store is not None:
-        mark_run_succeeded(run_id, len(snapshots), 0)
-    persist_label = "dry-run" if dry_run else f"persisted {len(snapshots)}"
+    try:
+        if snapshots and mode is SnapshotMode.DELAYED_SHADOW:
+            availability = _delayed_availability(target, level, as_shanghai_naive(now), query)
+            snapshots = [
+                replace(
+                    snapshot,
+                    data_available_at=availability.data_available_at,
+                    run_at=availability.run_at,
+                    execution_eligible_at=availability.execution_eligible_at,
+                    availability_basis=availability.availability_basis,
+                )
+                for snapshot in snapshots
+            ]
+        if store is not None:
+            if force_replace:
+                if sectors and not snapshots:
+                    raise ValueError("force_replace refused an empty repair result")
+                deleted = _delete_existing_repair_snapshots(as_of_date, level, mode)
+                if deleted:
+                    print(f"{as_of_date}: --force-replace deleted {deleted} stock_repair rows")
+            persist_repair_candidates(store, snapshots)
+            mark_run_succeeded(run_id, len(snapshots), 0)
+    except Exception as exc:
+        if store is not None:
+            mark_run_failed(run_id, str(exc))
+        raise
+    persist_label = f"dry-run {len(snapshots)}" if dry_run else f"persisted {len(snapshots)}"
     print(f"{as_of_date}: {persist_label} {mode.value} repair candidates across {len(sectors)} sectors")
     return len(snapshots)
 

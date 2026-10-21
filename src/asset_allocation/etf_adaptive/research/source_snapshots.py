@@ -1,8 +1,8 @@
-"""Auditable, injected MiniQMT and AkShare metadata snapshot adapters."""
+"""Auditable, injected AkShare metadata snapshot adapters."""
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from hashlib import sha256
@@ -95,96 +95,8 @@ def _snapshot(
     )
 
 
-def _calendar_date(value: object) -> date:
-    if isinstance(value, datetime):
-        return value.date()
-    if isinstance(value, date):
-        return value
-    if isinstance(value, str):
-        for format_string in ("%Y%m%d", "%Y-%m-%d"):
-            try:
-                return datetime.strptime(value, format_string).date()
-            except ValueError:
-                pass
-    raise ValueError("invalid MiniQMT calendar session")
 
 
-class MiniQmtSnapshotClient:
-    """Snapshot only the MiniQMT facts needed to verify identity and sessions."""
-
-    def __init__(
-        self, client: object, *, clock: Callable[[], datetime] = datetime.now
-    ) -> None:
-        if client is None:
-            raise ValueError("client is required")
-        if not callable(clock):
-            raise ValueError("clock must be callable")
-        self._client = client
-        self._clock = clock
-
-    def instrument(self, code: str, as_of: date) -> SourceSnapshot:
-        normalized_code = _normalise_code(code)
-        as_of = _require_date(as_of, "as_of")
-        try:
-            detail = self._client.get_instrument_detail(  # type: ignore[attr-defined]
-                normalized_code, iscomplete=True
-            )
-            instrument_type = self._client.get_instrument_type(normalized_code)  # type: ignore[attr-defined]
-        except Exception as exc:
-            raise ValueError("MiniQMT instrument unavailable") from exc
-        if not isinstance(detail, Mapping) or not detail:
-            raise ValueError("MiniQMT instrument unavailable")
-        if not isinstance(instrument_type, str) or instrument_type.strip().upper() != "ETF":
-            raise ValueError("MiniQMT instrument is not an ETF")
-        payload = {
-            "code": normalized_code,
-            "instrument_type": "ETF",
-            "detail": dict(detail),
-        }
-        return _snapshot(
-            source_name="miniqmt",
-            source_kind="instrument",
-            captured_at=self._clock(),
-            as_of_date=as_of,
-            payload=payload,
-        )
-
-    def calendar(self, market: str, start: date, end: date) -> SourceSnapshot:
-        if not isinstance(market, str) or not market.strip():
-            raise ValueError("market must be a non-empty string")
-        start = _require_date(start, "start")
-        end = _require_date(end, "end")
-        if start > end:
-            raise ValueError("start must not be after end")
-        normalized_market = market.strip().upper()
-        try:
-            values = self._client.get_trading_calendar(  # type: ignore[attr-defined]
-                normalized_market, start.strftime("%Y%m%d"), end.strftime("%Y%m%d")
-            )
-        except Exception as exc:
-            raise ValueError("MiniQMT calendar unavailable") from exc
-        if not isinstance(values, Sequence) or isinstance(values, (str, bytes)):
-            raise ValueError("invalid MiniQMT calendar")
-        try:
-            sessions = tuple(_calendar_date(value) for value in values)
-        except ValueError as exc:
-            raise ValueError("invalid MiniQMT calendar") from exc
-        if sessions != tuple(sorted(set(sessions))):
-            raise ValueError("invalid MiniQMT calendar")
-        if any(session < start or session > end for session in sessions):
-            raise ValueError("invalid MiniQMT calendar")
-        return _snapshot(
-            source_name="miniqmt",
-            source_kind="market_calendar",
-            captured_at=self._clock(),
-            as_of_date=end,
-            payload={
-                "market": normalized_market,
-                "start": start.isoformat(),
-                "end": end.isoformat(),
-                "sessions": tuple(session.isoformat() for session in sessions),
-            },
-        )
 
 
 def _overview_row(response: object) -> Mapping[str, object]:
@@ -263,4 +175,4 @@ class AkShareSnapshotClient:
         )
 
 
-__all__ = ["AkShareSnapshotClient", "MiniQmtSnapshotClient", "SourceSnapshot"]
+__all__ = ["AkShareSnapshotClient", "SourceSnapshot"]

@@ -71,3 +71,18 @@ def test_limit_applies_after_full_universe_is_persisted_and_resumed():
     assert store.prepared == ["000001.SZ", "000002.SZ", "000003.SZ"]
     assert codes == ["000002.SZ"]
     assert digest == "full-universe-hash"
+
+
+def test_forced_codes_must_belong_to_full_universe():
+    assert run_market_rebuild.select_forced_codes(
+        ["000001.SZ", "600519.SH"], ["600519.SH"]
+    ) == ["600519.SH"]
+
+    try:
+        run_market_rebuild.select_forced_codes(
+            ["000001.SZ", "600519.SH"], ["999999.SH"]
+        )
+    except ValueError as exc:
+        assert "outside immutable universe" in str(exc)
+    else:
+        raise AssertionError("foreign forced code must be rejected")

@@ -6,7 +6,7 @@ from typing import Any, Mapping
 import pytest
 
 from morning_conference.sector_rotation2.research.financial.providers import (
-    MiniQMTProvider,
+    DatabaseFinancialProvider,
     SecondaryProvider,
 )
 from morning_conference.sector_rotation2.research.financial.providers.base import (
@@ -51,8 +51,8 @@ def _raw_rows() -> list[Mapping[str, Any]]:
     ]
 
 
-def test_miniqmt_provider_yields_raw_rows() -> None:
-    provider = MiniQMTProvider(fetch=lambda sql, params: _raw_rows())
+def test_database_provider_yields_raw_rows() -> None:
+    provider = DatabaseFinancialProvider(fetch=lambda sql, params: _raw_rows())
     rows = list(provider.iter_raw_rows(as_of_date=date(2026, 8, 1), stock_codes=["600000"]))
     assert len(rows) == 2
     assert rows[0].stock_code == "600000"
@@ -61,25 +61,25 @@ def test_miniqmt_provider_yields_raw_rows() -> None:
     assert rows[1].report_date == date(2026, 3, 31)
 
 
-def test_miniqmt_provider_returns_full_universe_on_empty_codes() -> None:
+def test_database_provider_returns_full_universe_on_empty_codes() -> None:
     """Empty stock_codes signals ``no filter`` rather than ``no results``.
 
     The runner uses this mode to fetch all PIT-visible rows for a
     date and group them by stock downstream.
     """
 
-    provider = MiniQMTProvider(fetch=lambda sql, params: _raw_rows())
+    provider = DatabaseFinancialProvider(fetch=lambda sql, params: _raw_rows())
     rows = list(provider.iter_raw_rows(as_of_date=date(2026, 8, 1), stock_codes=[]))
     assert len(rows) == 2
 
 
-def test_miniqmt_provider_handles_missing_fetch() -> None:
-    provider = MiniQMTProvider()
+def test_database_provider_handles_missing_fetch() -> None:
+    provider = DatabaseFinancialProvider()
     rows = list(provider.iter_raw_rows(as_of_date=date(2026, 8, 1), stock_codes=["600000"]))
     assert rows == []
 
 
-def test_miniqmt_provider_returns_capital_rows() -> None:
+def test_database_provider_returns_capital_rows() -> None:
     def fetch(sql, params):
         return [{
             "stock_code": "600000",
@@ -90,10 +90,47 @@ def test_miniqmt_provider_returns_capital_rows() -> None:
             "source_hash": "cap_1",
             "data_source": "miniqmt",
         }]
-    provider = MiniQMTProvider(fetch=fetch)
+    provider = DatabaseFinancialProvider(fetch=fetch)
     rows = list(provider.iter_capital_rows(as_of_date=date(2026, 8, 1), stock_codes=["600000"]))
     assert len(rows) == 1
     assert rows[0].total_shares == 1000.0
+
+
+def test_database_provider_does_not_invent_missing_capital_dates() -> None:
+    provider = DatabaseFinancialProvider(fetch=lambda sql, params: [{
+        "stock_code": "600000.SH",
+        "report_date": date(2026, 6, 30),
+        "announcement_date": None,
+        "total_shares": 1000.0,
+        "circulating_shares": 900.0,
+    }])
+    rows = list(provider.iter_capital_rows(
+        as_of_date=date(2026, 8, 1), stock_codes=["600000.SH"]
+    ))
+    assert rows == []
+
+
+def test_database_provider_exposes_metrics_only_after_their_own_date() -> None:
+    raw = dict(_raw_rows()[0], eps=1.2, roe=10.5, gross_margin=31.0,
+               metric_available_at=date(2026, 8, 3))
+    provider = DatabaseFinancialProvider(fetch=lambda sql, params: [raw])
+    before = list(provider.iter_raw_rows(
+        as_of_date=date(2026, 8, 1), stock_codes=["600000"]
+    ))[0]
+    after = list(provider.iter_raw_rows(
+        as_of_date=date(2026, 8, 4), stock_codes=["600000"]
+    ))[0]
+    assert before.eps is None
+    assert before.roe is None
+    assert after.eps == 1.2
+    assert after.roe == 10.5
+    assert after.gross_margin == 31.0
+    assert "metric_available_at" in provider_query()
+
+
+def provider_query() -> str:
+    from morning_conference.sector_rotation2.research.financial.providers.database import DEFAULT_RAW_QUERY
+    return DEFAULT_RAW_QUERY
 
 
 def test_secondary_provider_uses_distinct_query() -> None:

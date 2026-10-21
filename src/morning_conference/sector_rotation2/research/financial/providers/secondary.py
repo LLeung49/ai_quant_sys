@@ -19,7 +19,7 @@ from .base import (
     FinancialRawRow,
     coerce_numeric,
 )
-from .miniqmt import _as_date, _bool, FetchCallable
+from .database import _as_date, _bool, FetchCallable
 
 
 class SecondaryProvider(FinancialProvider):
@@ -30,7 +30,7 @@ class SecondaryProvider(FinancialProvider):
         *,
         fetch: FetchCallable | None = None,
         provider_name: str = "secondary",
-        primary_provider_name: str = "miniqmt",
+        primary_provider_name: str = "akshare",
     ) -> None:
         self._fetch = fetch
         self._name = provider_name

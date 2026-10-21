@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date
+import math
 from typing import Optional
 
 from .providers.base import CapitalRow
@@ -33,22 +34,16 @@ class ResolvedCapital:
     @property
     def is_available(self) -> bool:
         """Whether PIT shares are sufficient for market-cap valuation."""
-        return self.total_shares is not None and self.total_shares > 0
+        return (self.total_shares is not None and
+                math.isfinite(float(self.total_shares)) and self.total_shares > 0)
 
     def market_cap(self, raw_close: float) -> Optional[float]:
         """Return ``raw_close * total_shares`` if both are available."""
 
-        if self.total_shares is None or raw_close is None:
+        if (not self.is_available or raw_close is None or
+                not math.isfinite(float(raw_close)) or raw_close <= 0):
             return None
         return float(raw_close) * float(self.total_shares)
-
-
-def _row_sort_key(row: CapitalRow) -> tuple:
-    return (
-        row.announcement_date,
-        1 if False else 0,  # placeholder for future restated handling
-        row.source_hash,
-    )
 
 
 def resolve_capital(
@@ -60,13 +55,21 @@ def resolve_capital(
 
     eligible: list[CapitalRow] = [
         row for row in rows
-        if row.announcement_date is not None and row.announcement_date <= as_of_date
+        if (
+            row.announcement_date is not None
+            and row.announcement_date <= as_of_date
+            and row.report_date <= as_of_date
+        )
     ]
     if not eligible:
         return None
-    # Tie-break: latest announcement, then earliest source_hash.
+    # Share counts apply from the change date, even when announced earlier.
+    # A correction to an older change does not supersede a later effective row.
+    # For the same effective date, use validated QMT history before AKShare.
     eligible.sort(
         key=lambda row: (
+            -row.report_date.toordinal(),
+            0 if row.data_source.lower() == "qmt" else 1,
             -row.announcement_date.toordinal(),
             row.source_hash,
         )

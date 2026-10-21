@@ -33,6 +33,24 @@ def test_classify_row_flags_dates_after_explicit_as_of_date() -> None:
     assert reasons == ("future_report_date", "future_announcement_date")
 
 
+def test_classify_row_flags_present_but_entirely_empty_core_payload() -> None:
+    reasons = classify_row(
+        {
+            "stock_code": "688795.SH",
+            "report_date": date(2023, 9, 30),
+            "announcement_date": date(2023, 9, 30),
+            "revenue": None,
+            "net_profit": None,
+            "total_assets": None,
+            "total_equity": None,
+            "operating_cash_flow": None,
+        },
+        as_of_date=date(2026, 10, 16),
+    )
+
+    assert reasons == ("all_core_financials_null",)
+
+
 def test_audit_rows_returns_only_rows_with_evidence() -> None:
     rows = [
         {

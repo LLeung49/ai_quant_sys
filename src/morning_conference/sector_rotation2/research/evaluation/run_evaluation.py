@@ -20,15 +20,21 @@ from .oos import build_purged_oos_windows, signal_scope
 from .prices import load_authoritative_market_calendar
 
 
-def run(*, snapshot_mode: str, start_date: date, end_date: date, oos: bool = False) -> dict[str, object]:
-    rows = execute_query(
-        """SELECT f.*, s.strategy_type, s.model_version AS upstream_model_version
+def run(
+    *, snapshot_mode: str, start_date: date, end_date: date, oos: bool = False,
+    strategy_type: str | None = None,
+) -> dict[str, object]:
+    query = """SELECT f.*, s.strategy_type, s.model_version AS upstream_model_version
              FROM sector_rotation_research_forward_label f
              JOIN research_candidate_snapshot s ON s.id=f.source_snapshot_id AND s.snapshot_mode=f.snapshot_mode
             WHERE f.snapshot_mode=%s AND f.signal_date BETWEEN %s AND %s
-            ORDER BY f.signal_date, f.id""",
-        (snapshot_mode, start_date, end_date),
-    )
+              AND NOT (s.strategy_type='stock_repair' AND s.validation_status='rejected')
+        """
+    params: tuple[object, ...] = (snapshot_mode, start_date, end_date)
+    if strategy_type is not None:
+        query += "AND s.strategy_type=%s "
+        params += (strategy_type,)
+    rows = execute_query(query + "ORDER BY f.signal_date, f.id", params)
     if not rows:
         return {"snapshot_mode": snapshot_mode, "groups": 0, "metrics": 0}
     frame = pd.DataFrame(rows)
@@ -109,8 +115,12 @@ def main() -> None:
     parser.add_argument("--start-date", required=True, type=date.fromisoformat)
     parser.add_argument("--end-date", required=True, type=date.fromisoformat)
     parser.add_argument("--oos", action="store_true", help="materialize purged train/validation/test scopes")
+    parser.add_argument("--strategy-type")
     args = parser.parse_args()
-    print(json.dumps(run(snapshot_mode=args.snapshot_mode, start_date=args.start_date, end_date=args.end_date, oos=args.oos), ensure_ascii=False, indent=2))
+    print(json.dumps(run(
+        snapshot_mode=args.snapshot_mode, start_date=args.start_date,
+        end_date=args.end_date, oos=args.oos, strategy_type=args.strategy_type,
+    ), ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

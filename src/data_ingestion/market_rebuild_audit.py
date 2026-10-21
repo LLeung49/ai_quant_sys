@@ -22,6 +22,7 @@ HARD_METRICS = (
     "incomplete_batches",
     "duplicate_rows",
     "batch_row_count_mismatches",
+    "rows_outside_batch_range",
     "zero_price_rows",
     "non_finite_rows",
     "invalid_ohlc_rows",
@@ -351,38 +352,74 @@ def audit_rebuild(batch_id: str) -> RebuildAuditReport:
         """,
         (batch_id, batch_id, batch_id, batch_id),
     )[0]["n"]
+    outside_batch_range = execute_query(
+        """
+        SELECT
+          (SELECT COUNT(*)
+           FROM trade_stock_daily_raw_rebuild s
+           JOIN trade_market_rebuild_batch b
+             ON b.batch_id=s.rebuild_batch_id AND b.stock_code=s.stock_code
+           LEFT JOIN trade_market_rebuild_excluded_code x
+             ON x.batch_id=b.batch_id AND x.stock_code=b.stock_code
+           WHERE s.rebuild_batch_id=%s AND b.status='complete'
+             AND x.stock_code IS NULL
+             AND (s.trade_date < b.start_date OR s.trade_date > b.end_date))
+          +
+          (SELECT COUNT(*)
+           FROM trade_stock_daily_qfq_rebuild s
+           JOIN trade_market_rebuild_batch b
+             ON b.batch_id=s.rebuild_batch_id AND b.stock_code=s.stock_code
+           LEFT JOIN trade_market_rebuild_excluded_code x
+             ON x.batch_id=b.batch_id AND x.stock_code=b.stock_code
+           WHERE s.rebuild_batch_id=%s AND b.status='complete'
+             AND x.stock_code IS NULL
+             AND (s.trade_date < b.start_date OR s.trade_date > b.end_date))
+          +
+          (SELECT COUNT(*)
+           FROM trade_stock_daily_bfq_rebuild s
+           JOIN trade_market_rebuild_batch b
+             ON b.batch_id=s.rebuild_batch_id AND b.stock_code=s.stock_code
+           LEFT JOIN trade_market_rebuild_excluded_code x
+             ON x.batch_id=b.batch_id AND x.stock_code=b.stock_code
+           WHERE s.rebuild_batch_id=%s AND b.status='complete'
+             AND x.stock_code IS NULL
+             AND (s.trade_date < b.start_date OR s.trade_date > b.end_date)) AS n
+        """,
+        (batch_id, batch_id, batch_id),
+    )[0]["n"]
     aggregate = execute_query(
         """
         SELECT
-          SUM(zero_price) AS zero_price_rows,
-          SUM(non_finite) AS non_finite_rows,
-          SUM(invalid_ohlc) AS invalid_ohlc_rows
+          SUM(zero_price_rows) AS zero_price_rows,
+          SUM(non_finite_rows) AS non_finite_rows,
+          SUM(invalid_ohlc_rows) AS invalid_ohlc_rows
         FROM (
           SELECT
-            (open_price=0 OR high_price=0 OR low_price=0 OR close_price=0) zero_price,
-            (NOT (open_price <=> open_price) OR NOT (high_price <=> high_price)
-             OR NOT (low_price <=> low_price) OR NOT (close_price <=> close_price)
-             OR NOT (amount <=> amount)) non_finite,
-            (low_price>high_price OR low_price>LEAST(open_price,close_price)
-             OR high_price<GREATEST(open_price,close_price)) invalid_ohlc
+            SUM(open_price=0 OR high_price=0 OR low_price=0 OR close_price=0)
+              AS zero_price_rows,
+            SUM(NOT (open_price <=> open_price) OR NOT (high_price <=> high_price)
+                OR NOT (low_price <=> low_price) OR NOT (close_price <=> close_price)
+                OR NOT (amount <=> amount)) AS non_finite_rows,
+            SUM(low_price>high_price OR low_price>LEAST(open_price,close_price)
+                OR high_price<GREATEST(open_price,close_price)) AS invalid_ohlc_rows
           FROM trade_stock_daily_raw_rebuild WHERE rebuild_batch_id=%s
           UNION ALL
           SELECT
-            (open_price=0 OR high_price=0 OR low_price=0 OR close_price=0),
-            (NOT (open_price <=> open_price) OR NOT (high_price <=> high_price)
-             OR NOT (low_price <=> low_price) OR NOT (close_price <=> close_price)
-             OR NOT (amount <=> amount)),
-            (low_price>high_price OR low_price>LEAST(open_price,close_price)
-             OR high_price<GREATEST(open_price,close_price))
+            SUM(open_price=0 OR high_price=0 OR low_price=0 OR close_price=0),
+            SUM(NOT (open_price <=> open_price) OR NOT (high_price <=> high_price)
+                OR NOT (low_price <=> low_price) OR NOT (close_price <=> close_price)
+                OR NOT (amount <=> amount)),
+            SUM(low_price>high_price OR low_price>LEAST(open_price,close_price)
+                OR high_price<GREATEST(open_price,close_price))
           FROM trade_stock_daily_qfq_rebuild WHERE rebuild_batch_id=%s
           UNION ALL
           SELECT
-            (open_price=0 OR high_price=0 OR low_price=0 OR close_price=0),
-            (NOT (open_price <=> open_price) OR NOT (high_price <=> high_price)
-             OR NOT (low_price <=> low_price) OR NOT (close_price <=> close_price)
-             OR NOT (amount <=> amount)),
-            (low_price>high_price OR low_price>LEAST(open_price,close_price)
-             OR high_price<GREATEST(open_price,close_price))
+            SUM(open_price=0 OR high_price=0 OR low_price=0 OR close_price=0),
+            SUM(NOT (open_price <=> open_price) OR NOT (high_price <=> high_price)
+                OR NOT (low_price <=> low_price) OR NOT (close_price <=> close_price)
+                OR NOT (amount <=> amount)),
+            SUM(low_price>high_price OR low_price>LEAST(open_price,close_price)
+                OR high_price<GREATEST(open_price,close_price))
           FROM trade_stock_daily_bfq_rebuild WHERE rebuild_batch_id=%s
         ) checked
         """,
@@ -446,6 +483,7 @@ def audit_rebuild(batch_id: str) -> RebuildAuditReport:
         "incomplete_batches": int(incomplete or 0),
         "duplicate_rows": int(duplicates or 0),
         "batch_row_count_mismatches": int(batch_counts or 0),
+        "rows_outside_batch_range": int(outside_batch_range or 0),
         "zero_price_rows": int(aggregate.get("zero_price_rows") or 0),
         "non_finite_rows": int(aggregate.get("non_finite_rows") or 0),
         "invalid_ohlc_rows": int(aggregate.get("invalid_ohlc_rows") or 0),

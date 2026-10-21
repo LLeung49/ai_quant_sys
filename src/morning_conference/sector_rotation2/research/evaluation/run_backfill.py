@@ -39,12 +39,20 @@ class CachingProvider(MySQLPriceBarProvider):
         return {day: bar for day, bar in self._cache[key].items() if start_date <= day <= end_date}
 
 
-def run(*, snapshot_mode: SnapshotMode, start_date: date, end_date: date, sector_level: int) -> dict[str, object]:
-    rows = execute_query(
+def run(
+    *, snapshot_mode: SnapshotMode, start_date: date, end_date: date, sector_level: int,
+    strategy_type: str | None = None, calendar_end_date: date | None = None,
+) -> dict[str, object]:
+    query = (
         "SELECT * FROM research_candidate_snapshot WHERE snapshot_mode=%s AND sector_level=%s "
-        "AND as_of_date BETWEEN %s AND %s ORDER BY as_of_date, id",
-        (snapshot_mode.value, sector_level, start_date, end_date),
+        "AND as_of_date BETWEEN %s AND %s "
+        "AND NOT (strategy_type='stock_repair' AND validation_status='rejected') "
     )
+    params: tuple[object, ...] = (snapshot_mode.value, sector_level, start_date, end_date)
+    if strategy_type is not None:
+        query += "AND strategy_type=%s "
+        params += (strategy_type,)
+    rows = execute_query(query + "ORDER BY as_of_date, id", params)
     snapshots: list[CandidateSnapshot] = []
     for row in rows:
         for field in ("feature_json", "reasons_json", "risk_flags_json"):
@@ -55,6 +63,10 @@ def run(*, snapshot_mode: SnapshotMode, start_date: date, end_date: date, sector
         return {"snapshot_mode": snapshot_mode.value, "snapshot_count": 0, "label_count": 0}
 
     calendar_end = _calendar_end_date(snapshots, end_date)
+    if calendar_end_date is not None:
+        if calendar_end_date < end_date:
+            raise ValueError("calendar_end_date cannot precede end_date")
+        calendar_end = calendar_end_date
     calendar_dates = load_authoritative_market_calendar(start_date, calendar_end, execute_query, sector_level=sector_level)
     if not calendar_dates:
         raise RuntimeError("authoritative market calendar returned no dates")
@@ -107,8 +119,14 @@ def main() -> None:
     parser.add_argument("--start-date", required=True, type=date.fromisoformat)
     parser.add_argument("--end-date", required=True, type=date.fromisoformat)
     parser.add_argument("--sector-level", type=int, default=2)
+    parser.add_argument("--strategy-type")
+    parser.add_argument("--calendar-end-date", type=date.fromisoformat)
     args = parser.parse_args()
-    print(json.dumps(run(snapshot_mode=SnapshotMode(args.snapshot_mode), start_date=args.start_date, end_date=args.end_date, sector_level=args.sector_level), ensure_ascii=False, default=str, indent=2))
+    print(json.dumps(run(
+        snapshot_mode=SnapshotMode(args.snapshot_mode), start_date=args.start_date,
+        end_date=args.end_date, sector_level=args.sector_level,
+        strategy_type=args.strategy_type, calendar_end_date=args.calendar_end_date,
+    ), ensure_ascii=False, default=str, indent=2))
 
 
 if __name__ == "__main__":

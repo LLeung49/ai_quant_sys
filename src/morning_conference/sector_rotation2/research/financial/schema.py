@@ -19,6 +19,12 @@ RESEARCH_FINANCIAL_DDL = {
             total_assets DECIMAL(24, 4) NULL,
             total_equity DECIMAL(24, 4) NULL,
             operating_cash_flow DECIMAL(24, 4) NULL,
+            eps DECIMAL(18, 6) NULL,
+            roe DECIMAL(18, 6) NULL,
+            gross_margin DECIMAL(18, 6) NULL,
+            metric_available_at DATE NULL,
+            metric_lineage_json JSON NULL,
+            date_evidence VARCHAR(64) NULL,
             pit_status VARCHAR(16) NOT NULL,
             source_updated_at DATETIME NOT NULL,
             source_hash CHAR(64) NOT NULL,
@@ -83,6 +89,17 @@ RESEARCH_FINANCIAL_DDL = {
 }
 
 
+_PIT_EXTRA_COLUMNS = {
+    "source_verified": "TINYINT(1) NOT NULL DEFAULT 0",
+    "eps": "DECIMAL(18, 6) NULL",
+    "roe": "DECIMAL(18, 6) NULL",
+    "gross_margin": "DECIMAL(18, 6) NULL",
+    "metric_available_at": "DATE NULL",
+    "metric_lineage_json": "JSON NULL",
+    "date_evidence": "VARCHAR(64) NULL",
+}
+
+
 def apply_schema_ddl(connection: Any) -> None:
     """Apply every DDL block in ``RESEARCH_FINANCIAL_DDL`` to ``connection``."""
 
@@ -92,15 +109,17 @@ def apply_schema_ddl(connection: Any) -> None:
             cursor.execute(ddl)
             connection.commit()
 
-        # Idempotently ensure source_verified column exists
-        try:
-            cursor.execute(
-                "ALTER TABLE trade_stock_financial_raw_pit "
-                "ADD COLUMN source_verified TINYINT(1) NOT NULL DEFAULT 0 AFTER is_restated"
-            )
-            connection.commit()
-        except Exception:
-            pass  # Column already exists or table not found
+        cursor.execute("SHOW COLUMNS FROM trade_stock_financial_raw_pit")
+        existing = {
+            str(row["Field"] if isinstance(row, dict) else row[0])
+            for row in cursor.fetchall()
+        }
+        for name, definition in _PIT_EXTRA_COLUMNS.items():
+            if name not in existing:
+                cursor.execute(
+                    f"ALTER TABLE trade_stock_financial_raw_pit ADD COLUMN {name} {definition}"
+                )
+                connection.commit()
     finally:
         cursor.close()
 

@@ -1,8 +1,8 @@
-"""QMT 权益事件快照与复权投影的持久化刷新任务。
+"""AKShare 权益事件快照与复权投影的持久化刷新任务。
 
 原始价格和权益事件是可审计事实；前/后复权价格则是可随供应商修订重建的投影。
 本模块只负责“识别权益变化并登记任务”，不直接下载行情。任务仅在价格刷新函数成功
-写入非零行数后才标记完成，因此进程中断或 QMT 短暂失败不会丢失重刷请求。
+写入非零行数后才标记完成，因此进程中断或数据源短暂失败不会丢失重刷请求。
 """
 
 from dataclasses import dataclass
@@ -36,7 +36,7 @@ except ImportError:  # Direct script execution from src/data_ingestion.
     )
 
 
-DATA_SOURCE = "xtquant"  # 同一股票、除权日可保留不同供应商来源的事件快照。
+DATA_SOURCE = "akshare"  # Historical provider rows retain their original source.
 TASK_REASON = "corporate_action_changed"  # 供任务表审计、聚合和排障使用。
 
 ACTION_VALUE_FIELDS = (
@@ -123,7 +123,7 @@ def _decimal_text(value, places: int) -> str | None:
     try:
         decimal_value = Decimal(str(value))
     except (InvalidOperation, ValueError) as exc:
-        raise ValueError(f"Invalid QMT factor value: {value!r}") from exc
+        raise ValueError(f"Invalid corporate action value: {value!r}") from exc
     quantum = Decimal(1).scaleb(-places)
     return format(decimal_value.quantize(quantum), f".{places}f")
 
@@ -139,7 +139,7 @@ def _json_value(value):
 
 
 def _event_date(value) -> date:
-    """兼容 QMT 可能返回的日期、时间戳和字符串，统一转为权益事件除权日。"""
+    """将日期、时间戳和字符串统一转为权益事件除权日。"""
     if isinstance(value, datetime):
         return value.date()
     if isinstance(value, date):
@@ -156,48 +156,138 @@ def _event_date(value) -> date:
     digits = "".join(character for character in text if character.isdigit())
     if len(digits) >= 8:
         return datetime.strptime(digits[:8], "%Y%m%d").date()
-    raise ValueError(f"Unexpected QMT ex-date value: {value!r}")
+    raise ValueError(f"Unexpected corporate action date: {value!r}")
 
 
-def normalize_qmt_factors(stock_code: str, factor_frame) -> list[dict]:
-    """将 QMT ``get_divid_factors`` 转为稳定的数据库权益事实。
+def _per_ten_shares(value) -> str:
+    if _is_null(value):
+        return "0.00000000"
+    try:
+        per_share = Decimal(str(value)) / Decimal(10)
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError(f"Invalid AKShare corporate action value: {value!r}") from exc
+    if not per_share.is_finite() or per_share < 0:
+        raise ValueError(f"Invalid AKShare corporate action value: {value!r}")
+    return _decimal_text(per_share, 8) or "0.00000000"
 
-    原始 QMT 字段同时保存在 ``source_payload``，便于以后核对字段语义或供应商修订；
-    用固定精度的文本保存可比较数值，避免二进制浮点误差反复触发重刷。
-    """
-    events = []
-    if factor_frame is None:
-        return events
-    for index_value, row in factor_frame.iterrows():
-        values = {
-            name: row.get(name) if hasattr(row, "get") else row[name]
-            for name in (
-                "interest", "stockBonus", "stockGift", "allotNum",
-                "allotPrice", "gugai", "dr",
-            )
-        }
-        ex_date = _event_date(index_value)
-        share_reform = _json_value(values["gugai"])
-        share_reform = int(share_reform) if share_reform is not None else 0
-        payload = {name: _json_value(value) for name, value in values.items()}
-        payload["gugai"] = share_reform
-        events.append(
-            {
-                "stock_code": stock_code,
-                "ex_date": ex_date.isoformat(),
-                "cash_dividend_per_share": _decimal_text(values["interest"], 8) or "0.00000000",
-                "stock_bonus_per_share": _decimal_text(values["stockBonus"], 8) or "0.00000000",
-                "stock_gift_per_share": _decimal_text(values["stockGift"], 8) or "0.00000000",
-                "rights_issue_per_share": _decimal_text(values["allotNum"], 8) or "0.00000000",
-                "rights_issue_price": _decimal_text(values["allotPrice"], 8),
-                "share_reform_flag": share_reform,
-                "qmt_dr_factor": _decimal_text(values["dr"], 16),
-                "event_status": "effective",
-                "data_source": DATA_SOURCE,
-                "source_payload": payload,
-            }
-        )
+
+def _akshare_event(
+    stock_code: str,
+    ex_date: date,
+    *,
+    cash: str,
+    bonus: str = "0.00000000",
+    gift: str = "0.00000000",
+    payload: dict | None = None,
+) -> dict:
+    return {
+        "stock_code": stock_code,
+        "ex_date": ex_date.isoformat(),
+        "cash_dividend_per_share": cash,
+        "stock_bonus_per_share": bonus,
+        "stock_gift_per_share": gift,
+        "rights_issue_per_share": "0.00000000",
+        "rights_issue_price": None,
+        "share_reform_flag": 0,
+        "qmt_dr_factor": None,
+        "event_status": "effective",
+        "data_source": DATA_SOURCE,
+        "source_payload": payload or {},
+    }
+
+
+def _normalize_akshare_stock_row(stock_code: str, row: dict) -> dict | None:
+    raw_ex_date = row.get("除权除息日")
+    if _is_null(raw_ex_date):
+        return None
+    ex_date = _event_date(raw_ex_date)
+    bonus_value = row.get("送转股份-送股比例")
+    if _is_null(bonus_value):
+        bonus_value = row.get("送转股份-送转比例")
+    cash_value = row.get("现金分红-现金分红比例")
+    gift_value = row.get("送转股份-转股比例")
+    cash = _per_ten_shares(cash_value)
+    bonus = _per_ten_shares(bonus_value)
+    gift = _per_ten_shares(gift_value)
+    if cash == bonus == gift == "0.00000000":
+        return None
+    payload = {
+        "cash_per_ten": None if _is_null(cash_value) else str(cash_value),
+        "bonus_per_ten": None if _is_null(bonus_value) else str(bonus_value),
+        "transfer_per_ten": None if _is_null(gift_value) else str(gift_value),
+        "progress": None if _is_null(row.get("方案进度")) else str(row.get("方案进度")),
+    }
+    return _akshare_event(
+        stock_code, ex_date, cash=cash, bonus=bonus, gift=gift, payload=payload,
+    )
+
+
+def normalize_akshare_stock_actions(stock_code: str, frame) -> list[dict]:
+    """Normalize implemented stock distributions reported per ten shares."""
+
+    if frame is None or getattr(frame, "empty", False):
+        return []
+    events = [
+        event
+        for row in frame.to_dict(orient="records")
+        if (event := _normalize_akshare_stock_row(stock_code, row)) is not None
+    ]
     return sorted(events, key=lambda item: item["ex_date"])
+
+
+def normalize_akshare_market_stock_actions(frame) -> list[dict]:
+    """Normalize a market-wide Eastmoney distribution frame."""
+
+    if frame is None or getattr(frame, "empty", False):
+        return []
+    code_column = "代码" if "代码" in frame.columns else frame.columns[0]
+    events = []
+    for row in frame.to_dict(orient="records"):
+        digits = str(row.get(code_column) or "").strip().zfill(6)
+        if len(digits) != 6 or not digits.isdigit():
+            continue
+        exchange = "SH" if digits.startswith(("5", "6", "9")) else "SZ"
+        event = _normalize_akshare_stock_row(f"{digits}.{exchange}", row)
+        if event is not None:
+            events.append(event)
+    return sorted(events, key=lambda item: (item["ex_date"], item["stock_code"]))
+
+
+def normalize_akshare_etf_actions(stock_code: str, frame) -> list[dict]:
+    """Derive individual ETF cash dividends from cumulative dividends."""
+
+    if frame is None or getattr(frame, "empty", False):
+        return []
+    date_column = "日期" if "日期" in frame.columns else frame.columns[0]
+    cumulative_column = "累计分红" if "累计分红" in frame.columns else frame.columns[-1]
+    observations = sorted(
+        (
+            _event_date(row[date_column]),
+            Decimal(str(row[cumulative_column])),
+        )
+        for row in frame.to_dict(orient="records")
+        if not _is_null(row.get(date_column)) and not _is_null(row.get(cumulative_column))
+    )
+    previous = Decimal(0)
+    events = []
+    for ex_date, cumulative in observations:
+        if not cumulative.is_finite() or cumulative < previous:
+            raise ValueError(
+                f"Invalid AKShare cumulative ETF dividend: {stock_code}/{ex_date}"
+            )
+        dividend = cumulative - previous
+        previous = cumulative
+        if dividend == 0:
+            continue
+        events.append(
+            _akshare_event(
+                stock_code,
+                ex_date,
+                cash=_decimal_text(dividend, 8) or "0.00000000",
+                payload={"cumulative_dividend": str(cumulative)},
+            )
+        )
+    return events
 
 
 def _key(event: dict) -> tuple[str, date, str]:
@@ -318,6 +408,21 @@ def plan_factor_snapshot(
     )
 
 
+def plan_incremental_snapshot(
+    current_events: Iterable[dict],
+    stored_events: Iterable[dict],
+    data_start: date,
+) -> SnapshotPlan:
+    """Plan a partial feed without treating omitted history as cancellation."""
+
+    current = list(current_events)
+    current_keys = {_key(item) for item in current}
+    comparable_stored = [
+        item for item in stored_events if _key(item) in current_keys
+    ]
+    return plan_factor_snapshot(current, comparable_stored, data_start)
+
+
 def _event_values(event: dict) -> tuple:
     return (
         event["stock_code"],
@@ -371,14 +476,16 @@ def persist_snapshot_plan(
         connection.close()
 
 
-def sync_qmt_factor_snapshot(
+def sync_akshare_action_snapshot(
     stock_code: str,
-    factor_frame,
+    action_frame,
     snapshot_start: date,
     snapshot_end: date,
     data_start: date,
+    *,
+    instrument_type: Literal["stock", "etf"] = "stock",
 ) -> SnapshotPlan:
-    """读取同窗口旧快照、生成差异计划并落库；返回值可用于调用方日志统计。"""
+    """Normalize one complete AKShare window, diff it, and persist atomically."""
     # 先查询数据库中同一股票、同一数据源、同一最近 10 天窗口内已经保存的权益事件
     existing = execute_query(
         SELECT_ACTION_SNAPSHOT_SQL,
@@ -386,7 +493,11 @@ def sync_qmt_factor_snapshot(
     )
     # 对比新旧，得出“哪些事实要更新、哪些投影要重刷”，factor_frame是最新查到的权益事件
     plan = plan_factor_snapshot(
-        normalize_qmt_factors(stock_code, factor_frame),
+        (
+            normalize_akshare_stock_actions(stock_code, action_frame)
+            if instrument_type == "stock"
+            else normalize_akshare_etf_actions(stock_code, action_frame)
+        ),
         existing,
         data_start,
     )

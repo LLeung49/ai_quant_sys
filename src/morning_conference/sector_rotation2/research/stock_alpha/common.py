@@ -238,6 +238,7 @@ def load_stock_close_series(
     query: Callable = execute_query,
     *,
     batch_size: int = 100,
+    start_date: date | None = None,
 ) -> dict:
     """Load per-stock close series (qfq) for stock-level return calculations.
 
@@ -256,11 +257,11 @@ def load_stock_close_series(
         sql = (
             "SELECT stock_code, trade_date, close_price AS close, volume, amount "
             "FROM trade_stock_daily_qfq "
-            "WHERE trade_date <= %s "
-            "AND stock_code IN (" + placeholders + ") "
+            + ("WHERE trade_date BETWEEN %s AND %s " if start_date else "WHERE trade_date <= %s ")
+            + "AND stock_code IN (" + placeholders + ") "
             "ORDER BY stock_code, trade_date"
         )
-        rows = query(sql, (as_of_date, *chunk))
+        rows = query(sql, (start_date, as_of_date, *chunk) if start_date else (as_of_date, *chunk))
         for row in rows:
             code = str(row.get("stock_code") or "").strip()
             trade_date = _as_date(row.get("trade_date"))
@@ -273,7 +274,7 @@ def load_stock_close_series(
 
 def load_stock_ohlcv_series(
     stock_codes: Iterable[str], as_of_date: date, query: Callable = execute_query,
-    *, batch_size: int = 100,
+    *, batch_size: int = 100, start_date: date | None = None,
 ) -> dict[str, dict[date, dict[str, float]]]:
     """Load raw OHLCV history for technical features without changing the close API."""
     codes = sorted({code for code in stock_codes if code})
@@ -284,10 +285,12 @@ def load_stock_ohlcv_series(
         sql = (
             "SELECT stock_code, trade_date, open_price AS open, high_price AS high, "
             "low_price AS low, close_price AS close, volume, amount "
-            "FROM trade_stock_daily_qfq WHERE trade_date <= %s AND stock_code IN ("
+            "FROM trade_stock_daily_qfq "
+            + ("WHERE trade_date BETWEEN %s AND %s " if start_date else "WHERE trade_date <= %s ")
+            + "AND stock_code IN ("
             + placeholders + ") ORDER BY stock_code, trade_date"
         )
-        for row in query(sql, (as_of_date, *chunk)):
+        for row in query(sql, (start_date, as_of_date, *chunk) if start_date else (as_of_date, *chunk)):
             code = str(row.get("stock_code") or "").strip()
             day = _as_date(row.get("trade_date"))
             if not code or day is None or row.get("close") is None:

@@ -36,7 +36,7 @@ export function recordDecision(snapshotId: number, decision: "WATCH" | "ENTER" |
 export function fetchResearchSummary(asOfDate: string, level = 2, snapshotMode = "live_shadow") {
   return get("/api/v1/sector-rotation/research/today-summary", { as_of_date: asOfDate, level, snapshot_mode: snapshotMode }).then((value) => summary.parse(value));
 }
-export function fetchLatestResearchDate(level = 2, snapshotMode = "live_shadow") { return get("/api/v1/sector-rotation/research/latest-date", { level, snapshot_mode: snapshotMode }).then((value) => latestDate.parse(value)); }
+export function fetchLatestResearchDate(level = 2, snapshotMode?: string) { return get("/api/v1/sector-rotation/research/latest-date", { level, ...(snapshotMode ? { snapshot_mode: snapshotMode } : {}) }).then((value) => latestDate.parse(value)); }
 export function fetchResearchCandidates(asOfDate: string, level = 2, snapshotMode = "live_shadow", strategyType?: string, sectorName?: string) {
   const path = strategyType === "etf_core" ? "/api/v1/sector-rotation/research/etf-candidates" : strategyType === "sector_opportunity" ? "/api/v1/sector-rotation/research/opportunities" : "/api/v1/sector-rotation/research/stock-candidates";
   return get(path, { as_of_date: asOfDate, level, snapshot_mode: snapshotMode, ...(strategyType && !["etf_core", "sector_opportunity"].includes(strategyType) ? { strategy_type: strategyType } : {}), ...(sectorName ? { sector_name: sectorName } : {}) }).then((value) => response.parse({ ...(value as object), candidates: "candidates" in (value as object) ? (value as { candidates: unknown[] }).candidates : (value as { opportunities: unknown[] }).opportunities }));

@@ -42,6 +42,20 @@ def test_valid_market_row_passes():
     assert result.issues == ()
 
 
+def test_price_that_database_would_round_to_zero_is_rejected():
+    result = validate_market_row(row(
+        open_price=0.0000001,
+        high_price=0.0000002,
+        low_price=0.0000001,
+        close_price=0.0000001,
+    ), allow_negative_price=True)
+
+    assert not result.is_valid
+    assert {issue.code for issue in result.issues} == {
+        "zero_price_after_storage_rounding"
+    }
+
+
 def test_negative_qfq_is_preserved_but_quarantined():
     result = validate_market_row(
         row(open_price=-2.0, high_price=-1.0, low_price=-3.0, close_price=-1.5),

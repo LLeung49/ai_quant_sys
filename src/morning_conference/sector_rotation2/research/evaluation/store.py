@@ -28,6 +28,19 @@ def persist_forward_labels(connection: Any, labels: Iterable[ForwardLabel], cont
         return 0
     cursor = connection.cursor()
     try:
+        snapshot_ids = sorted({row[0] for row in rows})
+        placeholders = ",".join(["%s"] * len(snapshot_ids))
+        cursor.execute(
+            "SELECT id,snapshot_mode FROM research_candidate_snapshot "
+            "WHERE id IN (" + placeholders + ") "
+            "AND NOT (strategy_type='stock_repair' AND validation_status='rejected') FOR SHARE",
+            snapshot_ids,
+        )
+        eligible = {(int(row[0]), str(row[1])) for row in cursor.fetchall()}
+        rows = [row for row in rows if (int(row[0]), str(row[1])) in eligible]
+        if not rows:
+            connection.commit()
+            return 0
         cursor.executemany(_FORWARD_LABEL_UPSERT, rows)
         connection.commit()
         return cursor.rowcount

@@ -1,6 +1,6 @@
 ﻿"""Tests for normalize + TTM + capital layers."""
 
-from datetime import date, timedelta
+from datetime import date
 
 import pytest
 
@@ -18,7 +18,6 @@ from morning_conference.sector_rotation2.research.financial.providers.base impor
     CapitalRow,
 )
 from morning_conference.sector_rotation2.research.financial.ttm import (
-    TTM_QUARTERS,
     build_ttm,
 )
 
@@ -45,22 +44,19 @@ def _raw_row(**overrides) -> FinancialRawRow:
     return FinancialRawRow(**base)
 
 
-def _quarter_chain(start: date, count: int = TTM_QUARTERS) -> list[FinancialRawRow]:
-    """Build ``count`` quarterly rows spaced by ~90 days from ``start``."""
-
-    rows: list[FinancialRawRow] = []
-    for i in range(count):
-        report = start + timedelta(days=90 * i)
-        announce = report + timedelta(days=25)
-        rows.append(_raw_row(
-            report_date=report,
-            announcement_date=announce,
-            source_hash=f"h{i}",
-            revenue=100.0,
-            net_profit=10.0,
-            operating_cash_flow=12.0,
-        ))
-    return rows
+def _ytd_anchor_chain() -> list[FinancialRawRow]:
+    """Three PIT-visible YTD anchors for 2026 Q2."""
+    return [
+        _raw_row(report_date=date(2025, 6, 30), announcement_date=date(2025, 8, 1),
+                 source_hash="h0", revenue=100.0, net_profit=10.0,
+                 operating_cash_flow=12.0),
+        _raw_row(report_date=date(2025, 12, 31), announcement_date=date(2026, 4, 1),
+                 source_hash="h1", revenue=400.0, net_profit=40.0,
+                 operating_cash_flow=48.0),
+        _raw_row(report_date=date(2026, 6, 30), announcement_date=date(2026, 7, 25),
+                 source_hash="h2", revenue=250.0, net_profit=25.0,
+                 operating_cash_flow=30.0),
+    ]
 
 
 def test_normalize_row_surfaces_missing_field_flags() -> None:
@@ -83,13 +79,85 @@ def test_normalize_rows_and_mapping_round_trip() -> None:
     assert out["quality_flags"] == []
 
 
-def test_build_ttm_sums_four_quarters() -> None:
-    ttm = build_ttm(_quarter_chain(date(2025, 9, 30)), as_of_date=date(2026, 8, 1))
+def test_build_ttm_differences_ytd_anchors() -> None:
+    ttm = build_ttm(_ytd_anchor_chain(), as_of_date=date(2026, 8, 1))
     assert ttm is not None
-    assert ttm.revenue == pytest.approx(400.0)
-    assert ttm.net_profit == pytest.approx(40.0)
-    assert ttm.operating_cash_flow == pytest.approx(48.0)
+    assert ttm.revenue == pytest.approx(550.0)
+    assert ttm.net_profit == pytest.approx(55.0)
+    assert ttm.operating_cash_flow == pytest.approx(66.0)
     assert ttm.is_complete is True
+
+
+def test_build_ttm_converts_year_to_date_statements_without_double_counting():
+    rows = [
+        _raw_row(report_date=date(2025, 6, 30), announcement_date=date(2025, 8, 1),
+                 source_hash="prior_q2", revenue=50.0, net_profit=5.0,
+                 operating_cash_flow=6.0),
+        _raw_row(report_date=date(2025, 12, 31), announcement_date=date(2026, 4, 1),
+                 source_hash="prior_fy", revenue=120.0, net_profit=12.0,
+                 operating_cash_flow=15.0),
+        _raw_row(report_date=date(2026, 6, 30), announcement_date=date(2026, 8, 1),
+                 source_hash="current_q2", revenue=70.0, net_profit=7.0,
+                 operating_cash_flow=8.0),
+    ]
+    ttm = build_ttm(rows, as_of_date=date(2026, 8, 2))
+    assert ttm is not None
+    assert ttm.revenue == pytest.approx(140.0)
+    assert ttm.net_profit == pytest.approx(14.0)
+    assert ttm.operating_cash_flow == pytest.approx(17.0)
+
+
+def test_build_ttm_matches_2026_maotai_statement_ytd_contract():
+    # Captured PIT statement amounts: 2026H1 + 2025FY - 2025H1.
+    rows = [
+        _raw_row(stock_code="600519.SH", report_date=date(2025, 6, 30), announcement_date=date(2025, 8, 13),
+                 source_hash="2025h1", revenue=91_093_762_553.97,
+                 net_profit=46_986_681_449.24),
+        _raw_row(stock_code="600519.SH", report_date=date(2025, 12, 31), announcement_date=date(2026, 4, 17),
+                 source_hash="2025fy", revenue=172_054_171_890.91,
+                 net_profit=85_310_324_833.67),
+        _raw_row(stock_code="600519.SH", report_date=date(2026, 6, 30), announcement_date=date(2026, 8, 15),
+                 source_hash="2026h1", revenue=92_278_072_083.21,
+                 net_profit=46_033_330_566.78),
+    ]
+    ttm = build_ttm(rows, as_of_date=date(2026, 10, 19))
+    assert ttm is not None
+    assert ttm.revenue == pytest.approx(173_238_481_420.15)
+    assert ttm.net_profit == pytest.approx(84_356_973_951.21)
+
+
+def test_build_ttm_annual_statement_is_one_full_year():
+    annual = _raw_row(report_date=date(2025, 12, 31),
+                      announcement_date=date(2026, 4, 1),
+                      revenue=120.0, net_profit=12.0)
+    ttm = build_ttm([annual], as_of_date=date(2026, 4, 2))
+    assert ttm is not None
+    assert ttm.revenue == pytest.approx(120.0)
+
+
+def test_build_ttm_requires_prior_year_anchor_visible_at_as_of_date():
+    rows = [
+        _raw_row(report_date=date(2025, 6, 30), announcement_date=date(2025, 8, 1),
+                 source_hash="prior_q2"),
+        _raw_row(report_date=date(2025, 12, 31), announcement_date=date(2026, 9, 1),
+                 source_hash="late_fy"),
+        _raw_row(report_date=date(2026, 6, 30), announcement_date=date(2026, 8, 1),
+                 source_hash="current_q2"),
+    ]
+    assert build_ttm(rows, as_of_date=date(2026, 8, 2)) is None
+
+
+def test_build_ttm_explicit_estimated_opt_in() -> None:
+    chain = _ytd_anchor_chain()
+    chain[0] = _raw_row(
+        report_date=chain[0].report_date,
+        announcement_date=None,
+        first_seen_at=chain[0].announcement_date,
+        source_hash="estimated",
+        source_verified=False,
+    )
+    assert build_ttm(chain, as_of_date=date(2026, 8, 1)) is None
+    assert build_ttm(chain, as_of_date=date(2026, 8, 1), allow_estimated_pit=True) is not None
 
 
 def test_build_ttm_returns_none_with_fewer_than_four_quarters() -> None:
@@ -113,7 +181,7 @@ def test_build_ttm_flags_partial_revenue_but_returns_projection() -> None:
     valuation knows not to compute a PE when ``revenue`` is ``None``.
     """
 
-    chain = _quarter_chain(date(2025, 9, 30))
+    chain = _ytd_anchor_chain()
     chain[1] = _raw_row(
         report_date=chain[1].report_date,
         announcement_date=chain[1].announcement_date,
@@ -124,12 +192,12 @@ def test_build_ttm_flags_partial_revenue_but_returns_projection() -> None:
     ttm = build_ttm(chain, as_of_date=date(2026, 8, 1))
     assert ttm is not None
     assert ttm.revenue is None
-    assert ttm.net_profit == pytest.approx(40.0)
+    assert ttm.net_profit == pytest.approx(25.0)
     assert "partial_revenue" in ttm.quality_flags
 
 
 def test_build_ttm_flags_restated_components() -> None:
-    chain = _quarter_chain(date(2025, 9, 30))
+    chain = _ytd_anchor_chain()
     chain[1] = _raw_row(
         report_date=chain[1].report_date,
         announcement_date=chain[1].announcement_date,
@@ -173,6 +241,55 @@ def test_resolve_capital_excludes_future_rows() -> None:
     assert resolve_capital(rows, as_of_date=date(2026, 8, 1)) is None
 
 
+def test_resolve_capital_waits_for_announced_share_change_to_take_effect() -> None:
+    rows = [
+        CapitalRow(
+            stock_code="600000", report_date=date(2026, 1, 1),
+            announcement_date=date(2025, 12, 20), total_shares=900.0,
+            circulating_shares=850.0, source_hash="old", data_source="qmt",
+        ),
+        CapitalRow(
+            stock_code="600000", report_date=date(2026, 10, 25),
+            announcement_date=date(2026, 10, 10), total_shares=1000.0,
+            circulating_shares=950.0, source_hash="new", data_source="qmt",
+        ),
+    ]
+    before = resolve_capital(rows, as_of_date=date(2026, 10, 20))
+    after = resolve_capital(rows, as_of_date=date(2026, 10, 26))
+    assert before is not None and before.source_hash == "old"
+    assert after is not None and after.source_hash == "new"
+
+
+def test_resolve_capital_prefers_latest_effective_date_over_late_correction() -> None:
+    rows = [
+        CapitalRow(
+            stock_code="600000", report_date=date(2026, 1, 1),
+            announcement_date=date(2026, 10, 1), total_shares=900.0,
+            circulating_shares=850.0, source_hash="corrected_old", data_source="qmt",
+        ),
+        CapitalRow(
+            stock_code="600000", report_date=date(2026, 6, 1),
+            announcement_date=date(2026, 7, 1), total_shares=1000.0,
+            circulating_shares=950.0, source_hash="current", data_source="qmt",
+        ),
+    ]
+    selected = resolve_capital(rows, as_of_date=date(2026, 10, 20))
+    assert selected is not None and selected.source_hash == "current"
+
+
+def test_capital_prefers_qmt_for_same_effective_date_but_newer_akshare_change_wins() -> None:
+    rows = [
+        CapitalRow("600000.SH", date(2026, 6, 1), date(2026, 6, 2),
+                   1000., 900., "qmt", "qmt"),
+        CapitalRow("600000.SH", date(2026, 6, 1), date(2026, 6, 3),
+                   1001., 901., "ak_same", "akshare"),
+        CapitalRow("600000.SH", date(2026, 7, 1), date(2026, 7, 2),
+                   1100., 990., "ak_new", "akshare"),
+    ]
+    assert resolve_capital(rows, as_of_date=date(2026, 6, 30)).source_hash == "qmt"
+    assert resolve_capital(rows, as_of_date=date(2026, 7, 3)).source_hash == "ak_new"
+
+
 def test_resolve_capital_market_cap_uses_raw_close() -> None:
     resolved = ResolvedCapital(
         stock_code="600000", as_of_date=date(2026, 8, 17),
@@ -182,3 +299,5 @@ def test_resolve_capital_market_cap_uses_raw_close() -> None:
     )
     assert resolved.market_cap(10.5) == pytest.approx(10500.0)
     assert resolved.market_cap(None) is None
+    assert resolved.market_cap(0.0) is None
+    assert resolved.market_cap(float("nan")) is None

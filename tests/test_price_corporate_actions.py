@@ -3,6 +3,7 @@ from decimal import Decimal
 from pathlib import Path
 import sys
 
+import pandas as pd
 
 SRC_DIR = Path(__file__).parents[1] / "src"
 sys.path.insert(0, str(SRC_DIR))
@@ -28,36 +29,81 @@ def event(
         "rights_issue_per_share": "0.00000000",
         "rights_issue_price": None,
         "share_reform_flag": 1,
-        "qmt_dr_factor": "0.9876543210987654",
+        "qmt_dr_factor": None,
         "event_status": status,
-        "data_source": "xtquant",
-        "source_payload": {
-            "interest": float(cash),
-            "stockBonus": 0.1,
-            "stockGift": 0.2,
-            "allotNum": 0,
-            "allotPrice": None,
-            "gugai": 1,
-            "dr": "0.9876543210987654",
-        },
+        "data_source": "akshare",
+        "source_payload": {},
     }
 
 
-class OneRowFactorFrame:
-    def iterrows(self):
-        yield date(2026, 7, 1), {
-            "interest": 0.12,
-            "stockBonus": 0.1,
-            "stockGift": 0.2,
-            "allotNum": 0,
-            "allotPrice": None,
-            "gugai": 1,
-            "dr": Decimal("0.9876543210987654"),
-        }
+def test_normalize_akshare_stock_actions_converts_per_ten_share_values():
+    frame = pd.DataFrame([{
+        "除权除息日": date(2026, 7, 1),
+        "现金分红-现金分红比例": Decimal("1.2"),
+        "送转股份-送股比例": Decimal("1"),
+        "送转股份-转股比例": Decimal("2"),
+        "方案进度": "实施分配",
+    }])
+
+    result = actions.normalize_akshare_stock_actions("000001.SZ", frame)
+
+    assert len(result) == 1
+    normalized = result[0]
+    assert normalized["ex_date"] == "2026-07-01"
+    assert normalized["cash_dividend_per_share"] == "0.12000000"
+    assert normalized["stock_bonus_per_share"] == "0.10000000"
+    assert normalized["stock_gift_per_share"] == "0.20000000"
+    assert normalized["data_source"] == "akshare"
+    assert normalized["qmt_dr_factor"] is None
 
 
-def test_normalize_qmt_factor_frame_preserves_exact_adjustment_fields():
-    assert actions.normalize_qmt_factors("000001.SZ", OneRowFactorFrame()) == [event()]
+def test_normalize_akshare_etf_actions_differences_cumulative_dividends():
+    frame = pd.DataFrame({
+        "日期": [date(2025, 1, 10), date(2026, 1, 12)],
+        "累计分红": [Decimal("0.10"), Decimal("0.25")],
+    })
+
+    result = actions.normalize_akshare_etf_actions("510300.SH", frame)
+
+    assert [row["cash_dividend_per_share"] for row in result] == [
+        "0.10000000", "0.15000000",
+    ]
+    assert all(row["data_source"] == "akshare" for row in result)
+
+
+def test_normalize_market_stock_actions_groups_codes_and_ignores_unimplemented_rows():
+    frame = pd.DataFrame([
+        {
+            "代码": "600519",
+            "除权除息日": date(2026, 6, 26),
+            "现金分红-现金分红比例": Decimal("280.2423"),
+            "送转股份-送转比例": None,
+            "送转股份-转股比例": None,
+            "方案进度": "实施分配",
+        },
+        {
+            "代码": "000001",
+            "除权除息日": None,
+            "现金分红-现金分红比例": Decimal("1"),
+            "方案进度": "预披露",
+        },
+    ])
+
+    result = actions.normalize_akshare_market_stock_actions(frame)
+
+    assert len(result) == 1
+    assert result[0]["stock_code"] == "600519.SH"
+    assert result[0]["cash_dividend_per_share"] == "28.02423000"
+
+
+def test_incremental_plan_does_not_cancel_stored_events_absent_from_partial_feed():
+    current = event(ex_date="2026-07-01")
+    older = event(ex_date="2025-07-01")
+
+    plan = actions.plan_incremental_snapshot([current], [older], DATA_START)
+
+    assert plan.events_to_cancel == []
+    assert [change.kind for change in plan.changes] == ["new"]
 
 
 def test_new_event_persists_snapshot_and_only_queues_full_qfq_refresh():
@@ -107,7 +153,7 @@ def test_missing_stored_event_is_persisted_as_cancelled_and_refreshes_both_proje
 
     assert [change.kind for change in plan.changes] == ["cancelled"]
     assert plan.events_to_upsert == []
-    assert plan.events_to_cancel == [("000001.SZ", date(2026, 7, 1), "xtquant")]
+    assert plan.events_to_cancel == [("000001.SZ", date(2026, 7, 1), "akshare")]
     assert [task["price_mode"] for task in plan.refresh_tasks] == ["front", "back"]
     assert plan.refresh_tasks[0]["refresh_from"] == DATA_START
     assert plan.refresh_tasks[1]["refresh_from"] == date(2026, 7, 1)

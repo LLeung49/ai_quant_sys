@@ -5,13 +5,15 @@
 正在使用的旧前复权链路。旧表只能由独立的、人工确认后的对账修复脚本写入。
 """
 
-from datetime import date
+from datetime import date, datetime, timezone
+import hashlib
+import json
 
 try:  # Package import for tests and application modules.
-    from .db_config import execute_many, execute_query
+    from .db_config import execute_many, execute_query, get_connection
     from .market_row_validation import validate_market_row
 except ImportError:  # Direct ``python 8-...py`` execution.
-    from db_config import execute_many, execute_query
+    from db_config import execute_many, execute_query, get_connection
     from market_row_validation import validate_market_row
 
 
@@ -26,14 +28,21 @@ RAW_INSERT_SQL = """
 -- 原始行情是交易事实；重复下载同一日期时以供应商最新值幂等覆盖。
 INSERT INTO trade_stock_daily_raw
     (stock_code, trade_date, open_price, high_price, low_price, close_price,
-     volume, amount, pre_close, suspend_flag, data_source)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+     volume, amount, pre_close, suspend_flag, data_source,
+     rebuild_batch_id, rebuild_source, rebuild_fetched_at, rebuild_fingerprint,
+     rebuild_validation_status)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'valid')
 ON DUPLICATE KEY UPDATE
     open_price = VALUES(open_price), high_price = VALUES(high_price),
     low_price = VALUES(low_price), close_price = VALUES(close_price),
     volume = VALUES(volume), amount = VALUES(amount),
     pre_close = VALUES(pre_close), suspend_flag = VALUES(suspend_flag),
     data_source = VALUES(data_source),
+    rebuild_batch_id = VALUES(rebuild_batch_id),
+    rebuild_source = VALUES(rebuild_source),
+    rebuild_fetched_at = VALUES(rebuild_fetched_at),
+    rebuild_fingerprint = VALUES(rebuild_fingerprint),
+    rebuild_validation_status = VALUES(rebuild_validation_status),
     updated_at = CURRENT_TIMESTAMP
 """
 
@@ -41,28 +50,44 @@ QFQ_INSERT_SQL = """
 -- 独立前复权投影；adjustment_asof 记录本行已包含到哪个权益事件版本。
 INSERT INTO trade_stock_daily_qfq
     (stock_code, trade_date, open_price, high_price, low_price, close_price,
-     volume, amount, turnover_rate, adjustment_asof)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+     volume, amount, turnover_rate, adjustment_asof,
+     rebuild_batch_id, rebuild_source, rebuild_fetched_at, rebuild_fingerprint,
+     rebuild_validation_status)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'valid')
 ON DUPLICATE KEY UPDATE
     open_price = VALUES(open_price), high_price = VALUES(high_price),
     low_price = VALUES(low_price), close_price = VALUES(close_price),
     volume = VALUES(volume), amount = VALUES(amount),
     turnover_rate = VALUES(turnover_rate),
-    adjustment_asof = VALUES(adjustment_asof), refreshed_at = CURRENT_TIMESTAMP
+    adjustment_asof = VALUES(adjustment_asof),
+    rebuild_batch_id = VALUES(rebuild_batch_id),
+    rebuild_source = VALUES(rebuild_source),
+    rebuild_fetched_at = VALUES(rebuild_fetched_at),
+    rebuild_fingerprint = VALUES(rebuild_fingerprint),
+    rebuild_validation_status = VALUES(rebuild_validation_status),
+    refreshed_at = CURRENT_TIMESTAMP
 """
 
 BFQ_INSERT_SQL = """
 -- 独立后复权投影；正常新增权益事件通常只需增量写入，历史修订才由任务表回补。
 INSERT INTO trade_stock_daily_bfq
     (stock_code, trade_date, open_price, high_price, low_price, close_price,
-     volume, amount, turnover_rate, adjustment_asof)
-VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+     volume, amount, turnover_rate, adjustment_asof,
+     rebuild_batch_id, rebuild_source, rebuild_fetched_at, rebuild_fingerprint,
+     rebuild_validation_status)
+VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'valid')
 ON DUPLICATE KEY UPDATE
     open_price = VALUES(open_price), high_price = VALUES(high_price),
     low_price = VALUES(low_price), close_price = VALUES(close_price),
     volume = VALUES(volume), amount = VALUES(amount),
     turnover_rate = VALUES(turnover_rate),
-    adjustment_asof = VALUES(adjustment_asof), refreshed_at = CURRENT_TIMESTAMP
+    adjustment_asof = VALUES(adjustment_asof),
+    rebuild_batch_id = VALUES(rebuild_batch_id),
+    rebuild_source = VALUES(rebuild_source),
+    rebuild_fetched_at = VALUES(rebuild_fetched_at),
+    rebuild_fingerprint = VALUES(rebuild_fingerprint),
+    rebuild_validation_status = VALUES(rebuild_validation_status),
+    refreshed_at = CURRENT_TIMESTAMP
 """
 
 INSERT_SQL_BY_DIVIDEND_TYPE = {
@@ -79,6 +104,29 @@ LATEST_DATE_SQL_BY_DIVIDEND_TYPE = {
     "front": "SELECT stock_code, MAX(trade_date) AS max_date FROM trade_stock_daily_qfq GROUP BY stock_code",
     "back": "SELECT stock_code, MAX(trade_date) AS max_date FROM trade_stock_daily_bfq GROUP BY stock_code",
 }
+
+
+def _daily_metadata(
+    row: dict,
+    adjustment_asof: date | None,
+    fetched_at: datetime,
+) -> tuple[str, str, datetime, str]:
+    source = str(row.get("data_source") or "akshare")
+    batch_date = adjustment_asof or date.fromisoformat(str(row["trade_date"])[:10])
+    batch_id = f"daily-{source}-{batch_date:%Y%m%d}"
+    payload = {
+        key: row.get(key)
+        for key in (
+            "stock_code", "trade_date", "open_price", "high_price", "low_price",
+            "close_price", "volume", "amount", "pre_close", "suspend_flag",
+            "turnover_rate", "data_source",
+        )
+    }
+    payload["adjustment_asof"] = adjustment_asof
+    fingerprint = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, default=str, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return batch_id, f"{source}_daily", fetched_at, fingerprint
 
 
 def table_for_mode(dividend_type: str) -> str:
@@ -130,6 +178,7 @@ def write_daily_rows(
         return 0
     table_for_mode(dividend_type)
     _validate_rows(dividend_type, rows)
+    fetched_at = datetime.now(timezone.utc).replace(tzinfo=None)
     if dividend_type == "none":
         values = [
             (
@@ -137,6 +186,7 @@ def write_daily_rows(
                 row["high_price"], row["low_price"], row["close_price"],
                 row["volume"], row["amount"], row.get("pre_close"),
                 row.get("suspend_flag"), row.get("data_source", "akshare"),
+                *_daily_metadata(row, adjustment_asof, fetched_at),
             )
             for row in rows
         ]
@@ -147,10 +197,55 @@ def write_daily_rows(
                 row["high_price"], row["low_price"], row["close_price"],
                 row["volume"], row["amount"], row.get("turnover_rate"),
                 adjustment_asof,
+                *_daily_metadata(row, adjustment_asof, fetched_at),
             )
             for row in rows
         ]
     return execute_many(INSERT_SQL_BY_DIVIDEND_TYPE[dividend_type], values)
+
+
+def write_projection_batch(rows_by_mode: dict[str, list[dict]], adjustment_asof: date) -> int:
+    """Write one instrument's three validated projections atomically."""
+    if set(rows_by_mode) != set(TABLE_BY_DIVIDEND_TYPE):
+        raise ValueError("all three market projections are required")
+    for mode, rows in rows_by_mode.items():
+        table_for_mode(mode)
+        if not rows:
+            raise ValueError(f"empty {mode} market projection")
+        _validate_rows(mode, rows)
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    affected = 0
+    fetched_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    try:
+        for mode in ("none", "front", "back"):
+            rows = rows_by_mode[mode]
+            if mode == "none":
+                values = [(
+                    row["stock_code"], row["trade_date"], row["open_price"],
+                    row["high_price"], row["low_price"], row["close_price"],
+                    row["volume"], row["amount"], row.get("pre_close"),
+                    row.get("suspend_flag"), row.get("data_source", "akshare"),
+                    *_daily_metadata(row, adjustment_asof, fetched_at),
+                ) for row in rows]
+            else:
+                values = [(
+                    row["stock_code"], row["trade_date"], row["open_price"],
+                    row["high_price"], row["low_price"], row["close_price"],
+                    row["volume"], row["amount"], row.get("turnover_rate"),
+                    adjustment_asof,
+                    *_daily_metadata(row, adjustment_asof, fetched_at),
+                ) for row in rows]
+            affected += cursor.executemany(INSERT_SQL_BY_DIVIDEND_TYPE[mode], values)
+        conn.commit()
+        return affected
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cursor.close()
+        conn.close()
 
 
 def write_daily_rows_batch(
@@ -171,6 +266,7 @@ def write_daily_rows_batch(
         raise ValueError("chunk_size must be greater than zero")
     table_for_mode(dividend_type)
     _validate_rows(dividend_type, rows)
+    fetched_at = datetime.now(timezone.utc).replace(tzinfo=None)
     if dividend_type == "none":
         values = [
             (
@@ -178,6 +274,9 @@ def write_daily_rows_batch(
                 row["high_price"], row["low_price"], row["close_price"],
                 row["volume"], row["amount"], row.get("pre_close"),
                 row.get("suspend_flag"), row.get("data_source", "akshare"),
+                *_daily_metadata(
+                    row, adjustment_asofs.get(row["stock_code"]), fetched_at
+                ),
             )
             for row in rows
         ]
@@ -188,6 +287,9 @@ def write_daily_rows_batch(
                 row["high_price"], row["low_price"], row["close_price"],
                 row["volume"], row["amount"], row.get("turnover_rate"),
                 adjustment_asofs.get(row["stock_code"]),
+                *_daily_metadata(
+                    row, adjustment_asofs.get(row["stock_code"]), fetched_at
+                ),
             )
             for row in rows
         ]

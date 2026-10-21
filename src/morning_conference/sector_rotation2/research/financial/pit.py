@@ -58,33 +58,56 @@ def _get(row: object, key: str) -> object:
     return getattr(row, key, None)
 
 
+def _legacy_qmt_period_date(row: object) -> bool:
+    """Identify the imported QMT rows whose period end was labeled EXACT."""
+
+    return (
+        str(_get(row, "data_source") or "").lower() == "qmt"
+        and str(_get(row, "source_table") or "") == "trade_stock_financial"
+        and _to_date(_get(row, "announcement_date")) is not None
+        and _to_date(_get(row, "announcement_date")) == _to_date(_get(row, "report_date"))
+    )
+
+
+def _availability_date(row: object) -> date | None:
+    if _legacy_qmt_period_date(row):
+        return _to_date(_get(row, "first_seen_at"))
+    return _to_date(_get(row, "announcement_date") or _get(row, "first_seen_at"))
+
+
 def classify_pit(row: object) -> PITStatus:
     """Return the PIT status for one raw row.
 
     The function accepts either a Mapping or a :class:`FinancialRawRow`
     dataclass instance.  The classification rules:
     - explicit ``pit_status`` if it already classifies the row;
-    - ``PIT_EXACT`` when ``announcement_date`` is present and the row has
-      not been restated (``is_restated=False``);
+    - ``PIT_EXACT`` when a genuine ``announcement_date`` is present, including
+      a revision announced later;
     - ``PIT_VERIFIED`` when the announcement date is missing but the
       source has verified ``first_seen_at`` provenance (manual entry);
     - ``PIT_ESTIMATED`` when only ``first_seen_at`` is available;
     - ``PIT_INVALID`` when both dates are missing or unparsable.
     """
 
+    if _legacy_qmt_period_date(row):
+        return PITStatus.ESTIMATED
     explicit = _get(row, "pit_status")
     if explicit:
         try:
-            return PITStatus(str(explicit))
+            normalized = str(explicit).strip().lower()
+            if normalized in {"exact", "verified", "estimated", "invalid"}:
+                normalized = "pit_" + normalized
+            status = PITStatus(normalized)
+            if status is not PITStatus.EXACT or _to_date(_get(row, "announcement_date")) is not None:
+                return status
         except ValueError:
             pass
     announcement = _get(row, "announcement_date")
     first_seen = _get(row, "first_seen_at")
-    is_restated = bool(_get(row, "is_restated"))
     source_verified = bool(_get(row, "source_verified"))
     if announcement is None and first_seen is None:
         return PITStatus.INVALID
-    if announcement is not None and not is_restated:
+    if _to_date(announcement) is not None:
         return PITStatus.EXACT
     if source_verified and first_seen is not None:
         return PITStatus.VERIFIED
@@ -113,29 +136,25 @@ def resolve_latest_visible(
     target_date = _to_date(as_of_date) or as_of_date
     eligible: list[FinancialRawRow] = []
     for row in rows:
-        pit_value = _get(row, "pit_status")
-        if pit_value:
-            try:
-                pit = PITStatus(str(pit_value))
-            except ValueError:
-                pit = classify_pit(row)
-        else:
-            pit = classify_pit(row)
+        pit = classify_pit(row)
         if pit is PITStatus.INVALID:
             continue
         if not allow_estimated_pit and pit is PITStatus.ESTIMATED:
             continue
-        availability = _to_date(row.announcement_date or row.first_seen_at)
+        availability = _availability_date(row)
         if availability is None or availability > target_date:
             continue
         eligible.append(row)
     if not eligible:
         return None
-    # Choose the row with the latest availability; tie-break prefers
-    # original records (is_restated=False) and the earliest source_hash.
+    # The latest visible reporting period wins. Within that period prefer the
+    # cross-checked native QMT history; then choose its latest visible revision.
     eligible.sort(
         key=lambda row: (
-            -((_to_date(row.announcement_date or row.first_seen_at) or date.min).toordinal()),
+            -row.report_date.toordinal(),
+            0 if (row.data_source.lower() == "qmt" and
+                  row.source_table == "qmt_native_composite") else 1,
+            -((_availability_date(row) or date.min).toordinal()),
             1 if row.is_restated else 0,
             row.source_hash,
         )

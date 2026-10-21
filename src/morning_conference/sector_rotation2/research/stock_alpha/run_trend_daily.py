@@ -192,9 +192,11 @@ def _process_sector(
     ).get(sector_name, {})
     stock_close_series = load_stock_close_series(
         [row.stock_code for row in universe], target, query,
+        start_date=target - timedelta(days=365),
     )
     ohlcv_series = load_stock_ohlcv_series(
         [row.stock_code for row in universe], target, query,
+        start_date=target - timedelta(days=365),
     )
     amount_feed = {
         code: float(pd.Series([v.get("amount") for v in values.values() if v.get("amount") is not None]).tail(20).median())

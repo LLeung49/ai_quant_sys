@@ -64,6 +64,23 @@ def test_stock_endpoint_accepts_strategy_filter(monkeypatch):
     assert "stock_repair" in seen["params"]
 
 
+def test_rejected_legacy_repair_snapshots_are_hidden_from_workbench(monkeypatch):
+    seen = {}
+
+    def fake_query(sql, params):
+        seen["sql"] = " ".join(sql.split())
+        return []
+
+    monkeypatch.setattr(research_router, "execute_query", fake_query)
+    response = TestClient(create_app()).get(
+        "/api/v1/sector-rotation/research/stock-candidates",
+        params={"as_of_date": "2025-01-15", "strategy_type": "stock_repair",
+                "snapshot_mode": "backfill"},
+    )
+    assert response.status_code == 200
+    assert "NOT (strategy_type='stock_repair' AND validation_status='rejected')" in seen["sql"]
+
+
 def test_candidate_endpoint_returns_security_name_and_falls_back_to_code(monkeypatch):
     seen = {}
 

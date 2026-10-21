@@ -94,7 +94,10 @@ def step2_filter_trap_avoidance(df: pd.DataFrame) -> dict:
     n = min(60, len(close)); sample = close[-n:]
     hurst = None
     if n >= 20 and np.std(sample) > 0:
-        hurst = float(np.log(np.sum(np.abs(np.diff(sample))) / np.std(sample)) / np.log(n))
+        path_length = np.sum(np.abs(np.diff(sample)))
+        if path_length > 0:
+            candidate = np.log(path_length / np.std(sample)) / np.log(n)
+            hurst = float(candidate) if np.isfinite(candidate) else None
     efficiency = None
     if len(close) > 1:
         window = close[-min(11, len(close)):]
@@ -211,12 +214,16 @@ def run_macd_daily_metrics(as_of_date: str, enable_step2: bool = True, volume_th
     stock_rows = execute_query(
         "SELECT d.stock_code, s.stock_name, s.sector_1, s.sector_2, d.trade_date, d.close_price AS close, d.volume "
         "FROM trade_stock_daily_qfq d LEFT JOIN trade_stock_status s ON s.stock_code=d.stock_code "
-        "WHERE d.trade_date BETWEEN %s AND %s ORDER BY d.stock_code, d.trade_date",
+        "WHERE d.trade_date BETWEEN %s AND %s "
+        "AND LEFT(d.stock_code, 2) IN ('15','16','50','51','56','58') "
+        "ORDER BY d.stock_code, d.trade_date",
         (start_date, as_of_date),
     )
     if stock_rows:
         for code, group in pd.DataFrame(stock_rows).groupby("stock_code"):
             if not str(code).split(".")[0].startswith(ETF_PREFIXES):
+                continue
+            if len(group) < 2:
                 continue
             latest_name = group.iloc[-1].get("stock_name")
             if is_excluded_bond_etf(code, latest_name):
@@ -234,6 +241,11 @@ def run_macd_daily_metrics(as_of_date: str, enable_step2: bool = True, volume_th
         if not sector_rows:
             continue
         for name, group in pd.DataFrame(sector_rows).groupby("sector_name"):
+            # Historical sector indices can be nonpositive (e.g. 白色家电).
+            # Indicators derived from these values are not valid price signals.
+            closes = pd.to_numeric(group['close'], errors='coerce')
+            if closes.isna().any() or (closes <= 0).any():
+                continue
             details = evaluate_macd_entity(group, entity_type=f"sector_l{level}", volume_threshold=thresholds[f"sector_l{level}"], enable_step2=enable_step2, gc_lookback=7, require_zero_above=False)
             details.update({"stock_code": name, "stock_name": name, "sector_1": name if level == 1 else None, "sector_2": name if level == 2 else None})
             frames.append(details)

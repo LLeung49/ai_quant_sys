@@ -99,3 +99,36 @@ def test_delayed_backfill_persists_not_matured_when_calendar_coverage_is_exhaust
     assert result["status_counts"] == {ReturnStatus.NOT_MATURED.value: 3}
     assert len(persisted) == 3
     assert all(label.source_snapshot_id == 9 for label in persisted)
+
+
+def test_backfill_accepts_bounded_calendar_end(monkeypatch) -> None:
+    signal_date = date(2024, 1, 2)
+    snapshot = CandidateSnapshot(
+        snapshot_id=10, as_of_date=signal_date, entity_type="stock", entity_code="000001.SZ", sector_level=2,
+        sector_name="test", strategy_type="stock_repair", candidate_status="candidate", candidate_score=1.0,
+        model_version="v1", config_hash="c1", run_id="run", snapshot_mode=SnapshotMode.BACKFILL,
+    )
+    captured = {}
+    monkeypatch.setattr("morning_conference.sector_rotation2.research.evaluation.run_backfill.execute_query", lambda *_: [{}])
+    monkeypatch.setattr("morning_conference.sector_rotation2.research.evaluation.run_backfill._snapshot_from_row", lambda _: snapshot)
+    monkeypatch.setattr(
+        "morning_conference.sector_rotation2.research.evaluation.run_backfill.load_authoritative_market_calendar",
+        lambda start, end, *_args, **_kwargs: (captured.setdefault("end", end), (signal_date,))[1],
+    )
+    monkeypatch.setattr("morning_conference.sector_rotation2.research.evaluation.run_backfill.backfill_forward_labels", lambda **kwargs: [])
+
+    class Connection:
+        def close(self):
+            pass
+
+    monkeypatch.setattr("morning_conference.sector_rotation2.research.evaluation.run_backfill.get_connection", Connection)
+    monkeypatch.setattr("morning_conference.sector_rotation2.research.evaluation.run_backfill.ensure_evaluation_tables", lambda _: None)
+    monkeypatch.setattr("morning_conference.sector_rotation2.research.evaluation.run_backfill.persist_forward_labels", lambda *_: 0)
+    bounded_end = date(2026, 10, 19)
+
+    run(
+        snapshot_mode=SnapshotMode.BACKFILL, start_date=signal_date, end_date=signal_date,
+        sector_level=2, calendar_end_date=bounded_end,
+    )
+
+    assert captured["end"] == bounded_end

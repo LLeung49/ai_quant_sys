@@ -67,6 +67,7 @@ INSERT INTO trade_market_rebuild_batch
      raw_rows, qfq_rows, hfq_rows, gap_count, error_detail, started_at)
 VALUES (%s, %s, %s, %s, 'running', %s, %s, 0, 0, 0, 0, NULL, CURRENT_TIMESTAMP)
 ON DUPLICATE KEY UPDATE
+    start_date=VALUES(start_date), end_date=VALUES(end_date),
     status='running', source=VALUES(source), fingerprint=VALUES(fingerprint),
     error_detail=NULL, started_at=CURRENT_TIMESTAMP, completed_at=NULL
 """
@@ -225,6 +226,56 @@ class RebuildStore:
             cursor.close()
             conn.close()
 
+    def replace_with_exclusion(
+        self,
+        stock_code: str,
+        *,
+        reason: str,
+        evidence: Mapping[str, object],
+    ) -> None:
+        """Remove one code's staged rows and record its reviewed exclusion atomically."""
+        code = str(stock_code).strip()
+        clean_reason = str(reason).strip()
+        if not code or not clean_reason or not isinstance(evidence, Mapping) or not evidence:
+            raise ValueError("exclusion requires code, reason, and non-empty evidence")
+        encoded_evidence = json.dumps(
+            dict(evidence), ensure_ascii=False, sort_keys=True, default=str
+        )
+        conn = self.connection_factory()
+        cursor = conn.cursor()
+        try:
+            for table in STAGING_TABLE_BY_MODE.values():
+                cursor.execute(
+                    f"DELETE FROM {table} "
+                    "WHERE rebuild_batch_id=%s AND stock_code=%s",
+                    (self.batch_id, code),
+                )
+            cursor.execute(
+                "DELETE FROM trade_market_rebuild_gap "
+                "WHERE batch_id=%s AND stock_code=%s",
+                (self.batch_id, code),
+            )
+            cursor.execute(
+                "INSERT INTO trade_market_rebuild_excluded_code "
+                "(batch_id, stock_code, reason, evidence) VALUES (%s, %s, %s, %s) "
+                "ON DUPLICATE KEY UPDATE reason=VALUES(reason), evidence=VALUES(evidence)",
+                (self.batch_id, code, clean_reason, encoded_evidence),
+            )
+            cursor.execute(
+                "UPDATE trade_market_rebuild_batch SET status='failed', "
+                "raw_rows=0, qfq_rows=0, hfq_rows=0, gap_count=0, "
+                "error_detail=%s, completed_at=NULL "
+                "WHERE batch_id=%s AND stock_code=%s",
+                (f"excluded:{clean_reason}", self.batch_id, code),
+            )
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+            conn.close()
+
     def record_failure(
         self,
         stock_code: str,
@@ -300,6 +351,21 @@ class RebuildStore:
                     for batch, fingerprint, source, _ in prepared
                 ],
             )
+            cursor.executemany(
+                "DELETE FROM trade_market_rebuild_gap "
+                "WHERE batch_id=%s AND stock_code=%s",
+                [(self.batch_id, batch.stock_code) for batch, _, _, _ in prepared],
+            )
+            replacement_keys = [
+                (self.batch_id, batch.stock_code)
+                for batch, _, _, _ in prepared
+            ]
+            for table in STAGING_TABLE_BY_MODE.values():
+                cursor.executemany(
+                    f"DELETE FROM {table} "
+                    "WHERE rebuild_batch_id=%s AND stock_code=%s",
+                    replacement_keys,
+                )
             raw_values = [
                 (
                     row["stock_code"], row["trade_date"], row["open_price"],

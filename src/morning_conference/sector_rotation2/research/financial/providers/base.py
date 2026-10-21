@@ -43,6 +43,10 @@ class FinancialRawRow:
     total_assets: Optional[float] = None
     total_equity: Optional[float] = None
     operating_cash_flow: Optional[float] = None
+    eps: Optional[float] = None
+    roe: Optional[float] = None
+    gross_margin: Optional[float] = None
+    metric_available_at: Optional[date] = None
     quality_issue: Optional[ProviderQualityIssue] = None
 
 

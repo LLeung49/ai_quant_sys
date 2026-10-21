@@ -22,6 +22,13 @@ from data_ingestion.db_config import get_connection
 
 VALID_STOCK_CODE = re.compile(r"^[0-9]{6}\.(SH|SZ|BJ)$")
 MIN_REPORT_DATE = date(1990, 1, 1)
+CORE_FINANCIAL_FIELDS = (
+    "revenue",
+    "net_profit",
+    "total_assets",
+    "total_equity",
+    "operating_cash_flow",
+)
 
 
 def _coerce_date(value: Any) -> date | None:
@@ -60,6 +67,12 @@ def classify_row(row: dict[str, Any], *, as_of_date: date) -> tuple[str, ...]:
     elif announcement_date is not None and announcement_date > as_of_date:
         reasons.append("future_announcement_date")
 
+    if (
+        any(field in row for field in CORE_FINANCIAL_FIELDS)
+        and all(row.get(field) is None for field in CORE_FINANCIAL_FIELDS)
+    ):
+        reasons.append("all_core_financials_null")
+
     return tuple(reasons)
 
 
@@ -90,6 +103,11 @@ def fetch_candidates(connection, *, as_of_date: date) -> list[dict[str, Any]]:
                   OR report_date < '1990-01-01'
                   OR report_date > %s
                   OR announcement_date > %s
+                  OR (revenue IS NULL
+                      AND net_profit IS NULL
+                      AND total_assets IS NULL
+                      AND total_equity IS NULL
+                      AND operating_cash_flow IS NULL)
                ORDER BY id""",
             (as_of_date, as_of_date),
         )

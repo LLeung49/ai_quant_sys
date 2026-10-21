@@ -79,7 +79,9 @@ def test_store_uses_only_rebuild_targets_and_commits_complete_triple():
     )
 
     insert_sql = [sql for kind, sql, _ in connection.calls if kind == "executemany"]
-    projection_sql = [sql for sql in insert_sql if "trade_stock_daily_" in sql]
+    projection_sql = [
+        sql for sql in insert_sql if "INSERT INTO trade_stock_daily_" in sql
+    ]
     assert len(projection_sql) == 3
     assert all("_rebuild" in sql.split("INSERT INTO", 1)[1].split("(", 1)[0] for sql in projection_sql)
     assert connection.commits == 1
@@ -125,11 +127,31 @@ def test_repeat_persist_is_an_idempotent_upsert():
 
     projection_sql = [
         sql for kind, sql, _ in connection.calls
-        if kind == "executemany" and "trade_stock_daily_" in sql
+        if kind == "executemany" and "INSERT INTO trade_stock_daily_" in sql
     ]
     assert projection_sql
     assert all("ON DUPLICATE KEY UPDATE" in sql for sql in projection_sql)
     assert connection.commits == 2
+
+
+def test_retry_refreshes_batch_range_and_replaces_stale_gap_evidence():
+    connection = Connection()
+
+    RebuildStore(lambda: connection, batch_id="batch-1").persist_validated_batch(
+        complete_batch()
+    )
+
+    assert "start_date=VALUES(start_date)" in __import__(
+        "data_ingestion.market_rebuild_store", fromlist=["START_BATCH_SQL"]
+    ).START_BATCH_SQL
+    gap_deletes = [
+        (sql, values) for kind, sql, values in connection.calls
+        if kind == "executemany" and "DELETE FROM trade_market_rebuild_gap" in sql
+    ]
+    assert gap_deletes == [(
+        "DELETE FROM trade_market_rebuild_gap WHERE batch_id=%s AND stock_code=%s",
+        [("batch-1", "600519.SH")],
+    )]
 
 
 def test_multiple_codes_use_one_transaction_and_three_projection_inserts():
@@ -144,12 +166,28 @@ def test_multiple_codes_use_one_transaction_and_three_projection_inserts():
 
     projection_calls = [
         (sql, values) for kind, sql, values in connection.calls
-        if kind == "executemany" and "trade_stock_daily_" in sql
+        if kind == "executemany" and "INSERT INTO trade_stock_daily_" in sql
     ]
     assert len(projection_calls) == 3
     assert all(len(values) == 2 for _, values in projection_calls)
     assert connection.commits == 1
     assert [result.stock_code for result in results] == ["600519.SH", "000001.SZ"]
+
+
+def test_replacement_deletes_old_projection_rows_inside_same_transaction():
+    connection = Connection()
+
+    RebuildStore(lambda: connection, batch_id="batch-1").persist_validated_batch(
+        complete_batch()
+    )
+
+    deletes = [
+        (sql, values) for kind, sql, values in connection.calls
+        if kind == "executemany" and sql.startswith("DELETE FROM trade_stock_daily_")
+    ]
+    assert len(deletes) == 3
+    assert all(values == [("batch-1", "600519.SH")] for _, values in deletes)
+    assert all("_rebuild" in sql for sql, _ in deletes)
 
 
 def test_prepare_universe_persists_sorted_manifest_and_hash():
@@ -210,3 +248,27 @@ def test_excluded_codes_are_read_for_resume():
     ).excluded_codes()
 
     assert codes == {"158036.SZ", "159047.SZ"}
+
+
+def test_replace_with_exclusion_removes_all_staging_evidence_atomically():
+    connection = Connection()
+    store = RebuildStore(lambda: connection, batch_id="market-full-1")
+
+    store.replace_with_exclusion(
+        "158058.SZ",
+        reason="listed_after_rebuild_end",
+        evidence={"open_date": "2026-10-14", "rebuild_end_date": "2026-10-13"},
+    )
+
+    executed = [(sql, params) for kind, sql, params in connection.calls if kind == "execute"]
+    projection_deletes = [
+        (sql, params) for sql, params in executed
+        if sql.startswith("DELETE FROM trade_stock_daily_")
+    ]
+    assert len(projection_deletes) == 3
+    assert all(params == ("market-full-1", "158058.SZ") for _, params in projection_deletes)
+    assert any("DELETE FROM trade_market_rebuild_gap" in sql for sql, _ in executed)
+    assert any("trade_market_rebuild_excluded_code" in sql for sql, _ in executed)
+    assert any("status='failed'" in sql for sql, _ in executed)
+    assert connection.commits == 1
+    assert connection.rollbacks == 0

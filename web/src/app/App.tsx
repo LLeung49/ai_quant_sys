@@ -64,13 +64,18 @@ export function App() {
 }
 
 function ResearchCockpitPage() {
-  const [snapshotMode, setSnapshotMode] = useState<"live_shadow" | "delayed_shadow" | "backfill">("delayed_shadow");
+  const [selectedMode, setSelectedMode] = useState<"live_shadow" | "delayed_shadow" | "backfill" | null>(null);
+  const autoLatest = useQuery({ queryKey: ["research-auto-latest-date"], queryFn: () => fetchLatestResearchDate(2) });
+  const snapshotMode = selectedMode ?? (
+    autoLatest.data?.snapshot_mode === "live_shadow" || autoLatest.data?.snapshot_mode === "backfill"
+      ? autoLatest.data.snapshot_mode : "delayed_shadow"
+  );
   const snapshotModeLabel = { delayed_shadow: "延迟运行", live_shadow: "当日运行", backfill: "历史回填" }[snapshotMode];
-  const latest = useQuery({ queryKey: ["research-latest-date", snapshotMode], queryFn: () => fetchLatestResearchDate(2, snapshotMode) });
+  const latest = useQuery({ queryKey: ["research-latest-date", snapshotMode], queryFn: () => fetchLatestResearchDate(2, snapshotMode), enabled: Boolean(selectedMode || autoLatest.data) });
   const [selectedDate, setSelectedDate] = useState<string>("");
   const activeDate = selectedDate || latest.data?.as_of_date || "";
 
-  if (latest.isLoading) return <div className="research-cockpit-page"><section className="research-cockpit-panel">快照信息加载中…</section></div>;
+  if (autoLatest.isLoading || latest.isLoading) return <div className="research-cockpit-page"><section className="research-cockpit-panel">快照信息加载中…</section></div>;
   if (!activeDate) return <div className="research-cockpit-page"><section className="research-cockpit-panel">暂无可用研究快照</section></div>;
 
   return (
@@ -85,7 +90,7 @@ function ResearchCockpitPage() {
           />
           <label>
             快照模式
-            <select value={snapshotMode} onChange={(event) => { setSnapshotMode(event.target.value as "live_shadow" | "delayed_shadow" | "backfill"); setSelectedDate(""); }}>
+            <select value={snapshotMode} onChange={(event) => { setSelectedMode(event.target.value as "live_shadow" | "delayed_shadow" | "backfill"); setSelectedDate(""); }}>
               <option value="delayed_shadow">延迟运行</option>
               <option value="live_shadow">当日运行</option>
               <option value="backfill">历史回填</option>

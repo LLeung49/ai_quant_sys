@@ -137,6 +137,41 @@ BEGIN
     SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='excluded code has staging rows';
   END IF;
 
+  SELECT
+    (SELECT COUNT(*)
+     FROM trade_stock_daily_raw_rebuild s
+     JOIN trade_market_rebuild_batch b
+       ON b.batch_id=s.rebuild_batch_id AND b.stock_code=s.stock_code
+     LEFT JOIN trade_market_rebuild_excluded_code x
+       ON x.batch_id=b.batch_id AND x.stock_code=b.stock_code
+     WHERE s.rebuild_batch_id=p_batch_id AND b.status='complete'
+       AND x.stock_code IS NULL
+       AND (s.trade_date < b.start_date OR s.trade_date > b.end_date))
+    +
+    (SELECT COUNT(*)
+     FROM trade_stock_daily_qfq_rebuild s
+     JOIN trade_market_rebuild_batch b
+       ON b.batch_id=s.rebuild_batch_id AND b.stock_code=s.stock_code
+     LEFT JOIN trade_market_rebuild_excluded_code x
+       ON x.batch_id=b.batch_id AND x.stock_code=b.stock_code
+     WHERE s.rebuild_batch_id=p_batch_id AND b.status='complete'
+       AND x.stock_code IS NULL
+       AND (s.trade_date < b.start_date OR s.trade_date > b.end_date))
+    +
+    (SELECT COUNT(*)
+     FROM trade_stock_daily_bfq_rebuild s
+     JOIN trade_market_rebuild_batch b
+       ON b.batch_id=s.rebuild_batch_id AND b.stock_code=s.stock_code
+     LEFT JOIN trade_market_rebuild_excluded_code x
+       ON x.batch_id=b.batch_id AND x.stock_code=b.stock_code
+     WHERE s.rebuild_batch_id=p_batch_id AND b.status='complete'
+       AND x.stock_code IS NULL
+       AND (s.trade_date < b.start_date OR s.trade_date > b.end_date))
+  INTO bad_count;
+  IF bad_count <> 0 THEN
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='staging rows fall outside approved code date range';
+  END IF;
+
   SELECT COALESCE(SUM(g.gap_count), 0) INTO bad_count
   FROM trade_market_rebuild_gap g
   JOIN trade_market_rebuild_batch b

@@ -188,6 +188,18 @@ def test_load_stock_close_series_batches_large_input() -> None:
     assert calls == [100, 100, 50]
 
 
+def test_load_stock_close_series_accepts_bounded_history() -> None:
+    captured = {}
+    def _query(sql: str, params: tuple) -> list[dict]:
+        captured['sql'] = sql
+        captured['params'] = params
+        return []
+    load_stock_close_series(['600000'], date(2026, 8, 17), query=_query,
+                            start_date=date(2025, 8, 17))
+    assert 'trade_date BETWEEN %s AND %s' in captured['sql']
+    assert captured['params'] == (date(2025, 8, 17), date(2026, 8, 17), '600000')
+
+
 def test_load_sector_close_series_returns_close_index() -> None:
     def _query(sql: str, params: tuple) -> list[dict]:
         return [

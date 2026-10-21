@@ -47,7 +47,8 @@ LATEST_ACTION_AS_OF_SQL = """
 SELECT MAX(ex_date) AS latest_action_date
 FROM trade_corporate_action
 WHERE stock_code = %s AND ex_date <= %s
-  AND event_status = 'effective' AND data_source = 'xtquant'
+  AND event_status = 'effective'
+  AND data_source IN ('akshare', 'xtquant')
 """
 
 
@@ -63,7 +64,7 @@ def adjustment_provenance_loader(
     if latest is not None and not isinstance(latest, date):
         raise ValueError("latest_action_date must be a date or null")
     return {"stock_code": stock_code, "as_of_date": as_of_date,
-            "source": "trade_corporate_action:xtquant", "complete": True,
+            "source": "trade_corporate_action:akshare_preferred", "complete": True,
             "latest_action_date": latest}
 
 

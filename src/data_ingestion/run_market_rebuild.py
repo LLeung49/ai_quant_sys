@@ -13,7 +13,6 @@ import time
 from .akshare_market_provider import AKShareMarketProvider
 from .db_config import execute_query
 from .market_rebuild_store import RebuildStore
-from .qmt_bootstrap_provider import QMTBootstrapProvider
 
 
 CODE_UNIVERSE_SQL = """
@@ -22,7 +21,6 @@ UNION SELECT stock_code FROM trade_stock_daily_qfq
 UNION SELECT stock_code FROM trade_stock_daily_bfq
 ORDER BY stock_code
 """
-
 
 def _parse_date(value: str) -> date:
     return date.fromisoformat(value)
@@ -54,6 +52,14 @@ def remaining_codes(codes: list[str], store: RebuildStore) -> list[str]:
     return [code for code in codes if code not in finished]
 
 
+def select_forced_codes(universe: list[str], forced_codes: list[str]) -> list[str]:
+    selected = sorted(set(forced_codes))
+    foreign = sorted(set(selected) - set(universe))
+    if foreign:
+        raise ValueError(f"forced codes outside immutable universe: {foreign}")
+    return selected
+
+
 def initialize_session_codes(
     codes: list[str],
     store: RebuildStore,
@@ -79,11 +85,14 @@ def initialize_session_codes(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Rebuild market prices into staging tables")
-    parser.add_argument("--provider", choices=("qmt-bootstrap",), default="qmt-bootstrap")
     parser.add_argument("--batch-id", default=datetime.now().strftime("market-%Y%m%d-%H%M%S"))
     parser.add_argument("--start-date", type=_parse_date, default=date(2015, 1, 1))
     parser.add_argument("--end-date", type=_parse_date, required=True)
     parser.add_argument("--stock-code", action="append", dest="stock_codes")
+    parser.add_argument(
+        "--force-code", action="append", dest="forced_codes",
+        help="rebuild an existing immutable-universe code even if checkpoint is complete",
+    )
     parser.add_argument("--codes-file", type=Path)
     parser.add_argument("--batch-size", type=int, default=20)
     parser.add_argument("--limit", type=int)
@@ -100,17 +109,20 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.batch_size <= 0 or args.start_date > args.end_date:
         return 2
-    codes = _load_codes(args.stock_codes, args.codes_file)
-    provider = QMTBootstrapProvider()
-    fallback_provider = AKShareMarketProvider(max_attempts=1, request_timeout=15.0)
+    full_codes = _load_codes(args.stock_codes, args.codes_file)
+    provider = AKShareMarketProvider(max_attempts=3, request_timeout=20.0)
     store = RebuildStore(batch_id=args.batch_id)
     codes, universe_sha256 = initialize_session_codes(
-        codes,
+        full_codes,
         store,
         dry_run=args.dry_run,
         no_resume=args.no_resume,
-        limit=args.limit,
+        limit=None if args.forced_codes else args.limit,
     )
+    if args.forced_codes:
+        codes = select_forced_codes(full_codes, args.forced_codes)
+        if args.limit is not None:
+            codes = codes[:args.limit]
 
     report_path = args.report or Path("reports/market-rebuild") / args.batch_id / "run.json"
     progress_path = report_path.with_suffix(".progress.jsonl")
@@ -128,7 +140,7 @@ def main(argv: list[str] | None = None) -> int:
     emit_progress("session_start", remaining_codes=len(codes))
     report = {
         "batch_id": args.batch_id,
-        "provider": "qmt_bridge",
+        "provider": "akshare",
         "start_date": args.start_date.isoformat(),
         "end_date": args.end_date.isoformat(),
         "dry_run": args.dry_run,
@@ -136,7 +148,6 @@ def main(argv: list[str] | None = None) -> int:
         "universe_sha256": universe_sha256,
         "complete": [],
         "failed": [],
-        "akshare_replacements": [],
         "rows": 0,
         "gaps": 0,
         "batch_timings": [],
@@ -164,46 +175,30 @@ def main(argv: list[str] | None = None) -> int:
             "fetch_start", first_code=code_batch[0], last_code=code_batch[-1],
             codes=len(code_batch),
         )
-        batches = provider.fetch_batches(code_batch, args.start_date, args.end_date)
+        batches = {
+            code: provider.fetch_batch(code, args.start_date, args.end_date)
+            for code in code_batch
+        }
         fetch_seconds = time.perf_counter() - batch_started
-        print(f"[重建阶段] qmt_fetch_done seconds={fetch_seconds:.2f}", flush=True)
-        emit_progress("qmt_fetch_done", seconds=round(fetch_seconds, 3))
+        print(f"[重建阶段] akshare_fetch_done seconds={fetch_seconds:.2f}", flush=True)
+        emit_progress("akshare_fetch_done", seconds=round(fetch_seconds, 3))
         ready = []
         for code in code_batch:
             batch = batches[code]
             if not batch.is_complete:
-                qmt_failures = dict(batch.failures)
-                replacement = fallback_provider.fetch_batch(
-                    code, batch.start_date, batch.end_date
-                )
-                if replacement.is_complete:
-                    batch = replacement
-                    report["akshare_replacements"].append({
-                        "stock_code": code,
-                        "qmt_failures": qmt_failures,
-                        "interfaces": replacement.provenance.get("interfaces", {}),
-                    })
-                else:
-                    detail = json.dumps({
-                        "qmt": qmt_failures,
-                        "akshare": replacement.failures,
-                    }, ensure_ascii=False)
-                    report["failed"].append({
-                        "stock_code": code, "detail": detail,
-                    })
-                    if not args.dry_run:
-                        store.record_failure(
-                            code, batch.start_date, batch.end_date,
-                            "qmt_bridge+akshare", detail,
-                        )
-                    continue
+                detail = json.dumps(batch.failures, ensure_ascii=False)
+                report["failed"].append({"stock_code": code, "detail": detail})
+                if not args.dry_run:
+                    store.record_failure(
+                        code, batch.start_date, batch.end_date, "akshare", detail,
+                    )
+                continue
             if args.dry_run:
                 report["complete"].append(code)
                 report["rows"] += sum(len(rows) for rows in batch.rows_by_mode.values())
                 report["gaps"] += len(batch.gaps)
                 continue
             ready.append(batch)
-        fallback_seconds = time.perf_counter() - batch_started - fetch_seconds
         if ready and not args.dry_run:
             persist_started = time.perf_counter()
             print(f"[重建阶段] persist_start codes={len(ready)}", flush=True)
@@ -222,7 +217,7 @@ def main(argv: list[str] | None = None) -> int:
                         })
                         store.record_failure(
                             batch.stock_code, args.start_date, args.end_date,
-                            "qmt_bridge", detail,
+                            "akshare", detail,
                         )
                     else:
                         report["complete"].append(batch.stock_code)
@@ -240,8 +235,7 @@ def main(argv: list[str] | None = None) -> int:
             "first_code": code_batch[0],
             "last_code": code_batch[-1],
             "codes": len(code_batch),
-            "qmt_fetch_seconds": round(fetch_seconds, 3),
-            "fallback_seconds": round(fallback_seconds, 3),
+            "fetch_seconds": round(fetch_seconds, 3),
             "persist_seconds": round(persist_seconds, 3),
             "total_seconds": round(time.perf_counter() - batch_started, 3),
         })

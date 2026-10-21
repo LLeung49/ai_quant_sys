@@ -31,7 +31,7 @@ SINA_COLUMNS = {
     "volume": "volume",
     "amount": "amount",
 }
-ETF_CODE_PREFIXES = ("15", "16", "50", "51", "56", "58")
+ETF_CODE_PREFIXES = ("15", "16", "50", "51", "52", "53", "55", "56", "58")
 
 
 def _is_etf_code(stock_code: str) -> bool:

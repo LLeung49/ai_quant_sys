@@ -13,6 +13,7 @@ from morning_conference.sector_rotation2.research.financial.service import (
     load_repair_sectors,
     persist_repair_candidates,
     score_repair_sector,
+    _raw_close_lookup,
 )
 from morning_conference.sector_rotation2.research.snapshot import InMemorySnapshotStore, SnapshotConflictError
 from morning_conference.sector_rotation2.research.status import ExecutionStatus, ResearchStatus, SnapshotMode
@@ -23,6 +24,7 @@ def _raw_rows() -> list[dict[str, Any]]:
     """Build 4 quarterly raw rows for a single stock."""
 
     periods = [
+        (date(2025, 6, 30), date(2025, 8, 1), date(2025, 8, 1), "h0"),
         (date(2025, 9, 30), date(2025, 10, 25), date(2025, 10, 25), "h1"),
         (date(2025, 12, 31), date(2026, 1, 25), date(2026, 1, 25), "h2"),
         (date(2026, 3, 31), date(2026, 4, 25), date(2026, 4, 25), "h3"),
@@ -41,8 +43,10 @@ def _raw_rows() -> list[dict[str, Any]]:
             "is_restated": 0,
             "source_verified": 1,
             "data_source": "miniqmt",
-            "revenue": 100.0,
-            "net_profit": 10.0,
+            "revenue": {6: 100.0, 9: 150.0, 12: 400.0, 3: 110.0}[report.month]
+            if report.year == 2025 else 250.0,
+            "net_profit": {6: 10.0, 9: 15.0, 12: 40.0, 3: 11.0}[report.month]
+            if report.year == 2025 else 25.0,
             "total_assets": 200.0,
             "total_equity": 80.0,
             "operating_cash_flow": 15.0,
@@ -82,6 +86,17 @@ def _stub_query(sql: str, params: tuple) -> list[dict[str, Any]]:
 
 def test_repair_playbooks_constant() -> None:
     assert REPAIR_PLAYBOOKS == frozenset({"repair_probe", "early_repair"})
+
+
+def test_market_cap_price_reads_unadjusted_daily_table() -> None:
+    calls = []
+
+    def query(sql, params):
+        calls.append((sql, params))
+        return [{"stock_code": "600000", "close": 10.0}]
+
+    assert _raw_close_lookup(query, date(2026, 8, 17)) == {"600000": 10.0}
+    assert "FROM trade_stock_daily_raw" in calls[0][0]
 
 
 def test_load_repair_sectors_filters_by_playbook() -> None:
@@ -204,6 +219,24 @@ def test_score_repair_sector_emits_snapshot_for_eligible_stock() -> None:
     assert snapshots[0].strategy_type == "stock_repair"
 
 
+def test_repair_candidate_exposes_missing_market_price_in_quality_flags() -> None:
+    def query(sql, params):
+        if "FROM trade_stock_daily" in " ".join(sql.split()):
+            return []
+        return _stub_query(sql, params)
+
+    snapshots = score_repair_sector(
+        {"sector_name": "Bank", "candidate_status": "trend_reinforced",
+         "model_version": "sector_opportunity_v1", "config_hash": "abc",
+         "snapshot_mode": "backfill"},
+        as_of_date="2026-08-17", level=2, mode=SnapshotMode.BACKFILL,
+        config=TrendAlphaConfig(), run_id="run-missing-price", store=None,
+        query=query,
+    )
+    assert len(snapshots) == 1
+    assert "missing_market_cap" in snapshots[0].risk_flags_json
+
+
 def test_run_repair_daily_parser_accepts_backfill_window() -> None:
     from morning_conference.sector_rotation2.research.stock_alpha.run_repair_daily import (
         build_parser,
@@ -245,6 +278,33 @@ def test_force_replace_repair_deletes_only_requested_snapshot_mode() -> None:
     assert deleted == 2
     assert all("snapshot_mode=%s" in sql for sql, _ in calls)
     assert all(params == ("2026-08-17", 2, "delayed_shadow") for _, params in calls)
+
+
+def test_force_replace_keeps_old_snapshots_if_recalculation_fails(monkeypatch) -> None:
+    from morning_conference.sector_rotation2.research.stock_alpha import run_repair_daily
+
+    class Store:
+        def ensure_schema(self):
+            pass
+
+    deleted = []
+    failed = []
+    monkeypatch.setattr(run_repair_daily, "MySQLSnapshotStore", lambda: Store())
+    monkeypatch.setattr(run_repair_daily, "create_run", lambda *args: None)
+    monkeypatch.setattr(run_repair_daily, "mark_run_failed", lambda *args: failed.append(args))
+    monkeypatch.setattr(run_repair_daily, "load_repair_sectors", lambda *args: [{"sector_name": "Bank"}])
+    monkeypatch.setattr(run_repair_daily, "score_repair_sector",
+                        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("scoring failed")))
+    monkeypatch.setattr(run_repair_daily, "_delete_existing_repair_snapshots",
+                        lambda *args: deleted.append(args))
+
+    with pytest.raises(RuntimeError, match="scoring failed"):
+        run_repair_daily.run_one_date(
+            "2026-08-17", 2, SnapshotMode.BACKFILL,
+            query=lambda *args: [], force_replace=True,
+        )
+    assert deleted == []
+    assert len(failed) == 1
 
 
 def test_run_repair_daily_parser_rejects_missing_date_window() -> None:

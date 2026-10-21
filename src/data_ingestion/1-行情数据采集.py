@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 行情数据采集 - 使用MiniQMT(xtquant)下载全量A股日线数据存入MySQL
-
+?? MiniQMT ???????????????????? docs/run_daily_once.txt?
 功能：
   1. 连接MiniQMT数据服务
   2. 获取沪深A股全量股票列表（约5000只）
@@ -290,7 +290,7 @@ def download_and_save(stock_code, start_date):
 def main():
     raise RuntimeError(
         "已废弃：旧 trade_stock_daily 不再维护；请运行 "
-        "data_ingestion_qmt/8-原始行情与复权数据采集_qmt_bridge.py，"
+        "??? docs/run_daily_once.txt ?? AKShare ???????"
         "其前复权数据写入 trade_stock_daily_qfq。"
     )
     print("=" * 60)

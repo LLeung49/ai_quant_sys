@@ -87,7 +87,7 @@ def batch_load_recent(days_back=120, end_date=None):
         sub = group.set_index('trade_date').sort_index()
         sub = sub[['open_price', 'high_price', 'low_price', 'close_price', 'volume']]
         sub.columns = ['open', 'high', 'low', 'close', 'volume']
-        if len(sub) >= min_bars:
+        if len(sub) >= min_bars and sub.index[-1] == ref_date:
             result[code] = sub.tail(days_back)
     
     print(f"总标的数：{len(result.keys()):<14}")
@@ -304,7 +304,7 @@ def run_radar(end_date=None, lookback=LOOKBACK):
     print(f"  加载完成: {len(all_data)} 只标的, 耗时 {load_time:.1f}s")
 
     if not all_data:
-        print("  没有可用数据, 请先运行 1-行情数据采集.py")
+        print("  没有可用数据, 请先运行 8-原始行情与复权数据采集.py")
         return
 
     sample_code = next(iter(all_data))

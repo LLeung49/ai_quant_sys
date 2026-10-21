@@ -22,7 +22,7 @@ from ..snapshot import (
 )
 from ..status import ExecutionStatus, ResearchStatus, SnapshotMode, ValidationStatus
 from .capital import resolve_capital
-from .providers import MiniQMTProvider
+from .providers import DatabaseFinancialProvider
 from .providers.base import FinancialProvider
 from .quality import QualityComponents, score_quality
 from .ttm import build_ttm
@@ -95,7 +95,7 @@ def _raw_close_lookup(
 
     rows = query(
         """SELECT stock_code, close_price AS close
-             FROM trade_stock_daily_qfq
+             FROM trade_stock_daily_raw
             WHERE trade_date = %s""",
         (as_of_date,),
     )
@@ -110,7 +110,7 @@ def _dispatch_provider(
 
     if provider is not None:
         return provider
-    return MiniQMTProvider(fetch=query)
+    return DatabaseFinancialProvider(fetch=query)
 
 
 def _score_one_stock(
@@ -133,7 +133,10 @@ def _score_one_stock(
     if not raw_rows_for_stock:
         return None
     from .pit import resolve_latest_visible
-    ttm = build_ttm(raw_rows_for_stock, as_of_date=target)
+    ttm = build_ttm(
+        raw_rows_for_stock, as_of_date=target,
+        allow_estimated_pit=allow_estimated_pit,
+    )
     if ttm is None:
         return None
     latest = resolve_latest_visible(
@@ -199,7 +202,9 @@ def _build_row_from_ttm(*, latest, ttm, raw_close: float, sector_name: str, capi
             "valuation_rank": rank,
             "quality_roe": quality.roe,
         },
-        "qualitative_flags": list(quality.quality_flags),
+        "qualitative_flags": list(dict.fromkeys(
+            [*quality.quality_flags, *valuation.quality_flags]
+        )),
         "payout_subtype": "restated" if latest.is_restated else "original",
     }
 

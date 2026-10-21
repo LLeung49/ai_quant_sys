@@ -90,7 +90,7 @@ def batch_load_recent(days_back=120, end_date=None):
         sub = group.set_index('trade_date').sort_index()
         sub = sub[['open_price', 'high_price', 'low_price', 'close_price', 'volume']]
         sub.columns = ['open', 'high', 'low', 'close', 'volume']
-        if len(sub) >= min_bars:
+        if len(sub) >= min_bars and sub.index[-1] == ref_date:
             result[code] = sub.tail(days_back)
 
     return result
@@ -247,7 +247,7 @@ def run_macd_pool_scanner(end_date=None):
     print(f"  数据加载完成: 获得 {len(all_data)} 只标的, 耗时 {load_time:.2f}s")
 
     if not all_data:
-        print("  没有可用数据, 请检查数据库或运行 1-行情数据采集.py")
+        print("  没有可用数据, 请检查数据库或运行 8-原始行情与复权数据采集.py")
         return None
 
     sample_code = next(iter(all_data))
