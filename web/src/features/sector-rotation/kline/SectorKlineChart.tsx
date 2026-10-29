@@ -11,6 +11,7 @@ import {
 export interface SectorKlineChartProps {
   /** 已通过 API 契约校验且按交易日升序的 K 线。 */
   bars: SectorKlineResponse["bars"];
+  waves?: SectorKlineResponse["waves"];
   /** 缩略图或弹窗放大图模式。 */
   mode: SectorKlineChartMode;
   /** 当前希望显示的最近交易日根数。 */
@@ -26,7 +27,7 @@ export interface SectorKlineChartProps {
  * 输出：图表容器；初始化失败仅显示本组件 ``role=alert``，不会影响详情抽屉其余内容。
  * 异常：第三方图表的异步异常被本地捕获并降级，渲染期异常交由 ``KlineErrorBoundary`` 处理。
  */
-export function SectorKlineChart({ bars, mode, visibleCount, ariaLabel }: SectorKlineChartProps) {
+export function SectorKlineChart({ bars, waves, mode, visibleCount, ariaLabel }: SectorKlineChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const runtimeRef = useRef<SectorKlineRuntime | null>(null);
   const visibleCountRef = useRef(visibleCount);
@@ -55,7 +56,7 @@ export function SectorKlineChart({ bars, mode, visibleCount, ariaLabel }: Sector
       // 同一份 bars/mode 的失败只展示局部提示，不因连续 ResizeObserver 回调无休止重试。
       if (initializing || initializationFailed) return;
       initializing = true;
-      void createSectorKlineRuntime({ container, bars, mode, visibleCount: visibleCountRef.current })
+      void createSectorKlineRuntime({ container, bars, waves, mode, visibleCount: visibleCountRef.current })
         .then((runtime) => {
           // 异步加载期间若已切换板块/模式或卸载，立即释放迟到实例，禁止旧图闪现。
           if (cancelled) {
@@ -85,7 +86,7 @@ export function SectorKlineChart({ bars, mode, visibleCount, ariaLabel }: Sector
       runtimeRef.current?.dispose();
       runtimeRef.current = null;
     };
-  }, [bars, mode]);
+  }, [bars, waves, mode]);
 
   return <div className={`sector-kline-chart-shell sector-kline-chart-shell--${mode}`}>
     {/* 容器在失败时仍须保留，后续切换板块、日期或模式才能重新获得 ref 并初始化。 */}

@@ -88,6 +88,43 @@ class SectorRotationRepository:
         """
         return list(execute_query(sql, (sector_name, sector_level, end_date, KLINE_BAR_LIMIT)))
 
+    def load_sector_wave_prices(
+        self, sector_name: str, sector_level: int, trade_dates: list[str]
+    ) -> list[dict[str, Any]]:
+        """一次读取 K 线窗口内全部波段边界日的当前行业成分股前复权收盘价。"""
+        self._validate_level(sector_level)
+        if not trade_dates:
+            return []
+        if len(trade_dates) > KLINE_BAR_LIMIT or len(set(trade_dates)) != len(trade_dates):
+            raise ValueError("波段边界日期必须唯一且不超过 K 线窗口长度")
+        field = "sector_1" if sector_level == 1 else "sector_2"
+        placeholders = ", ".join(["%s"] * len(trade_dates))
+        sql = f"""
+            SELECT daily.stock_code, status.stock_name, daily.trade_date,
+                   daily.close_price AS close
+            FROM trade_stock_daily_qfq AS daily
+            INNER JOIN trade_stock_status AS status ON status.stock_code = daily.stock_code
+            WHERE status.{field} = %s AND daily.trade_date IN ({placeholders})
+            ORDER BY daily.stock_code, daily.trade_date
+        """
+        return list(execute_query(sql, (sector_name, *trade_dates)))
+
+    def load_etf_kline(self, stock_code: str, end_date: str) -> list[dict[str, Any]]:
+        """Read the latest bounded set of forward-adjusted ETF daily bars."""
+        sql = """
+            SELECT trade_date, open, high, low, close, volume, amount
+            FROM (
+                SELECT trade_date, open_price AS open, high_price AS high,
+                       low_price AS low, close_price AS close, volume, amount
+                FROM trade_stock_daily_qfq
+                WHERE stock_code = %s AND trade_date <= %s
+                ORDER BY trade_date DESC
+                LIMIT %s
+            ) AS recent_bars
+            ORDER BY trade_date ASC
+        """
+        return list(execute_query(sql, (stock_code, end_date, KLINE_BAR_LIMIT)))
+
     def list_available_dates(self, sector_level: int, model_version: str) -> list[str]:
         """读取存在成功快照的可选交易日。
 

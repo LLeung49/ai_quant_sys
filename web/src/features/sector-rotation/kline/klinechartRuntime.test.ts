@@ -7,6 +7,7 @@ const klineMocks = vi.hoisted(() => ({
   dispose: vi.fn(),
   getSupportedIndicators: vi.fn(() => ["SYSTEM_MACD"]),
   registerIndicator: vi.fn(),
+  registerOverlay: vi.fn(),
 }));
 
 vi.mock("klinecharts", () => ({
@@ -14,6 +15,7 @@ vi.mock("klinecharts", () => ({
   dispose: klineMocks.dispose,
   getSupportedIndicators: klineMocks.getSupportedIndicators,
   registerIndicator: klineMocks.registerIndicator,
+  registerOverlay: klineMocks.registerOverlay,
 }));
 
 import {
@@ -37,6 +39,7 @@ function createFakeChart() {
     setPaneOptions: vi.fn(),
     getSize: vi.fn(() => ({ width: 960, height: 400, left: 0, right: 960, top: 0, bottom: 400 })),
     setBarSpace: vi.fn(), scrollToRealTime: vi.fn(), resize: vi.fn(),
+    createOverlay: vi.fn(),
   };
 }
 
@@ -60,7 +63,7 @@ describe("createSectorKlineRuntime", () => {
     expect(chart.createIndicator).toHaveBeenCalledWith(expect.objectContaining({ name: "VOL", calcParams: [5, 10] }));
     expect(chart.createIndicator).toHaveBeenCalledWith(expect.objectContaining({ name: SYSTEM_MACD_NAME, calcParams: [12, 26, 9] }));
     expect(chart.setPaneOptions).toHaveBeenCalledWith(expect.objectContaining({ id: "volume_pane", height: 72 }));
-    expect(chart.setPaneOptions).toHaveBeenCalledWith(expect.objectContaining({ id: "macd_pane", height: 88 }));
+    expect(chart.setPaneOptions).toHaveBeenCalledWith(expect.objectContaining({ id: "macd_pane", height: 120 }));
     expect(chart.overrideYAxis).toHaveBeenCalledWith({ paneId: "candle_pane", gap: { top: 72, bottom: 12 } });
     expect(chart.overrideIndicator).toHaveBeenCalledWith(expect.objectContaining({ name: SYSTEM_MACD_NAME, minValue: expect.any(Number), maxValue: expect.any(Number) }));
     expect(chart.setZoomEnabled).toHaveBeenCalledWith(false);
@@ -79,6 +82,74 @@ describe("createSectorKlineRuntime", () => {
     runtime.dispose();
     runtime.dispose();
     expect(klineMocks.dispose).toHaveBeenCalledOnce();
+  });
+
+  it("在主图叠加全部波段，以顶部半透明悬浮信息展示紧凑排行", async () => {
+    const chart = createFakeChart();
+    klineMocks.init.mockReturnValue(chart);
+    const wave = { base_date: "2026-08-03", start_date: "2026-08-03", end_date: "2026-08-04",
+      start_timestamp: fixtureBars[0]!.timestamp, end_timestamp: fixtureBars[1]!.timestamp,
+      start_low: 9, end_high: 12, trading_days: 2, sector_change_pct: 12,
+      is_confirmed: true, leaders: [
+        { rank: 1, stock_code: "000001.SZ", stock_name: "甲", change_pct: 60 },
+        { rank: 2, stock_code: "000002.SZ", stock_name: "乙", change_pct: 50 },
+        { rank: 3, stock_code: "000003.SZ", stock_name: "丙", change_pct: 40 },
+      ] };
+    const runtime = await createSectorKlineRuntime({
+      container: document.createElement("div"), bars: fixtureBars, mode: "expanded", visibleCount: 60,
+      waves: Array.from({ length: 4 }, () => wave),
+    });
+    expect(klineMocks.registerOverlay).toHaveBeenCalledWith(expect.objectContaining({ name: "sectorRisingWave" }));
+    expect(chart.createOverlay).toHaveBeenCalledWith(expect.objectContaining({
+      name: "sectorRisingWave", paneId: "candle_pane",
+      points: [{ timestamp: fixtureBars[0]!.timestamp, value: 9 }, { timestamp: fixtureBars[1]!.timestamp, value: 12 }],
+      extendData: expect.objectContaining({ sector_change_pct: 12, leaders: expect.any(Array) }),
+    }));
+    const template = klineMocks.registerOverlay.mock.calls.at(-1)?.[0] as { createPointFigures: (params: unknown) => Array<{ type: string; attrs: { text?: string } }> };
+    const overlay = chart.createOverlay.mock.calls[0]?.[0];
+    expect(chart.createOverlay).toHaveBeenCalledTimes(4);
+    const figures = template.createPointFigures({ coordinates: [{ x: 10, y: 250 }, { x: 80, y: 150 }], bounding: { width: 960, height: 400 }, overlay });
+    expect(figures.filter((figure) => figure.type === "text").map((figure) => figure.attrs.text)).toEqual([
+      "上涨波段 +12.00%", "甲", "+60.00%", "乙", "+50.00%", "丙", "+40.00%",
+    ]);
+    expect(figures.some((figure) => figure.type === "line")).toBe(true);
+    const rects = figures.filter((figure) => figure.type === "rect") as unknown as Array<{ attrs: { y: number; height: number }; styles: { style?: string; borderColor?: string; color: string } }>;
+    expect(rects).toHaveLength(2);
+    const [region, label] = rects;
+    expect(region.attrs).toMatchObject({ y: 178, height: 222 });
+    expect(label.attrs.y + label.attrs.height).toBeLessThan(region.attrs.y);
+    expect(label.attrs.y).toBe(112);
+    expect(label.attrs.height).toBeLessThanOrEqual(62);
+    expect(region.styles).toMatchObject({ style: "fill" });
+    expect(label.styles).toMatchObject({ style: "fill" });
+    expect(label.styles.color).toMatch(/^rgba\(/);
+    expect(label.styles.borderColor).toBeUndefined();
+    expect(chart.overrideYAxis).toHaveBeenCalledWith({ paneId: "candle_pane", gap: { top: 202, bottom: 12 } });
+    expect(chart.setPaneOptions).toHaveBeenCalledWith({ id: "volume_pane", height: 110, minHeight: 48 });
+    expect(chart.setPaneOptions).toHaveBeenCalledWith({ id: "macd_pane", height: 164, minHeight: 80 });
+    const narrowFigures = template.createPointFigures({ coordinates: [{ x: 10, y: 250 }, { x: 80, y: 150 }], bounding: { width: 480, height: 400 }, overlay });
+    const narrowLabel = narrowFigures.filter((figure) => figure.type === "rect")[1] as unknown as { attrs: { y: number; height: number } };
+    expect(narrowLabel.attrs.y).toBeGreaterThan(label.attrs.y);
+    expect(narrowLabel.attrs.y).toBe(144);
+    expect(narrowLabel.attrs.y + narrowLabel.attrs.height).toBeLessThan(210);
+    chart.getSize.mockReturnValue({ width: 480, height: 400, left: 0, right: 480, top: 0, bottom: 400 });
+    runtime.resize();
+    expect(chart.overrideYAxis).toHaveBeenLastCalledWith({ paneId: "candle_pane", gap: { top: 234, bottom: 12 } });
+    const name = figures.find((figure) => figure.attrs.text === "甲") as { styles?: { color?: string } };
+    const gain = figures.find((figure) => figure.attrs.text === "+60.00%") as unknown as { attrs: { x: number }; styles?: { color?: string } };
+    expect(name.styles?.color).not.toBe(gain.styles?.color);
+    const nameX = (name as { attrs: { x: number } }).attrs.x;
+    expect(gain.attrs.x - nameX).toBeLessThan(24);
+    expect(template.createPointFigures({ coordinates: [{ x: -200, y: 100 }, { x: -120, y: 40 }], bounding: { width: 960, height: 400 }, overlay })).toEqual([]);
+  });
+
+  it("缩略模式即使收到波段数据也不创建标注", async () => {
+    const chart = createFakeChart();
+    klineMocks.init.mockReturnValue(chart);
+    await createSectorKlineRuntime({ container: document.createElement("div"), bars: fixtureBars, mode: "compact", visibleCount: 120,
+      waves: [{ base_date: "2026-08-03", start_date: "2026-08-03", end_date: "2026-08-04", start_timestamp: fixtureBars[0]!.timestamp,
+        end_timestamp: fixtureBars[1]!.timestamp, start_low: 9, end_high: 12, trading_days: 2, sector_change_pct: 12, is_confirmed: true, leaders: [] }] });
+    expect(chart.createOverlay).not.toHaveBeenCalled();
   });
 
   it("放大模式允许缩放滚动，并在尺寸变化后按窗口数重新计算柱间距", async () => {

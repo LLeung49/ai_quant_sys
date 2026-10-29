@@ -99,6 +99,27 @@ def test_load_sector_kline_rejects_unsupported_sector_level_before_query(monkeyp
         SectorRotationRepository().load_sector_kline("半导体", 3, "2026-08-06")
 
 
+def test_load_sector_wave_prices_uses_current_members_and_bounded_dates(monkeypatch: pytest.MonkeyPatch) -> None:
+    from morning_conference.sector_rotation2.api.repository import SectorRotationRepository
+
+    captured = {}
+
+    def fake_query(sql, params):
+        captured.update(sql=sql, params=params)
+        return []
+
+    monkeypatch.setattr("morning_conference.sector_rotation2.api.repository.execute_query", fake_query)
+    assert SectorRotationRepository().load_sector_wave_prices("半导体", 2, ["2026-08-03", "2026-08-10"]) == []
+    assert "status.sector_2 = %s" in captured["sql"]
+    assert "trade_stock_daily_qfq" in captured["sql"]
+    assert "daily.trade_date IN (%s, %s)" in captured["sql"]
+    assert captured["params"] == ("半导体", "2026-08-03", "2026-08-10")
+    many_dates = [f"2026-{index // 28 + 1:02d}-{index % 28 + 1:02d}" for index in range(13)]
+    assert SectorRotationRepository().load_sector_wave_prices("半导体", 2, many_dates) == []
+    with pytest.raises(ValueError):
+        SectorRotationRepository().load_sector_wave_prices("半导体", 2, many_dates + many_dates)
+
+
 def test_list_available_dates_returns_only_successful_run_dates(monkeypatch: pytest.MonkeyPatch) -> None:
     """输入：层级与版本；输出：去重、倒序的成功运行日期。"""
     from morning_conference.sector_rotation2.api.repository import SectorRotationRepository

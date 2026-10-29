@@ -9,7 +9,7 @@ const klineMocks = vi.hoisted(() => ({
 
 vi.mock("./useSectorKline", () => ({ useSectorKline: klineMocks.useSectorKline }));
 vi.mock("./LazySectorKlineChart", () => ({
-  LazySectorKlineChart: ({ visibleCount }: { visibleCount: number }) => <div data-testid="kline-chart">缩略图窗口：{visibleCount}</div>,
+  LazySectorKlineChart: ({ visibleCount, waves }: { visibleCount: number; waves?: unknown[] }) => <div data-testid="kline-chart" data-wave-count={waves?.length ?? 0}>缩略图窗口：{visibleCount}</div>,
 }));
 
 import { SectorKlineCard } from "./SectorKlineCard";
@@ -34,6 +34,12 @@ function renderCard(queryResult: Record<string, unknown>, props: Partial<React.C
 }
 
 describe("SectorKlineCard", () => {
+  it("缩略图不接收波段标注，也不显示波段摘要", () => {
+    renderCard({ data: { ...response, waves: [{ start_date: "2026-08-05", end_date: "2026-08-06", leaders: [] }] }, isLoading: false, isError: false });
+    expect(screen.getByTestId("kline-chart")).toHaveAttribute("data-wave-count", "0");
+    expect(screen.queryByText(/最近波段/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/历史龙头按当前成分股映射回看/)).not.toBeInTheDocument();
+  });
   it("显示工作台截止日、价格口径、窗口按钮和放大入口", () => {
     const { onExpand } = renderCard({ data: response, isLoading: false, isError: false });
 

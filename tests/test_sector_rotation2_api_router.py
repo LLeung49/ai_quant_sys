@@ -31,7 +31,7 @@ def test_sector_kline_returns_validated_numeric_bars(monkeypatch) -> None:
     payload = response.json()
     assert set(payload) == {
         "sector_name", "sector_level", "requested_end_date", "actual_end_date",
-        "price_basis", "bars", "meta",
+        "price_basis", "bars", "waves", "membership_asof_mode", "meta",
     }
     assert payload["sector_name"] == "半导体"
     assert payload["actual_end_date"] == "2026-08-06"
@@ -48,6 +48,69 @@ def test_sector_kline_returns_validated_numeric_bars(monkeypatch) -> None:
         "skipped_bar_count": 0,
         "warmup_target": 100,
     }
+
+
+def test_sector_kline_includes_wave_leaders_from_prestart_qfq_prices(monkeypatch) -> None:
+    from morning_conference.sector_rotation2.api.app import create_app
+    from morning_conference.sector_rotation2.api.repository import SectorRotationRepository
+
+    closes = [100, 96, 100, 105, 109, 103]
+    monkeypatch.setattr(SectorRotationRepository, "load_sector_kline", lambda *_: [
+        {"trade_date": date(2026, 8, 1 + index), "open": close, "high": close + 1,
+         "low": close - 1, "close": close, "volume": 100, "amount": 1000}
+        for index, close in enumerate(closes)
+    ])
+    queried = {}
+
+    def prices(_self, name, level, dates):
+        queried.update(name=name, level=level, dates=dates)
+        return [
+            {"stock_code": code, "stock_name": stock, "trade_date": trade_date, "close": close}
+            for code, stock, base, end in [("000001.SZ", "甲", 10, 16), ("000002.SZ", "乙", 20, 30)]
+            for trade_date, close in [("2026-08-01", base), ("2026-08-05", end)]
+        ]
+
+    monkeypatch.setattr(SectorRotationRepository, "load_sector_wave_prices", prices)
+    response = TestClient(create_app()).get(
+        "/api/v1/sector-rotation/sector-kline",
+        params={"sector_name": "半导体", "level": 2, "end_date": "2026-08-06"},
+    )
+    assert response.status_code == 200
+    wave = response.json()["waves"][0]
+    assert queried == {"name": "半导体", "level": 2, "dates": ["2026-08-01", "2026-08-05"]}
+    assert wave["start_date"] == "2026-08-02"
+    assert wave["end_date"] == "2026-08-05"
+    assert wave["is_confirmed"] is True
+    assert wave["leaders"][0] == {"rank": 1, "stock_code": "000001.SZ", "stock_name": "甲", "change_pct": 60.0}
+    assert response.json()["membership_asof_mode"] == "current_mapping"
+
+
+def test_sector_kline_returns_more_than_six_waves_when_present_in_bars(monkeypatch) -> None:
+    from morning_conference.sector_rotation2.api.app import create_app
+    from morning_conference.sector_rotation2.api.repository import SectorRotationRepository
+
+    closes = [100]
+    for _ in range(8):
+        closes.extend([90, 100, 94])
+    monkeypatch.setattr(SectorRotationRepository, "load_sector_kline", lambda *_: [
+        {"trade_date": date(2026, 1, 1 + index), "open": close, "high": close + 1,
+         "low": close - 1, "close": close, "volume": 100, "amount": 1000}
+        for index, close in enumerate(closes)
+    ])
+    queried = {}
+
+    def prices(_self, _name, _level, dates):
+        queried["dates"] = dates
+        return []
+
+    monkeypatch.setattr(SectorRotationRepository, "load_sector_wave_prices", prices)
+    response = TestClient(create_app()).get(
+        "/api/v1/sector-rotation/sector-kline",
+        params={"sector_name": "半导体", "level": 2, "end_date": "2026-01-25"},
+    )
+    assert response.status_code == 200
+    assert len(response.json()["waves"]) == 8
+    assert len(queried["dates"]) > 12
 
 
 @pytest.mark.parametrize(

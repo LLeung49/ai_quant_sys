@@ -10,8 +10,8 @@ import type { SectorKlineResponse } from "./sectorKlineApi";
 const globalStyles = readFileSync(resolve(process.cwd(), "src/styles/globals.css"), "utf8");
 
 vi.mock("./LazySectorKlineChart", () => ({
-  LazySectorKlineChart: ({ mode, visibleCount }: { mode: string; visibleCount: number }) => (
-    <div data-testid="expanded-kline-chart">{mode}:{visibleCount}</div>
+  LazySectorKlineChart: ({ mode, visibleCount, waves }: { mode: string; visibleCount: number; waves?: unknown[] }) => (
+    <div data-testid="expanded-kline-chart" data-wave-count={waves?.length ?? 0}>{mode}:{visibleCount}</div>
   ),
 }));
 
@@ -28,18 +28,48 @@ const response: SectorKlineResponse = {
 };
 
 describe("SectorKlineModal", () => {
-  it("放大图填满 grid 分配的可用轨道，不引入会造成裁剪的桌面最小高度", () => {
+  it("展示波段起止日期、无排名前缀的股票和当前成分映射口径", () => {
+    const wave = {
+      base_date: "2026-08-04", start_date: "2026-08-05", end_date: "2026-08-06",
+      start_timestamp: 1785859200000, end_timestamp: 1785945600000,
+      start_low: 9, end_high: 12, trading_days: 2, sector_change_pct: 9,
+      is_confirmed: true,
+      leaders: [
+        { rank: 1, stock_code: "000001.SZ", stock_name: "甲", change_pct: 60 },
+        { rank: 2, stock_code: "000002.SZ", stock_name: "乙", change_pct: 50 },
+        { rank: 3, stock_code: "000003.SZ", stock_name: "丙", change_pct: 40 },
+      ],
+    };
+    render(<SectorKlineModal data={{ ...response, waves: [wave], membership_asof_mode: "current_mapping" }} visibleCount={120} onVisibleCountChange={vi.fn()} openerRef={createRef()} onClose={vi.fn()} />);
+    expect(screen.getByTestId("expanded-kline-chart")).toHaveAttribute("data-wave-count", "1");
+    expect(screen.getByText(/2026-08-05.*2026-08-06/)).toBeInTheDocument();
+    expect(screen.getByText("甲")).toHaveClass("sector-wave-list__leader-name");
+    expect(screen.getByText("+60.00%")).toHaveClass("sector-wave-list__leader-change");
+    expect(screen.getByText("乙")).toBeInTheDocument();
+    expect(screen.getByText("丙")).toBeInTheDocument();
+    expect(screen.queryByText(/龙[123一二三]/)).not.toBeInTheDocument();
+    expect(screen.getByText(/当前成分股映射/)).toBeInTheDocument();
+  });
+  it("放大图保持更高的绘图高度，弹窗内容和波段列表使用同一滚动区域", () => {
+    const dialogRule = globalStyles.match(/\.sector-kline-dialog\s*\{[^}]*\}/)?.[0] ?? "";
+    const modalRule = globalStyles.match(/\.sector-kline-modal\s*\{[^}]*\}/)?.[0] ?? "";
     const chartWrapRule = globalStyles.match(/\.sector-kline-modal__chart-wrap\s*\{[^}]*\}/)?.[0] ?? "";
     const expandedShellRule = globalStyles.match(/\.sector-kline-chart-shell--expanded\s*\{[^}]*\}/)?.[0] ?? "";
     const expandedChartRule = globalStyles.match(/\.sector-kline-chart--expanded\s*\{[^}]*\}/)?.[0] ?? "";
-    expect(chartWrapRule).toContain("height: 100%");
+    const waveListRule = globalStyles.match(/\.sector-wave-list\s*\{[^}]*\}/)?.[0] ?? "";
+    expect(dialogRule).toContain("height: 94dvh");
+    expect(modalRule).toContain("overflow-y: auto");
+    expect(modalRule).toContain("grid-template-rows: auto auto auto auto");
+    expect(chartWrapRule).toContain("height: auto");
     expect(chartWrapRule).toContain("min-height: 0");
     expect(chartWrapRule).toContain("box-sizing: border-box");
-    expect(expandedShellRule).toContain("height: 100%");
-    expect(expandedShellRule).toContain("min-height: 0");
+    expect(expandedShellRule).toContain("height: clamp(700px");
+    expect(expandedShellRule).toContain("flex: 0 0 auto");
     expect(expandedChartRule).toContain("height: 100%");
     expect(expandedChartRule).toContain("min-height: 0");
-    expect(expandedChartRule).not.toContain("clamp(300px");
+    expect(waveListRule).toContain("max-height: none");
+    expect(waveListRule).toContain("overflow: visible");
+    expect(globalStyles).toContain("height: max(580px, calc(100dvh - 180px))");
   });
 
   it("通过 body Portal 显示原生 dialog，并在关闭后恢复打开按钮焦点", () => {

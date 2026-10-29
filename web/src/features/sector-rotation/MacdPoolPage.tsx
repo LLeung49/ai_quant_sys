@@ -1,6 +1,9 @@
 ﻿import { useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { requestJson } from "./api";
+import { fetchSnapshot, requestJson, type SectorPoint } from "./api";
+import { SectorDetailDrawer, type DetailSector } from "./detail/SectorDetailDrawer";
+import { MarketOnlyDrawer } from "./detail/MarketOnlyDrawer";
+import { fetchShortTermSnapshot } from "./short_term/api";
 import { TradingCalendar } from "./filters/TradingCalendar";
 import { MacdPoolChart } from "./MacdPoolChart";
 type Row = {
@@ -53,6 +56,28 @@ function hasResolvedEtfName(row: Row): boolean {
   return normalizeCodeLike(name) !== normalizeCodeLike(row.stock_code.trim());
 }
 
+function toDetailSector(sector: SectorPoint): DetailSector {
+  const numberOrNull = (value: unknown): number | null => typeof value === "number" && Number.isFinite(value) ? value : null;
+  return {
+    sector_name: sector.sector_name,
+    phase_confirmed: sector.phase_confirmed ?? null,
+    phase_confidence: numberOrNull(sector.phase_confidence),
+    composite_rank: sector.composite_rank ?? null,
+    rank_change_1d: sector.rank_change_1d ?? null,
+    trend_level_score: numberOrNull(sector.trend_level_score),
+    velocity_score: numberOrNull(sector.velocity_score),
+    acceleration_score: numberOrNull(sector.acceleration_score),
+    participation_score: numberOrNull(sector.participation_score),
+    volume_score: numberOrNull(sector.volume_score),
+    lifecycle_state: sector.lifecycle_state ?? null,
+    lifecycle_reason: sector.lifecycle_reason ?? null,
+    lifecycle_changed: sector.lifecycle_changed ?? null,
+    lifecycle_age: sector.lifecycle_age ?? null,
+    phase_age: sector.phase_age ?? null,
+    coverage_ratio: numberOrNull(sector.coverage_ratio),
+  };
+}
+
 export function MacdPoolPage() {
   const datesQuery = useQuery({
     queryKey: ["macd-pool-dates"],
@@ -87,6 +112,22 @@ export function MacdPoolPage() {
     Object.entries(groups).map(([key, rows]) => [key, rows.filter(hasResolvedEtfName)]),
   );
   const [selected, setSelected] = useState<Row | null>(null);
+  const selectedLevel: 1 | 2 = selected?.entity_type === "sector_l1" ? 1 : 2;
+  const rotationQuery = useQuery({
+    queryKey: ["macd-pool-rotation-snapshot", date, selectedLevel],
+    queryFn: () => fetchSnapshot(date, selectedLevel, "v1"),
+    enabled: Boolean(date && selected && selected.entity_type !== "etf"),
+    retry: false,
+  });
+  const shortTermQuery = useQuery({
+    queryKey: ["short-term-snapshot", selectedLevel, date],
+    queryFn: () => fetchShortTermSnapshot(date, selectedLevel),
+    enabled: Boolean(date && selected && selected.entity_type !== "etf"),
+    retry: false,
+  });
+  const selectedRotationSector = selected?.entity_type === "etf" ? undefined : rotationQuery.data?.sectors.find(
+    (sector) => sector.sector_name === selected?.stock_code || sector.sector_name === selected?.stock_name,
+  );
   const trajectoryQuery = useQuery({
     queryKey: [
       "macd-pool-trajectory",
@@ -149,7 +190,7 @@ export function MacdPoolPage() {
             tradeDates={dates.filter((item) => item >= bounds.start && item <= bounds.end)}
             snapshotDates={dates.filter((item) => item >= bounds.start && item <= bounds.end)}
             selectedDate={date}
-            onDateChange={setSelectedDate}
+            onDateChange={(nextDate) => { setSelectedDate(nextDate); setSelected(null); }}
           />
         </div>
       </header>
@@ -201,6 +242,26 @@ export function MacdPoolPage() {
           </div>
         </>
       )}
+      {selected && date && (selectedRotationSector ? (
+        <SectorDetailDrawer
+          key={`${selected.entity_type}-${selected.stock_code}-${date}`}
+          sector={toDetailSector(selectedRotationSector)}
+          shortTerm={shortTermQuery.data?.sectors.find((sector) => sector.sector_name === selectedRotationSector.sector_name) ?? null}
+          level={selectedLevel}
+          asOfDate={date}
+          isLatestDate={date === dates[0]}
+          onClose={() => setSelected(null)}
+        />
+      ) : (
+        <MarketOnlyDrawer
+          key={`${selected.entity_type}-${selected.stock_code}-${date}`}
+          name={selected.stock_name || selected.stock_code}
+          code={selected.stock_code}
+          entityType={selected.entity_type}
+          asOfDate={date}
+          onClose={() => setSelected(null)}
+        />
+      ))}
     </section>
   );
 }

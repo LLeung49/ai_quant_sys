@@ -3,14 +3,18 @@
 from __future__ import annotations
 
 from datetime import date
+import re
 
 from fastapi import APIRouter, HTTPException, Query
 
 from .kline import normalize_sector_kline_rows
+from .sector_waves import detect_rising_waves, rank_wave_leaders
 from .repository import MAX_HISTORY_SECTORS, SectorRotationRepository
 from .schemas import (
     AvailableDatesResponse,
     CalendarAvailabilityResponse,
+    EtfKlineMeta,
+    EtfKlineResponse,
     HistoryResponse,
     ResponseMeta,
     SectorKlineMeta,
@@ -21,6 +25,32 @@ from .schemas import (
 
 
 router = APIRouter(prefix="/api/v1/sector-rotation", tags=["板块轮动"])
+
+
+@router.get("/etf-kline", response_model=EtfKlineResponse, summary="读取 ETF 前复权日 K 线")
+def get_etf_kline(
+    stock_code: str = Query(min_length=9, max_length=9),
+    end_date: str = Query(),
+) -> EtfKlineResponse:
+    if not re.fullmatch(r"(?:5\d{5}\.SH|1\d{5}\.SZ)", stock_code):
+        raise _invalid_parameter("ETF 代码格式不正确")
+    try:
+        parsed_end_date = date.fromisoformat(end_date)
+    except ValueError as exc:
+        raise _invalid_parameter("日期必须使用 YYYY-MM-DD 格式") from exc
+    bars, skipped = normalize_sector_kline_rows(
+        SectorRotationRepository().load_etf_kline(stock_code, parsed_end_date.isoformat()),
+        parsed_end_date,
+    )
+    if not bars:
+        raise _not_found("ETF_KLINE_NOT_FOUND", "未找到该 ETF 在指定日期前的有效行情")
+    return EtfKlineResponse(
+        stock_code=stock_code,
+        requested_end_date=parsed_end_date.isoformat(),
+        actual_end_date=bars[-1]["trade_date"],
+        bars=bars,
+        meta=EtfKlineMeta(bar_count=len(bars), skipped_bar_count=skipped),
+    )
 
 
 def _not_found(code: str, message: str) -> HTTPException:
@@ -122,16 +152,24 @@ def get_sector_kline(
         HTTPException: 参数非法时返回 422；无有效 K 线时返回 404。
     """
     clean_name, parsed_level, parsed_end_date = _parse_sector_kline_request(sector_name, level, end_date)
-    rows = SectorRotationRepository().load_sector_kline(clean_name, parsed_level, parsed_end_date.isoformat())
+    repository = SectorRotationRepository()
+    rows = repository.load_sector_kline(clean_name, parsed_level, parsed_end_date.isoformat())
     bars, skipped = normalize_sector_kline_rows(rows, parsed_end_date)
     if not bars:
         raise _not_found("SECTOR_KLINE_NOT_FOUND", "未找到该板块在指定日期前的有效行情")
+    waves = detect_rising_waves(bars)
+    if waves:
+        boundary_dates = sorted({date_key for wave in waves for date_key in (wave["base_date"], wave["end_date"])})
+        prices = repository.load_sector_wave_prices(clean_name, parsed_level, boundary_dates)
+        for wave in waves:
+            wave["leaders"] = rank_wave_leaders(wave, prices)
     return SectorKlineResponse(
         sector_name=clean_name,
         sector_level=parsed_level,
         requested_end_date=parsed_end_date.isoformat(),
         actual_end_date=bars[-1]["trade_date"],
         bars=bars,
+        waves=waves,
         meta=SectorKlineMeta(bar_count=len(bars), skipped_bar_count=skipped),
     )
 

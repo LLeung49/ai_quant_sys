@@ -33,6 +33,27 @@ const sectorKlineMetaSchema = z.object({
   warmup_target: z.literal(100),
 });
 
+const sectorWaveSchema = z.object({
+  base_date: tradeDateSchema,
+  start_date: tradeDateSchema,
+  end_date: tradeDateSchema,
+  start_timestamp: z.number().int().positive(),
+  end_timestamp: z.number().int().positive(),
+  start_low: z.number().positive(),
+  end_high: z.number().positive(),
+  trading_days: z.number().int().positive(),
+  sector_change_pct: z.number().finite(),
+  is_confirmed: z.boolean(),
+  leaders: z.array(z.object({
+    rank: z.number().int().min(1).max(3),
+    stock_code: z.string().min(1),
+    stock_name: z.string().min(1),
+    change_pct: z.number().finite(),
+  })).max(3),
+});
+
+export type SectorRisingWave = z.infer<typeof sectorWaveSchema>;
+
 /** K 线接口的基础响应结构；跨 K 线的排序和截止日约束由 ``parseSectorKlineResponse`` 完成。 */
 const sectorKlineResponseSchema = z.object({
   sector_name: z.string().min(1),
@@ -41,6 +62,8 @@ const sectorKlineResponseSchema = z.object({
   actual_end_date: tradeDateSchema,
   price_basis: z.literal("equal_weight_composite_index"),
   bars: z.array(sectorKlineBarSchema).min(1),
+  waves: z.array(sectorWaveSchema).max(350).optional(),
+  membership_asof_mode: z.literal("current_mapping").optional(),
   meta: sectorKlineMetaSchema,
 });
 
@@ -87,6 +110,11 @@ function parseSectorKlineResponse(payload: unknown, requestedEndDate: string): S
       path: ["meta", "bar_count"],
       message: "元数据条数必须与 bars 长度一致",
     }]);
+  }
+  for (const [index, wave] of (response.waves ?? []).entries()) {
+    if (wave.base_date >= wave.start_date || wave.start_date > wave.end_date || wave.end_date > response.actual_end_date || wave.end_timestamp < wave.start_timestamp) {
+      throw new z.ZodError([{ code: z.ZodIssueCode.custom, path: ["waves", index], message: "波段日期必须位于已加载 K 线内且顺序正确" }]);
+    }
   }
   return response;
 }

@@ -1,8 +1,8 @@
 /** 板块 K 线三窗格的 KLineChart 10 运行时适配、指标配置与资源生命周期。 */
 import type { IndicatorCreate, KLineData, Options } from "klinecharts";
-import { calculateSystemMacd, SYSTEM_MACD_NAME, ensureSystemMacdRegistered, type SystemMacdValue } from "./indicatorParity";
+import { SYSTEM_MACD_NAME, ensureSystemMacdRegistered, type SystemMacdValue } from "./indicatorParity";
 import { INDICATOR_PARAMS, KLINE_COLORS } from "./sectorKlineConfig";
-import type { SectorKlineResponse } from "./sectorKlineApi";
+import type { SectorKlineResponse, SectorRisingWave } from "./sectorKlineApi";
 
 /** KLineChart 内置主图 candle pane 的稳定标识。 */
 const CANDLE_PANE_ID = "candle_pane";
@@ -16,6 +16,7 @@ export interface CreateSectorKlineRuntimeOptions {
   container: HTMLElement;
   /** 已通过 Zod 契约校验且交易日升序的日 K 线。 */
   bars: SectorKlineResponse["bars"];
+  waves?: SectorRisingWave[];
   /** 缩略图或放大图的交互模式。 */
   mode: SectorKlineChartMode;
   /** 希望可见的最近交易日根数。 */
@@ -139,6 +140,10 @@ export function buildSystemMacdOverride(): IndicatorCreate {
   return {
     name: SYSTEM_MACD_NAME,
     calcParams: [...INDICATOR_PARAMS.macd],
+    precision: 4,
+    // 以最小显示刻度保留零轴，避免横盘时范围退化为 0；实际范围由可见数据自动撑开。
+    minValue: -0.0001,
+    maxValue: 0.0001,
     figures: [
       { key: "dif", title: "DIF: ", type: "line", styles: () => ({ color: KLINE_COLORS.dif }) },
       { key: "dea", title: "DEA: ", type: "line", styles: () => ({ color: KLINE_COLORS.dea }) },
@@ -177,6 +182,18 @@ function normalizeVisibleCount(count: number): number {
   return Number.isFinite(count) ? Math.max(1, Math.round(count)) : 1;
 }
 
+/** 以当前 10px 标注字号估计文字宽度，让涨幅紧随股票名。 */
+function estimateWaveTextWidth(value: string): number {
+  return Array.from(value).reduce((width, character) => width + (character.charCodeAt(0) < 128 ? 6 : 10), 0);
+}
+
+/** 为主图图示保留独立行；窄屏图示更容易换行，因而需要更深的标注位置。 */
+function waveTopLayout(width: number): { labelY: number; regionTop: number; priceGapTop: number } {
+  const labelY = width < 900 ? 144 : 112;
+  const regionTop = labelY + 66;
+  return { labelY, regionTop, priceGapTop: regionTop + 24 };
+}
+
 /**
  * 创建 KLineChart 10 三窗格运行时，并将数据限定为内存本地数据源。
  *
@@ -187,6 +204,46 @@ function normalizeVisibleCount(count: number): number {
 export async function createSectorKlineRuntime(options: CreateSectorKlineRuntimeOptions): Promise<SectorKlineRuntime> {
   const klinecharts = await import("klinecharts");
   await ensureSystemMacdRegistered();
+  if (options.mode === "expanded" && options.waves?.length) {
+    klinecharts.registerOverlay<SectorRisingWave>({
+      name: "sectorRisingWave",
+      totalStep: 3,
+      needDefaultPointFigure: false,
+      needDefaultXAxisFigure: false,
+      needDefaultYAxisFigure: false,
+      createPointFigures: ({ coordinates, bounding, overlay }) => {
+        if (coordinates.length !== 2) return [];
+        const [start, end] = coordinates;
+        const wave = overlay.extendData;
+        const left = Math.min(start.x, end.x);
+        const right = Math.max(start.x, end.x);
+        if (right < 0 || left > bounding.width) return [];
+        const width = right - left;
+        const { regionTop, labelY } = waveTopLayout(bounding.width);
+        const labelHeight = 61;
+        const header = `上涨波段 ${wave.sector_change_pct >= 0 ? "+" : ""}${wave.sector_change_pct.toFixed(2)}%`;
+        const title = wave.is_confirmed ? header : `${header} · 进行中`;
+        const rowWidths = wave.leaders.map((leader) => estimateWaveTextWidth(leader.stock_name) + 4 + estimateWaveTextWidth(`${leader.change_pct >= 0 ? "+" : ""}${leader.change_pct.toFixed(2)}%`));
+        const labelWidth = Math.min(190, Math.max(112, estimateWaveTextWidth(title) + 12, ...rowWidths.map((rowWidth) => rowWidth + 12)));
+        const labelX = Math.max(4, Math.min(bounding.width - labelWidth - 4, left + width / 2 - labelWidth / 2));
+        return [
+          { type: "rect", attrs: { x: left, y: regionTop, width: Math.max(width, 3), height: Math.max(bounding.height - regionTop, 0) }, styles: { style: "fill", color: "rgba(255, 114, 133, .09)" }, ignoreEvent: true },
+          { type: "rect", attrs: { x: labelX, y: labelY, width: labelWidth, height: labelHeight }, styles: { style: "fill", color: "rgba(13, 27, 46, .78)" }, ignoreEvent: true },
+          { type: "text", attrs: { x: labelX + 6, y: labelY + 3, text: title, align: "left", baseline: "top" }, styles: { color: "#ffb5bd", size: 10, weight: "bold" }, ignoreEvent: true },
+          { type: "line", attrs: { coordinates: [{ x: labelX + 5, y: labelY + 17 }, { x: labelX + labelWidth - 5, y: labelY + 17 }] }, styles: { color: "rgba(255, 181, 189, .45)", size: 1 }, ignoreEvent: true },
+          ...wave.leaders.flatMap((leader, index) => {
+            const rowY = labelY + 21 + index * 13;
+            const up = leader.change_pct >= 0;
+            const nameX = labelX + 6;
+            return [
+              { type: "text", attrs: { x: nameX, y: rowY, text: leader.stock_name, align: "left", baseline: "top" }, styles: { color: "#eaf2ff", size: 10, weight: "bold" }, ignoreEvent: true },
+              { type: "text", attrs: { x: nameX + estimateWaveTextWidth(leader.stock_name) + 4, y: rowY, text: `${up ? "+" : ""}${leader.change_pct.toFixed(2)}%`, align: "left", baseline: "top" }, styles: { color: up ? "#ff9eab" : "#64dfc1", size: 10, weight: "bold" }, ignoreEvent: true },
+            ];
+          }),
+        ];
+      },
+    });
+  }
   const chart = klinecharts.init(options.container, {
     locale: "zh-CN",
     timezone: "Asia/Shanghai",
@@ -204,23 +261,36 @@ export async function createSectorKlineRuntime(options: CreateSectorKlineRuntime
     });
     chart.setSymbol({ ticker: "SECTOR_INDEX", pricePrecision: 4, volumePrecision: 0 });
     chart.setPeriod({ span: 1, type: "day" });
+    for (const wave of options.mode === "expanded" ? options.waves ?? [] : []) {
+      chart.createOverlay({
+        name: "sectorRisingWave", paneId: CANDLE_PANE_ID, lock: true,
+        points: [{ timestamp: wave.start_timestamp, value: wave.start_low }, { timestamp: wave.end_timestamp, value: wave.end_high }],
+        extendData: wave,
+      });
+    }
     chart.createIndicator({ name: "MA", calcParams: [...INDICATOR_PARAMS.ma], paneId: CANDLE_PANE_ID }, true);
     chart.createIndicator({ name: "BOLL", calcParams: [...INDICATOR_PARAMS.boll], paneId: CANDLE_PANE_ID }, true);
     const volumePaneId = chart.createIndicator({ name: "VOL", calcParams: [...INDICATOR_PARAMS.vol] });
     const macdPaneId = chart.createIndicator({ name: SYSTEM_MACD_NAME, calcParams: [...INDICATOR_PARAMS.macd] });
-    chart.overrideYAxis({ paneId: CANDLE_PANE_ID, gap: { top: 72, bottom: 12 } });
+    const updatePriceGap = () => {
+      const chartWidth = chart.getSize(CANDLE_PANE_ID, "main")?.width ?? options.container.clientWidth;
+      chart.overrideYAxis({ paneId: CANDLE_PANE_ID, gap: {
+        top: options.mode === "expanded" && options.waves?.length ? waveTopLayout(chartWidth).priceGapTop : 72,
+        bottom: 12,
+      } });
+    };
+    updatePriceGap();
     chart.overrideIndicator(buildMaOverride());
     chart.overrideIndicator(buildBollOverride());
-    const macdValues = calculateSystemMacd(data.map((bar) => bar.close));
-    const macdMaxAbs = Math.max(1, ...macdValues.flatMap((value) => [Math.abs(value.dif), Math.abs(value.dea), Math.abs(value.macd)]));
-    chart.overrideIndicator({ ...buildSystemMacdOverride(), minValue: -macdMaxAbs, maxValue: macdMaxAbs });
+    chart.overrideIndicator(buildSystemMacdOverride());
 
     // 放大图给足副图高度以便读数；缩略图压缩副图，仍保留成交量和 MACD 的业务信息。
     if (volumePaneId) {
-      chart.setPaneOptions({ id: volumePaneId, height: options.mode === "expanded" ? 128 : 72, minHeight: 48 });
+      chart.setPaneOptions({ id: volumePaneId, height: options.mode === "expanded" ? 110 : 72, minHeight: 48 });
     }
     if (macdPaneId) {
-      chart.setPaneOptions({ id: macdPaneId, height: options.mode === "expanded" ? 152 : 88, minHeight: 56 });
+      chart.setPaneOptions({ id: macdPaneId, height: options.mode === "expanded" ? 164 : 120, minHeight: 80 });
+      chart.overrideYAxis({ paneId: macdPaneId, gap: { top: 24, bottom: 0.08 } });
     }
     const interactionEnabled = options.mode === "expanded";
     chart.setZoomEnabled(interactionEnabled);
@@ -240,6 +310,7 @@ export async function createSectorKlineRuntime(options: CreateSectorKlineRuntime
       resize() {
         if (disposed) return;
         chart.resize();
+        updatePriceGap();
         applyVisibleCount();
       },
       setVisibleCount(count) {

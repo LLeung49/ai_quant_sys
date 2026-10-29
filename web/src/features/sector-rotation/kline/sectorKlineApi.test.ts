@@ -42,6 +42,21 @@ function mockSuccess(body: unknown) {
 }
 
 describe("fetchSectorKline", () => {
+  it("解析全部上涨波段及前三名，并拒绝越过 K 线截止日的波段", async () => {
+    const wave = {
+      base_date: "2026-08-05", start_date: "2026-08-06", end_date: "2026-08-06",
+      start_timestamp: 1785945600000, end_timestamp: 1785945600000,
+      start_low: 10, end_high: 13, trading_days: 1, sector_change_pct: 9.09,
+      is_confirmed: false,
+      leaders: [{ rank: 1, stock_code: "000001.SZ", stock_name: "甲", change_pct: 60.63 }],
+    };
+    mockSuccess({ ...validResponse, waves: [wave], membership_asof_mode: "current_mapping" });
+    await expect(fetchSectorKline("半导体", 2, "2026-08-06")).resolves.toMatchObject({ waves: [wave] });
+    mockSuccess({ ...validResponse, waves: [{ ...wave, end_date: "2026-08-07" }], membership_asof_mode: "current_mapping" });
+    await expect(fetchSectorKline("半导体", 2, "2026-08-06")).rejects.toThrow();
+    mockSuccess({ ...validResponse, waves: Array.from({ length: 7 }, () => wave), membership_asof_mode: "current_mapping" });
+    await expect(fetchSectorKline("半导体", 2, "2026-08-06")).resolves.toMatchObject({ waves: expect.arrayContaining([wave]) });
+  });
   it("拒绝字符串数值和不合法 OHLC，避免图表引擎接收脏数据", async () => {
     mockSuccess({
       ...validResponse,

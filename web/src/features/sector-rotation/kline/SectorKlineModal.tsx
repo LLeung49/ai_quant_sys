@@ -105,7 +105,19 @@ export function SectorKlineModal({ data, visibleCount, onVisibleCountChange, ope
           <div className="sector-kline-window-buttons">{KLINE_WINDOWS.map((windowValue) => <button key={windowValue} type="button" className={visibleCount === windowValue ? "is-active" : ""} aria-label={`显示最近 ${windowValue} 个交易日`} aria-pressed={visibleCount === windowValue} onClick={() => onVisibleCountChange(windowValue)}>{windowValue} 日</button>)}</div>
           <label className="sector-kline-range-label">可见窗口<input type="range" min="0" max="2" step="1" value={selectedIndex < 0 ? 1 : selectedIndex} aria-label="选择放大行情可见窗口" onChange={(event) => onVisibleCountChange(windowFromRangeIndex(Number(event.target.value)))} /></label>
         </div>
-        <div className="sector-kline-modal__chart-wrap"><LazySectorKlineChart bars={data.bars} mode="expanded" visibleCount={visibleCount} ariaLabel={chartLabel} /></div>
+        <div className="sector-kline-modal__chart-wrap">
+          <LazySectorKlineChart bars={data.bars} waves={data.waves} mode="expanded" visibleCount={visibleCount} ariaLabel={chartLabel} />
+          {(data.waves?.length ?? 0) > 0 && <section className="sector-wave-list" aria-label="上涨波段龙头排行">
+            <p>波段算法：上涨 8% / 回撤 5% · 区间涨幅以前复权收盘价计算 · 按当前成分股映射回看</p>
+            <ul>{[...data.waves!].reverse().map((wave) => <li key={`${wave.start_date}-${wave.end_date}`}>
+              <strong>{wave.start_date} — {wave.end_date} · {wave.trading_days} 个交易日 · 板块 {wave.sector_change_pct >= 0 ? "+" : ""}{wave.sector_change_pct.toFixed(2)}%{wave.is_confirmed ? "" : " · 进行中"}</strong>
+              <div className="sector-wave-list__leaders">{wave.leaders.length ? wave.leaders.map((leader) => <span className="sector-wave-list__leader" key={leader.stock_code}>
+                <span className="sector-wave-list__leader-name">{leader.stock_name}</span>
+                <span className={`sector-wave-list__leader-change ${leader.change_pct >= 0 ? "is-up" : "is-down"}`}>{leader.change_pct >= 0 ? "+" : ""}{leader.change_pct.toFixed(2)}%</span>
+              </span>) : "成分股行情不足，暂无排名"}</div>
+            </li>)}</ul>
+          </section>}
+        </div>
       </section>
     </dialog>, document.body,
   );

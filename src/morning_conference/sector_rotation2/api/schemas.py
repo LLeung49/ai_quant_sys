@@ -106,6 +106,27 @@ class SectorKlineMeta(BaseModel):
     warmup_target: int = 100
 
 
+class SectorWaveLeader(BaseModel):
+    rank: int
+    stock_code: str
+    stock_name: str
+    change_pct: float
+
+
+class SectorRisingWave(BaseModel):
+    base_date: str
+    start_date: str
+    end_date: str
+    start_timestamp: int
+    end_timestamp: int
+    start_low: float
+    end_high: float
+    trading_days: int
+    sector_change_pct: float
+    is_confirmed: bool
+    leaders: list[SectorWaveLeader]
+
+
 class SectorKlineResponse(BaseModel):
     """板块合成日 K 线的完整 HTTP 成功响应。"""
 
@@ -115,4 +136,23 @@ class SectorKlineResponse(BaseModel):
     actual_end_date: str
     price_basis: Literal["equal_weight_composite_index"] = "equal_weight_composite_index"
     bars: list[SectorKlineBar]
+    waves: list[SectorRisingWave] = []
+    membership_asof_mode: Literal["current_mapping"] = "current_mapping"
     meta: SectorKlineMeta
+
+
+class EtfKlineMeta(BaseModel):
+    field_version: Literal["v1"] = "v1"
+    source: Literal["trade_stock_daily_qfq"] = "trade_stock_daily_qfq"
+    bar_count: int
+    skipped_bar_count: int
+    warmup_target: int = 100
+
+
+class EtfKlineResponse(BaseModel):
+    stock_code: str
+    requested_end_date: str
+    actual_end_date: str
+    price_basis: Literal["qfq"] = "qfq"
+    bars: list[SectorKlineBar]
+    meta: EtfKlineMeta
