@@ -11,7 +11,7 @@ MACD全市场扫描选股策略 - 第一步: 动能+趋势股票池生成
 模块结构:
   - 继承 `9-形态选股雷达.py` 的全市场高效批量数据加载架构 (SQL单次查询 + pandas分组)
   - 模块化设计 `step1_filter_macd_momentum_trend` 供后续阶段组合调用
-  - 自动输出选股结果并导出 CSV 候选池
+  - 股票和场内基金分别展示并导出 CSV 候选池
 
 运行方式: python src/pattern_detection/10-MACD全市场扫描选股.py
 """
@@ -29,7 +29,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from data_ingestion.db_config import execute_query
-from data_ingestion.utils import get_instrument_names
+from pattern_detection.instrument_names import get_scan_names
 
 # ============================================================
 # 策略参数配置 (门槛筛选)
@@ -221,7 +221,7 @@ def _is_tradable(code, name, change_pct, vol_ratio):
 
 def _is_stock(code):
     """判断是否为个股 (排除 ETF/LOF/REITs)"""
-    if code.startswith(('51', '56', '58', '15', '16')):
+    if code.startswith(('51', '56', '58', '15', '16', '18')):
         return False
     return True
 
@@ -270,7 +270,7 @@ def run_macd_pool_scanner(end_date=None):
 
     # ---- 查询股票/ETF中文名称 ----
     hit_codes = [r['code'] for r in passed_list]
-    names = get_instrument_names(hit_codes) if hit_codes else {}
+    names = get_scan_names(hit_codes)
 
     # ---- 3. 输出展示与统计 ----
     print(f"\n[3/3] MACD 动能+趋势股票池明细 ({scan_date})")
@@ -279,31 +279,28 @@ def run_macd_pool_scanner(end_date=None):
     # 排序：按最新量比降序
     passed_list.sort(key=lambda x: x['vol_ratio'], reverse=True)
 
-    print(f"{'代码':<12} {'名称':<10} {'收盘价':>8} {'涨跌幅%':>8} {'DIF':>8} {'DEA':>8} {'最新量比':>8} {'金叉时点':<14}")
-    print("-" * 85)
-
-    stocks_count = 0
-    etf_count = 0
-
-    for r in passed_list:
-        code = r['code']
-        name = names.get(code, code)
-        is_stk = _is_stock(code)
-        if is_stk:
-            stocks_count += 1
-        else:
-            etf_count += 1
-
-        print(f"{code:<12} {name:<10} {r['close']:>8.2f} {r['change_pct']:>+8.2f}% "
-              f"{r['dif']:>8.4f} {r['dea']:>8.4f} {r['vol_ratio']:>8.2f}x {r['gc_label']:<14}")
+    stocks = [r for r in passed_list if _is_stock(r['code'])]
+    funds = [r for r in passed_list if not _is_stock(r['code'])]
+    for label, records in (("股票明细", stocks), ("ETF/基金明细", funds)):
+        print(f"\n--- {label} ({len(records)} 只) ---")
+        if not records:
+            print("  (无)")
+            continue
+        print(f"{'代码':<12} {'名称':<10} {'收盘价':>8} {'涨跌幅%':>8} {'DIF':>8} {'DEA':>8} {'最新量比':>8} {'金叉时点':<14}")
+        print("-" * 85)
+        for r in records:
+            code = r['code']
+            name = names.get(code, code)
+            print(f"{code:<12} {name:<10} {r['close']:>8.2f} {r['change_pct']:>+8.2f}% "
+                  f"{r['dif']:>8.4f} {r['dea']:>8.4f} {r['vol_ratio']:>8.2f}x {r['gc_label']:<14}")
 
     print(f"\n{'='*85}")
     print(f"筛选汇总摘要 ({scan_date})")
     print(f"{'='*85}")
     print(f"  全市场标的总数:   {len(all_data)} 只")
     print(f"  符合第一步门槛:   {len(passed_list)} 只 (占全市场 {len(passed_list)/len(all_data)*100:.2f}%)")
-    print(f"    - A股个股:     {stocks_count} 只")
-    print(f"    - ETF/基金:    {etf_count} 只")
+    print(f"    - A股个股:     {len(stocks)} 只")
+    print(f"    - ETF/基金:    {len(funds)} 只")
     print(f"  扫描耗时:         {load_time + scan_time:.2f}s")
 
     # ---- 4. 导出 CSV 候选池 ----
@@ -352,11 +349,14 @@ def export_macd_pool_csv(scan_date, passed_list, names):
         })
 
     df_out = pd.DataFrame(rows)
-    df_out = df_out.sort_values(by=['标的类型', '最新量比(MA20)'], ascending=[True, False])
-
-    csv_path = os.path.join('outputs', f'MACD动能趋势股票池_{scan_date}.csv')
-    df_out.to_csv(csv_path, index=False, encoding='utf-8-sig')
-    print(f"\n  候选池数据已保存至: {csv_path}")
+    for label, kind in (("股票", "个股"), ("ETF基金", "ETF/基金")):
+        group = df_out[df_out['标的类型'] == kind]
+        if group.empty:
+            continue
+        group = group.sort_values(by='最新量比(MA20)', ascending=False)
+        csv_path = os.path.join('outputs', f'MACD动能趋势股票池_{label}_{scan_date}.csv')
+        group.to_csv(csv_path, index=False, encoding='utf-8-sig')
+        print(f"\n  {kind}候选池数据已保存至: {csv_path}")
 
 
 # ============================================================

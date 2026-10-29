@@ -2,7 +2,7 @@
 """
 形态选股雷达 - 截面扫描 (MACD底背离 + K线反转形态)
 
-场景: 每天收盘后对全市场股票运行一次形态扫描
+场景: 每天收盘后对全市场股票和场内基金运行一次形态扫描
   1. MACD底背离: 价格创新低但MACD未创新低, 空方力量衰竭
   2. K线底部形态: 吞没/锤子线/早晨之星等看涨反转形态
   双重共振: 同时满足底背离 + 看涨K线形态的个股 -> 次日重点关注池
@@ -20,7 +20,7 @@ import pandas as pd
 import talib
 import time
 from data_ingestion.db_config import execute_query
-from data_ingestion.utils import get_instrument_names
+from pattern_detection.instrument_names import get_scan_names
 import os
 
 LOAD_BACK=120
@@ -338,75 +338,58 @@ def run_radar(end_date=None, lookback=LOOKBACK):
     print(f"  扫描完成: 耗时 {scan_time:.1f}s" +
           (f", 跳过异常 {errors} 只" if errors else ""))
 
-    # ---- 查询股票名称 ----
+    # ---- 查询股票与场内基金名称 ----
     hit_codes = list(set(
         [r['code'] for r in divergence_list] +
         [r['code'] for r in pattern_list]
     ))
-    names = get_instrument_names(hit_codes) if hit_codes else {}
+    names = get_scan_names(hit_codes)
 
     # ---- 第3步: 输出结果 ----
     print(f"\n[3/3] 扫描结果 ({scan_date})")
     print("=" * 70)
 
-    # (A) 双重共振 - 最高优先级
-    print(f"\n{'*'*70}")
-    print(f"  双重共振: MACD底背离 + 看涨K线形态  ({len(combined_list)} 只)")
-    print(f"{'*'*70}")
-    if combined_list:
-        combined_list.sort(key=lambda x: (len(x['bullish_patterns']), x['vol_ratio']), reverse=True)
-        print(f"{'代码':<14} {'名称':<10} {'收盘':>8} {'涨跌%':>7} {'量比':>6} {'形态':<20} {'背离信息'}")
-        print("-" * 100)
-        for r in combined_list:
-            name = names.get(r['code'], r['code'])
-            # 显示最强形态的强度
-            max_sig = max(p[2] for p in r['bullish_patterns']) if r['bullish_patterns'] else 0
-            sig_tag = '强' if max_sig >= 200 else '标准'
-            pat_str = ','.join(p[0] for p in r['bullish_patterns'])
-            div = r['divergence_info']
-            div_str = (f"价{div['prev_price']}->{div['recent_price']} "
-                        f"MACD{div['prev_macd']}->{div['recent_macd']}")
-            print(f"{r['code']:<14} {name:<10} {r['close']:>8.2f} "
-                f"{r['change_pct']:>+6.2f}% {r['vol_ratio']:>5.1f}x "
-                f"{sig_tag:<8} {pat_str:<20} {div_str}")
-    else:
-        print("  (无)")
-
-    # (B) 仅MACD底背离
-    div_only = [r for r in divergence_list if not r['combined']]
-    print(f"\n--- 仅MACD底背离 ({len(div_only)} 只, 显示前30) ---")
-    if div_only:
-        div_only.sort(key=lambda x: x['vol_ratio'], reverse=True)
-        print(f"{'代码':<14} {'名称':<10} {'收盘':>8} {'涨跌%':>7} {'量比':>6} {'MACD':>10} {'间距'}")
-        print("-" * 70)
-        for r in div_only[:30]:
-            name = names.get(r['code'], r['code'])
-            div = r['divergence_info']
-            print(f"{r['code']:<14} {name:<10} {r['close']:>8.2f} "
-                  f"{r['change_pct']:>+6.2f}% {r['vol_ratio']:>5.1f}x "
-                  f"{r['macd']:>10.4f} {div['days_apart']:>4}日")
-        if len(div_only) > 30:
-            print(f"  ... 还有 {len(div_only) - 30} 只")
-    else:
-        print("  (无)")
-
-    # (C) 仅K线形态
-    pat_only = [r for r in pattern_list if not r['combined']]
-    print(f"\n--- 仅看涨K线形态 ({len(pat_only)} 只, 显示前30) ---")
-    if pat_only:
-        pat_only.sort(key=lambda x: x['vol_ratio'], reverse=True)
-        print(f"{'代码':<14} {'名称':<10} {'收盘':>8} {'涨跌%':>7} {'量比':>6} {'形态'}")
-        print("-" * 60)
-        for r in pat_only[:30]:
-            name = names.get(r['code'], r['code'])
-            pat_str = ','.join(p[0] for p in r['bullish_patterns'])
-            print(f"{r['code']:<14} {name:<10} {r['close']:>8.2f} "
-                  f"{r['change_pct']:>+6.2f}% {r['vol_ratio']:>5.1f}x "
-                  f"{pat_str}")
-        if len(pat_only) > 30:
-            print(f"  ... 还有 {len(pat_only) - 30} 只")
-    else:
-        print("  (无)")
+    combined_list.sort(key=lambda x: (len(x['bullish_patterns']), x['vol_ratio']), reverse=True)
+    div_only = sorted((r for r in divergence_list if not r['combined']),
+                      key=lambda x: x['vol_ratio'], reverse=True)
+    pat_only = sorted((r for r in pattern_list if not r['combined']),
+                      key=lambda x: x['vol_ratio'], reverse=True)
+    for label, is_stock in (("股票", True), ("ETF/基金", False)):
+        for title, records in (("双重共振", combined_list),
+                               ("仅MACD底背离", div_only),
+                               ("仅看涨K线形态", pat_only)):
+            subset = [r for r in records if _is_stock(r['code']) == is_stock]
+            limit = None if title == "双重共振" else 30
+            print(f"\n--- {label} - {title} ({len(subset)} 只" +
+                  (", 显示前30) ---" if limit else ") ---"))
+            if not subset:
+                print("  (无)")
+                continue
+            if title == "双重共振":
+                print(f"{'代码':<14} {'名称':<10} {'收盘':>8} {'涨跌%':>7} {'量比':>6} {'形态':<20} {'背离信息'}")
+            elif title == "仅MACD底背离":
+                print(f"{'代码':<14} {'名称':<10} {'收盘':>8} {'涨跌%':>7} {'量比':>6} {'MACD':>10} {'间距'}")
+            else:
+                print(f"{'代码':<14} {'名称':<10} {'收盘':>8} {'涨跌%':>7} {'量比':>6} {'形态'}")
+            print("-" * 70)
+            for r in subset[:limit]:
+                name = names.get(r['code'], r['code'])
+                prefix = (f"{r['code']:<14} {name:<10} {r['close']:>8.2f} "
+                          f"{r['change_pct']:>+6.2f}% {r['vol_ratio']:>5.1f}x ")
+                if title == "双重共振":
+                    max_sig = max(p[2] for p in r['bullish_patterns'])
+                    sig_tag = '强' if max_sig >= 200 else '标准'
+                    pat_str = ','.join(p[0] for p in r['bullish_patterns'])
+                    div = r['divergence_info']
+                    div_str = (f"价{div['prev_price']}->{div['recent_price']} "
+                               f"MACD{div['prev_macd']}->{div['recent_macd']}")
+                    print(f"{prefix}{sig_tag:<8} {pat_str:<20} {div_str}")
+                elif title == "仅MACD底背离":
+                    print(f"{prefix}{r['macd']:>10.4f} {r['divergence_info']['days_apart']:>4}日")
+                else:
+                    print(f"{prefix}{','.join(p[0] for p in r['bullish_patterns'])}")
+            if limit and len(subset) > limit:
+                print(f"  ... 还有 {len(subset) - limit} 只")
 
     # ---- 汇总 ----
     print(f"\n{'='*70}")
@@ -465,7 +448,7 @@ def _is_tradable(r, name):
 
 def _is_stock(code):
     """判断是否为个股(排除ETF/LOF/REIT等基金)"""
-    if code.startswith(('51', '56', '58', '15', '16')):
+    if code.startswith(('51', '56', '58', '15', '16', '18')):
         return False
     return True
 
@@ -480,7 +463,8 @@ def export_candidate_pool(scan_result):
       - 按量比降序排列(放量优先)
 
     输出:
-      outputs/候选池_YYYY-MM-DD.csv
+      outputs/候选池_股票_YYYY-MM-DD.csv
+      outputs/候选池_ETF基金_YYYY-MM-DD.csv
     """
     if not scan_result:
         return
@@ -576,32 +560,29 @@ def export_candidate_pool(scan_result):
         print("\n  过滤后无候选标的")
         return
 
-    df = pd.DataFrame(rows)
-    df = df.sort_values(['信号等级', '量比'], ascending=[True, False])
-
-    csv_path = os.path.join('outputs', f'候选池_{scan_date}.csv')
-    df.to_csv(csv_path, index=False, encoding='utf-8-sig')
-
-    # 打印摘要
-    stocks_df = df[df['类型'] == '个股']
-    etf_df = df[df['类型'] == 'ETF/基金']
+    df = pd.DataFrame(rows).sort_values(['信号等级', '量比'], ascending=[True, False])
 
     print(f"\n{'='*70}")
     print(f"次日候选池 ({scan_date} 收盘扫描)")
     print(f"{'='*70}")
-    print(f"  已保存: {csv_path}")
-    print(f"  总计: {len(df)} 只 (个股 {len(stocks_df)}, ETF/基金 {len(etf_df)})")
-
-    for level in ['A-双重共振', 'B-底背离放量', 'C-形态放量']:
-        sub = df[df['信号等级'] == level]
-        if len(sub) == 0:
+    print(f"  总计: {len(df)} 只")
+    for label, kind in (("股票", "个股"), ("ETF基金", "ETF/基金")):
+        group = df[df['类型'] == kind]
+        if group.empty:
             continue
-        print(f"\n  [{level}] {len(sub)} 只:")
-        for _, row in sub.iterrows():
-            tag = f"  {row['K线形态']}" if row['K线形态'] else ''
-            print(f"    {row['代码']:<14} {row['名称']:<10} "
-                  f"收盘{row['收盘价']:>8.2f}  {row['涨跌幅%']:>+6.2f}%  "
-                  f"量比{row['量比']:>4.1f}x{tag}")
+        csv_path = os.path.join('outputs', f'候选池_{label}_{scan_date}.csv')
+        group.to_csv(csv_path, index=False, encoding='utf-8-sig')
+        print(f"\n  {kind}: {len(group)} 只, 已保存: {csv_path}")
+        for level in ['A-双重共振', 'B-底背离放量', 'C-形态放量']:
+            sub = group[group['信号等级'] == level]
+            if sub.empty:
+                continue
+            print(f"  [{level}] {len(sub)} 只:")
+            for _, row in sub.iterrows():
+                tag = f"  {row['K线形态']}" if row['K线形态'] else ''
+                print(f"    {row['代码']:<14} {row['名称']:<10} "
+                      f"收盘{row['收盘价']:>8.2f}  {row['涨跌幅%']:>+6.2f}%  "
+                      f"量比{row['量比']:>4.1f}x{tag}")
 
     return df
 

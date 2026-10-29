@@ -546,7 +546,7 @@ def get_instrument_names(codes: Iterable[str], *, force_refresh: bool = False) -
     """获取代码-显示名称映射.
 
     加载策略 (进程级单例缓存):
-      1. 已缓存 -> 直接返回
+      1. 已缓存 -> 使用缓存；命中的场内基金缺名时补取
       2. 文件存在且 < 7 天 -> 从文件加载
       3. 否则 -> 从 akshare 拉取并刷新文件
 
@@ -574,5 +574,21 @@ def get_instrument_names(codes: Iterable[str], *, force_refresh: bool = False) -
                 _NAME_MAP_CACHE = cached
             else:
                 _NAME_MAP_CACHE = _refresh_name_map()
+
+    codes = list(codes)
+    missing_funds = [code for code in codes
+                     if code.startswith(("51", "56", "58", "15", "16", "18"))
+                     and not _NAME_MAP_CACHE.get(code)]
+    if missing_funds:
+        try:
+            fund_map = _fetch_etf_name_map_from_akshare()
+            if fund_map:
+                _NAME_MAP_CACHE.update(fund_map)
+                _save_name_map(_NAME_MAP_CACHE)
+            unresolved = [code for code in missing_funds if not _NAME_MAP_CACHE.get(code)]
+            if unresolved:
+                print(f"  [utils] 警告: {len(unresolved)} 只场内基金缺少名称: {', '.join(unresolved[:5])}")
+        except Exception as e:
+            print(f"  [utils] 警告: 场内基金名称补取失败 ({e})")
 
     return {code: _NAME_MAP_CACHE.get(code, code) for code in codes}
