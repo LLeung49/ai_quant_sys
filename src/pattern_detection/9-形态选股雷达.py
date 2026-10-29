@@ -124,7 +124,7 @@ def detect_bottom_divergence(close,
         macd_line: MACD线数组
         lookback: 总回看K线数 (默认60, 约3个月)
         recent_window: 近段窗口 (默认10, 低点需在最近10根K线内)
-        min_macd_diff: MACD差值最小阈值, 默认0.05近段MACD必须比前段高过此值, 否则视为噪声
+        min_macd_diff: DIF相对改善幅度阈值, 默认0.05表示抬高幅度须超过前期DIF绝对值的5%
         require_macd_below_zero: 是否要求近段MACD在零轴下方
 
     返回:
@@ -150,14 +150,23 @@ def detect_bottom_divergence(close,
     idx_recent = n - recent_window + recent_low_local     # 近段最低价在全局的index
     idx_prev = n - lookback + prev_low_local              # 前段最低价在全局的index
 
-    if np.isnan(macd_line[idx_recent]) or np.isnan(macd_line[idx_prev]):
+    prev_dif = float(macd_line[idx_prev])
+    recent_dif = float(macd_line[idx_recent])
+
+    # 无效指标或分母接近零时，不判定背离
+    if not (np.isfinite(prev_dif) and np.isfinite(recent_dif)):
+        return False, {}
+    if abs(prev_dif) <= 1e-8:
         return False, {}
 
     # ---- 判定1: 价格创新低或平底 ----
     price_lower = close[idx_recent] <= close[idx_prev]         # 近n天的低点<=前段低点
-    # ---- 判定2: MACD高于前段, 且差值超过阈值 ----
-    macd_diff = (macd_line[idx_recent] - macd_line[idx_prev]) / macd_line[idx_prev]    # 对应macd diff线在近n天低点时 > 前段低点时（ma12-ma26））
-    macd_higher = macd_diff > min_macd_diff  
+    # ---- 判定2: DIF抬高, 且相对前期DIF绝对值的改善幅度超过阈值 ----
+    macd_improvement = (recent_dif - prev_dif) / abs(prev_dif)
+    macd_higher = (
+        recent_dif > prev_dif
+        and macd_improvement > min_macd_diff
+    )
 
     # ---- 判定3(可选): 近段MACD必须位于零轴下方 ----
     macd_below_zero = (macd_line[idx_recent] < 0) if require_macd_below_zero else True
